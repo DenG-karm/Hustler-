@@ -1,0 +1,9 @@
+[build]
+incremental = false
+target-dir = "C:/Users/Deniz/.cargo-targets/hustler"
+
+[target.x86_64-pc-windows-msvc]
+linker = "rust-lld.exe"
+
+[profile.dev]
+incremental = false

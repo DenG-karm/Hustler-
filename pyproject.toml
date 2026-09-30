@@ -1,0 +1,9 @@
+[project]
+name = "hustler-workspace"
+version = "0.1.0"
+description = "Hustler monorepo"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["services/core"]

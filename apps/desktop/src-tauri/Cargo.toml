@@ -1,0 +1,34 @@
+[package]
+name = "app"
+version = "0.1.0"
+description = "Hustler Desktop Shell"
+authors = ["you"]
+license = ""
+repository = ""
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "app_lib"
+crate-type = ["rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2.7.0" }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+log = "0.4"
+tauri = { version = "2.12.0" }
+tauri-plugin-log = "2"
+reqwest = { version = "0.12", features = ["json", "stream"], default-features = false }
+tokio = { version = "1", features = ["full"] }
+anyhow = "1"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.62", features = [
+    "Win32_System_JobObjects",
+    "Win32_System_Threading",
+    "Win32_Foundation",
+    "Win32_Security",
+] }

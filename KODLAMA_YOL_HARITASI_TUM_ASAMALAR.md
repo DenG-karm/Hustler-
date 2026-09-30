@@ -25,16 +25,16 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-001 | Monorepo, kilit dosyaları, just görevleri (dev, check, test, gen) | just check tek komutla lint + tip + test çalıştırır |
-| [ ] K-002 | ruff, mypy strict, ESLint/Prettier, rustfmt/clippy, pre-commit, gitleaks | Hatalı commit engellenir |
-| [ ] K-003 | CI hattı (Windows): lint → tip → birim; sözleşme denetimi K-004 ile eklenir | Boş projede yeşil |
-| [ ] K-004 | hustler.contracts, JSON Schema ve TypeScript tipi üretimi | Şema değişince üretilen dosya farkı CI'ı kırar |
-| [ ] K-005 | FastAPI iskeleti: /health, oturum belirteci, Problem Details, SSE | Entegrasyon testi geçer |
-| [ ] K-006 | Tauri 2 kabuğu: sidecar başlatma (dinamik port keşfi için stdout'tan BIND_PORT=xxxxx okunması), sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur | Zorla kapatmada yetim süreç yok; arayüz belleğinde port veya belirteç yok |
-| [ ] K-007 | structlog, run_id, Timer ve RunEvent modeli | Adım süresi veritabanına yazılır |
-| [ ] K-008 | SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken ve freelist sayfalarını OS'e geri vermek için WriterQueue içinde PRAGMA incremental_vacuum; tetikleyicisi), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı | 1 yazıcı + 5 okuyucu stres testinde 0 kilit hatası |
-| [ ] K-009 | hustler doctor: ffmpeg, WebView2, GPU/CUDA, disk, veritabanı ve runs/ boyutu, API anahtarları | Eksikleri ve büyüme uyarılarını tek raporda listeler |
-| [ ] K-010 | Tauri IPC köprüsü (önkoşul: K-005, K-006): genel proxy komutu, OpenAPI'den üretilen rota izin listesi, SSE → Tauri Channel akışı, istek boyutu ve süre sınırı; üretilmiş TypeScript istemcisinin taşıması invoke olur | Köprü sözleşme testi geçer; izin listesi dışı rota reddedilir; arayüzde doğrudan ağ çağrısı lint ile engellenir |
+| [x] K-001 | Monorepo, kilit dosyaları, just görevleri (dev, check, test, gen) | just check tek komutla lint + tip + test çalıştırır |
+| [x] K-002 | ruff, mypy strict, ESLint/Prettier, rustfmt/clippy, pre-commit, gitleaks | Hatalı commit engellenir |
+| [x] K-003 | CI hattı (Windows): lint → tip → birim; sözleşme denetimi K-004 ile eklenir | Boş projede yeşil |
+| [x] K-004 | hustler.contracts, JSON Schema ve TypeScript tipi üretimi | Şema değişince üretilen dosya farkı CI'ı kırar |
+| [x] K-005 | FastAPI iskeleti: /health, oturum belirteci, Problem Details, SSE | Entegrasyon testi geçer |
+| [x] K-006 | Tauri 2 kabuğu: sidecar başlatma (dinamik port keşfi için stdout'tan BIND_PORT=xxxxx okunması), sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur | Zorla kapatmada yetim süreç yok; arayüz belleğinde port veya belirteç yok |
+| [x] K-007 | structlog, run_id, Timer ve RunEvent modeli | Adım süresi veritabanına yazılır |
+| [x] K-008 | SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken ve freelist sayfalarını OS'e geri vermek için WriterQueue içinde PRAGMA incremental_vacuum; tetikleyicisi), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı | 1 yazıcı + 5 okuyucu stres testinde 0 kilit hatası |
+| [x] K-009 | hustler doctor: ffmpeg, WebView2, GPU/CUDA, disk, veritabanı ve runs/ boyutu, API anahtarları | Eksikleri ve büyüme uyarılarını tek raporda listeler |
+| [x] K-010 | Tauri IPC köprüsü (önkoşul: K-005, K-006): genel proxy komutu, OpenAPI'den üretilen rota izin listesi, SSE → Tauri Channel akışı, istek boyutu ve süre sınırı; üretilmiş TypeScript istemcisinin taşıması invoke olur | Köprü sözleşme testi geçer; izin listesi dışı rota reddedilir; arayüzde doğrudan ağ çağrısı lint ile engellenir |
 
 **Çıkış kriteri:** Arayüzdeki bir düğme Tauri invoke ile sidecar'ı çağırır (arayüz doğrudan ağ çağrısı yapmaz), sonuç veritabanına yazılır ve olay Tauri Channel ile arayüze döner; CI yeşildir.
 
