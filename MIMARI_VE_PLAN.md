@@ -1164,13 +1164,13 @@ K-005
 FastAPI iskeleti: /health, oturum belirteci, Problem Details, SSE
 Entegrasyon testi geçer
 K-006
-Tauri 2 kabuğu: sidecar başlatma, sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur
+Tauri 2 kabuğu: sidecar başlatma (dinamik port keşfi için stdout'tan BIND_PORT=xxxxx okunması), sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur
 Zorla kapatmada yetim süreç yok; arayüz belleğinde port veya belirteç yok
 K-007
 structlog, run_id, Timer ve RunEvent modeli
 Adım süresi veritabanına yazılır
 K-008
-SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı
+SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken ve freelist sayfalarını OS'e geri vermek için WriterQueue içinde PRAGMA incremental_vacuum; tetikleyicisi), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı
 1 yazıcı + 5 okuyucu stres testinde 0 kilit hatası
 K-009
 hustler doctor: ffmpeg, WebView2, GPU/CUDA, disk, veritabanı ve runs/ boyutu, API anahtarları
@@ -1232,7 +1232,7 @@ K-206
 Arka plan zamanlayıcısı: kayıtlı konuların yenilenmesi; yenileme ve bakım işleri tek zamanlayıcıda, aktif üretim sürerken ertelenir
 Yenileme sırasında arayüz okuması kilitlenmez
 K-207
-Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca ve yeterli boş disk varken VACUUM (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası
+Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca PRAGMA incremental_vacuum; komutu ile alan işletim sistemine geri verilir (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası
 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir
 Çıkış kriteri
 Bir konu için sıralı Top 20 listesi < 30 sn; eşzamanlılık stres testinde 0 kilit hatası; 30 günlük büyüme simülasyonunda veritabanı boyutu sınırlı kalır.

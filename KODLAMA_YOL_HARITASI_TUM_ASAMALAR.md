@@ -30,9 +30,9 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [ ] K-003 | CI hattı (Windows): lint → tip → birim; sözleşme denetimi K-004 ile eklenir | Boş projede yeşil |
 | [ ] K-004 | hustler.contracts, JSON Schema ve TypeScript tipi üretimi | Şema değişince üretilen dosya farkı CI'ı kırar |
 | [ ] K-005 | FastAPI iskeleti: /health, oturum belirteci, Problem Details, SSE | Entegrasyon testi geçer |
-| [ ] K-006 | Tauri 2 kabuğu: sidecar başlatma, sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur | Zorla kapatmada yetim süreç yok; arayüz belleğinde port veya belirteç yok |
+| [ ] K-006 | Tauri 2 kabuğu: sidecar başlatma (dinamik port keşfi için stdout'tan BIND_PORT=xxxxx okunması), sağlık yoklaması, Job Object ile kapanış; servis adresi ve belirteci yalnızca Rust'ta tutulur | Zorla kapatmada yetim süreç yok; arayüz belleğinde port veya belirteç yok |
 | [ ] K-007 | structlog, run_id, Timer ve RunEvent modeli | Adım süresi veritabanına yazılır |
-| [ ] K-008 | SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı | 1 yazıcı + 5 okuyucu stres testinde 0 kilit hatası |
+| [ ] K-008 | SQLite katmanı: WAL PRAGMA'ları, auto_vacuum=INCREMENTAL (veritabanı oluşturulurken ve freelist sayfalarını OS'e geri vermek için WriterQueue içinde PRAGMA incremental_vacuum; tetikleyicisi), WriterQueue (bakım işi türüyle), ReaderPool, göç çalıştırıcı | 1 yazıcı + 5 okuyucu stres testinde 0 kilit hatası |
 | [ ] K-009 | hustler doctor: ffmpeg, WebView2, GPU/CUDA, disk, veritabanı ve runs/ boyutu, API anahtarları | Eksikleri ve büyüme uyarılarını tek raporda listeler |
 | [ ] K-010 | Tauri IPC köprüsü (önkoşul: K-005, K-006): genel proxy komutu, OpenAPI'den üretilen rota izin listesi, SSE → Tauri Channel akışı, istek boyutu ve süre sınırı; üretilmiş TypeScript istemcisinin taşıması invoke olur | Köprü sözleşme testi geçer; izin listesi dışı rota reddedilir; arayüzde doğrudan ağ çağrısı lint ile engellenir |
 
@@ -68,7 +68,7 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [ ] K-204 | Skorlama (saf fonksiyonlar): log-ölçekli izlenme/abone, saatlik hız, minimum abone eşiği, gizli abone işareti | hypothesis: sınırlı, monoton, NaN yok |
 | [ ] K-205 | Discovery servisi, hustler discover CLI, Top 20 sıralaması | Top 20 < 30 sn |
 | [ ] K-206 | Arka plan zamanlayıcısı: kayıtlı konuların yenilenmesi; yenileme ve bakım işleri tek zamanlayıcıda, aktif üretim sürerken ertelenir | Yenileme sırasında arayüz okuması kilitlenmez |
-| [ ] K-207 | Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca ve yeterli boş disk varken VACUUM (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası | 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir |
+| [ ] K-207 | Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca PRAGMA incremental_vacuum; komutu ile alan işletim sistemine geri verilir (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası | 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir |
 
 **Çıkış kriteri:** Bir konu için sıralı Top 20 listesi < 30 sn; eşzamanlılık stres testinde 0 kilit hatası; 30 günlük büyüme simülasyonunda veritabanı boyutu sınırlı kalır.
 
