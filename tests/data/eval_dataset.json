@@ -1,0 +1,92 @@
+[
+  {
+    "id": "T1",
+    "transcript": "Merhaba kanalıma hoşgeldiniz! Bu videoda size nasıl zengin olacağınızın sırrını vereceğim. Tüm detaylar için profilimdeki linke tıklayın. Görüşmek üzere!",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "linke tıklayın",
+      "topic": "zenginlik, para kazanma"
+    }
+  },
+  {
+    "id": "T2",
+    "transcript": "Bugün hava çok güzel. Ormanda yürüdük, kuşları dinledik. Başka da bir şey yapmadık.",
+    "ideal_output": {
+      "has_hook": false,
+      "hook_text": "",
+      "topic": "doğa, yürüyüş"
+    }
+  },
+  {
+    "id": "T3",
+    "transcript": "Sen de bu hatayı yapıyor musun? Kod yazarken sakın bu fonksiyonu kullanma. Videoyu kaydet ki sonra lazım olur.",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "videoyu kaydet",
+      "topic": "yazılım, kodlama hataları"
+    }
+  },
+  {
+    "id": "T4",
+    "transcript": "Sadece 3 adımda mükemmel kahve demlemenin yolu. Abone olmayı unutmayın.",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "abone olmayı unutmayın",
+      "topic": "kahve demleme"
+    }
+  },
+  {
+    "id": "T5",
+    "transcript": "Müzik çalıyor. Sadece müzik. La la la.",
+    "ideal_output": {
+      "has_hook": false,
+      "hook_text": "",
+      "topic": "müzik"
+    }
+  },
+  {
+    "id": "T6",
+    "transcript": "Eğer bu testi geçersen IQ seviyen 140 demektir. Yorumlara kaç yaptığını yazmayı unutma.",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "yorumlara yaz",
+      "topic": "iq testi"
+    }
+  },
+  {
+    "id": "T7",
+    "transcript": "Yeni araba aldık. Çok hızlı. Bitti.",
+    "ideal_output": {
+      "has_hook": false,
+      "hook_text": "",
+      "topic": "araba"
+    }
+  },
+  {
+    "id": "T8",
+    "transcript": "Bunu daha önce duymuş muydun? Bizi takip etmeye devam edin, part 2 yolda.",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "bizi takip et",
+      "topic": "ilginç bilgi"
+    }
+  },
+  {
+    "id": "T9",
+    "transcript": "Bir bardak un, iki yumurta, biraz şeker. Fırına veriyoruz. Bu kadar.",
+    "ideal_output": {
+      "has_hook": false,
+      "hook_text": "",
+      "topic": "yemek tarifi"
+    }
+  },
+  {
+    "id": "T10",
+    "transcript": "Daha fazlası için bio'daki linkten ücretsiz rehberimi indir.",
+    "ideal_output": {
+      "has_hook": true,
+      "hook_text": "bio'daki link",
+      "topic": "ücretsiz rehber"
+    }
+  }
+]

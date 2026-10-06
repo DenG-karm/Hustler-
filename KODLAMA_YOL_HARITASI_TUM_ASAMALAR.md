@@ -45,13 +45,13 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-101 | T0-1 ve T0-2: 5 konu x 20 video, kota ve hata günlüğü, Shorts sınıflandırma doğrulaması | 100 video eksiksiz; yanlış sınıflandırma < %10 |
-| [ ] K-102 | T0-3: transkript kapsama ölçümü (altyazı / Whisper) | Kapsama ≥ %90 |
-| [ ] K-103 | T0-4 ve T0-5: şema uyumu koşucusu (30 üretim) ve map-reduce A/B kıyas aracı | İlk denemede ≥ %95; 2 denemede %100; maliyet baz çizgisi |
-| [ ] K-104 | T0-6 ve T0-7: eşzamanlılık stres testi ve yavaş-kopyalama simülatörü | Kilit hatası 0; çökme 0 |
-| [ ] K-105 | T0-8: FFmpeg prototipi (8 görsel + ses + ASS), snapshot ve kuru çalıştırma | Nihai < 2 dk; taslak < 10 sn |
-| [ ] K-106 | T0-10, T0-11, T0-12: Whisper CPU ve devre kesici, asenkron Map (yerel model adayıyla event loop gecikme ölçümü dahil), sidecar paketleme ve taşıma alternatifleri (loopback + belirteç, stdio, named pipe) karşılaştırması | Bütçe içinde; yetim süreç 0; taşıma kararı ADR-010'a işlenir |
-| [ ] K-107 | Sonuç raporu: her test için ölçüm ve geç/revize kararı; eşiklerin kalibrasyonu | ADR'ler ölçülen değerlerle güncellenir |
+| [x] K-101 | T0-1 ve T0-2: 5 konu x 20 video, kota ve hata günlüğü, Shorts sınıflandırma doğrulaması | 100 video eksiksiz; yanlış sınıflandırma < %10 |
+| [x] K-102 | T0-3: transkript kapsama ölçümü (altyazı / Whisper) | Kapsama ≥ %90 |
+| [x] K-103 | T0-4 ve T0-5: şema uyumu koşucusu (30 üretim) ve map-reduce A/B kıyas aracı | İlk denemede ≥ %95; 2 denemede %100; maliyet baz çizgisi |
+| [x] K-104 | T0-6 ve T0-7: eşzamanlılık stres testi ve yavaş-kopyalama simülatörü | Kilit hatası 0; çökme 0 |
+| [x] K-105 | T0-8: FFmpeg prototipi (8 görsel + ses + ASS), snapshot ve kuru çalıştırma | Nihai < 2 dk; taslak < 10 sn |
+| [x] K-106 | T0-10, T0-11, T0-12: Whisper CPU ve devre kesici, asenkron Map (yerel model adayıyla event loop gecikme ölçümü dahil), sidecar paketleme ve taşıma alternatifleri (loopback + belirteç, stdio, named pipe) karşılaştırması | Bütçe içinde; yetim süreç 0; taşıma kararı ADR-010'a işlenir |
+| [x] K-107 | Sonuç raporu: her test için ölçüm ve geç/revize kararı; eşiklerin kalibrasyonu | ADR'ler ölçülen değerlerle güncellenir |
 
 **Çıkış kriteri:** Tüm T0 testleri geçmiş veya ilgili mimari karar revize edilmiştir; varsayılan eşikler (5 video, 90 sn, %80 kart) ölçülmüş değerlerle değişmiştir.
 
@@ -62,13 +62,13 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-201 | YouTubeClient (httpx async): arama, videolar, kanallar, sayfalama, zaman aşımı | Cassette testleri geçer |
-| [ ] K-202 | Kota izleyici ve SQLite önbellek: TTL ve tablo başına saklama politikası (öneri: video önbelleği kısa, transkript ve özet kartı uzun ömürlü), boyut üst sınırı; aynı sorgu tekrar çekilmez | Kota göstergesi olayı; ikinci çağrı önbellekten; saklama süreleri ayardan |
-| [ ] K-203 | Shorts sınıflandırıcı: süre eşiği ayardan gelir | Güncel eşik doğrulama testi |
-| [ ] K-204 | Skorlama (saf fonksiyonlar): log-ölçekli izlenme/abone, saatlik hız, minimum abone eşiği, gizli abone işareti | hypothesis: sınırlı, monoton, NaN yok |
-| [ ] K-205 | Discovery servisi, hustler discover CLI, Top 20 sıralaması | Top 20 < 30 sn |
-| [ ] K-206 | Arka plan zamanlayıcısı: kayıtlı konuların yenilenmesi; yenileme ve bakım işleri tek zamanlayıcıda, aktif üretim sürerken ertelenir | Yenileme sırasında arayüz okuması kilitlenmez |
-| [ ] K-207 | Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca PRAGMA incremental_vacuum; komutu ile alan işletim sistemine geri verilir (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası | 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir |
+| [x] K-201 | YouTubeClient (httpx async): arama, videolar, kanallar, sayfalama, zaman aşımı | Cassette testleri geçer |
+| [x] K-202 | Kota izleyici ve SQLite önbellek: TTL ve tablo başına saklama politikası (öneri: video önbelleği kısa, transkript ve özet kartı uzun ömürlü), boyut üst sınırı; aynı sorgu tekrar çekilmez | Kota göstergesi olayı; ikinci çağrı önbellekten; saklama süreleri ayardan |
+| [x] K-203 | Shorts sınıflandırıcı: süre eşiği ayardan gelir | Güncel eşik doğrulama testi |
+| [x] K-204 | Skorlama (saf fonksiyonlar): log-ölçekli izlenme/abone, saatlik hız, minimum abone eşiği, gizli abone işareti | hypothesis: sınırlı, monoton, NaN yok |
+| [x] K-205 | Discovery servisi, hustler discover CLI, Top 20 sıralaması | Top 20 < 30 sn |
+| [x] K-206 | Arka plan zamanlayıcısı: kayıtlı konuların yenilenmesi; yenileme ve bakım işleri tek zamanlayıcıda, aktif üretim sürerken ertelenir | Yenileme sırasında arayüz okuması kilitlenmez |
+| [x] K-207 | Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca PRAGMA incremental_vacuum; komutu ile alan işletim sistemine geri verilir (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası | 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir |
 
 **Çıkış kriteri:** Bir konu için sıralı Top 20 listesi < 30 sn; eşzamanlılık stres testinde 0 kilit hatası; 30 günlük büyüme simülasyonunda veritabanı boyutu sınırlı kalır.
 
@@ -79,15 +79,15 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-301 | HardwareProfile: GPU/CUDA tespiti, RTF benchmark, kalıcı profil | Profil veritabanında; CUDA yokken doğru işaretlenir |
-| [ ] K-302 | TranscriptProvider: yerleşik altyazı önceliği, Whisper yedeği, dil algılama | Kapsama ≥ %90 |
-| [ ] K-303 | CircuitBreaker: kapalı/açık/yarı açık durum makinesi; video sayısı, süre ve video uzunluğu bütçesi | Durum makinesi birim ve özellik testleri |
-| [ ] K-304 | Map A: kanca adayı, kelime sayısı, dakikadaki kelime, CTA kuralları | Deterministik; LLM maliyeti sıfır |
-| [ ] K-305 | LLMPort + adapter, LlmCall maliyet defteri, token tavanı | Aşımda uyarı olayı |
-| [ ] K-306 | CpuBudget ve yerel çıkarım altyapısı (önkoşul: K-301): Whisper ve yerel Map modeli için paylaşılan CPU semaforu ve çekirdek bütçesi; InferencePort (API ve yerel uygulama); yerel çıkarım event loop dışında (asyncio.to_thread yalnızca GIL'i bırakan native kütüphanelerde, aksi halde ProcessPoolExecutor); model süreç başına bir kez yüklenir | Çıkarım sırasında event loop gecikmesi eşik altında (öneri: < 100 ms); iptalde çıkarım süreci sonlanır |
-| [ ] K-307 | Map B çalıştırıcı (önkoşul: K-305, K-306): API modunda asyncio eşzamanlılığı (Semaphore 5-8, zaman aşımı, 429 için geri çekilme + jitter, kısmi başarısızlık); yerel modda eşzamanlılık CpuBudget'a bağlı (varsayılan 1) | API modunda 20 kart < 60 sn; 429 simülasyonu geçer; yerel modda süre ölçülür (bütçeyi aşarsa API modu seçilir) |
-| [ ] K-308 | Reduce, AnalysisResult; önbellek anahtarı (transkript_hash + prompt_sürümü) | İkinci çalıştırmada LLM çağrısı yok |
-| [ ] K-309 | Prompt eval harness: sabit veri seti, otomatik puan raporu | Prompt değişikliği raporla kıyaslanır |
+| [x] K-301 | HardwareProfile: GPU/CUDA tespiti, RTF benchmark, kalıcı profil | Profil veritabanında; CUDA yokken doğru işaretlenir |
+| [x] K-302 | TranscriptProvider: yerleşik altyazı önceliği, Whisper yedeği, dil algılama | Kapsama ≥ %90 |
+| [x] K-303 | CircuitBreaker: kapalı/açık/yarı açık durum makinesi; video sayısı, süre ve video uzunluğu bütçesi | Durum makinesi birim ve özellik testleri |
+| [x] K-304 | Map A: kanca adayı, kelime sayısı, dakikadaki kelime, CTA kuralları | Deterministik; LLM maliyeti sıfır |
+| [x] K-305 | LLMPort + adapter, LlmCall maliyet defteri, token tavanı | Aşımda uyarı olayı |
+| [x] K-306 | CpuBudget ve yerel çıkarım altyapısı (önkoşul: K-301): Whisper ve yerel Map modeli için paylaşılan CPU semaforu ve çekirdek bütçesi; InferencePort (API ve yerel uygulama); yerel çıkarım event loop dışında (asyncio.to_thread yalnızca GIL'i bırakan native kütüphanelerde, aksi halde ProcessPoolExecutor); model süreç başına bir kez yüklenir | Çıkarım sırasında event loop gecikmesi eşik altında (öneri: < 100 ms); iptalde çıkarım süreci sonlanır |
+| [x] K-307 | Map B çalıştırıcı (önkoşul: K-305, K-306): API modunda asyncio eşzamanlılığı (Semaphore 5-8, zaman aşımı, 429 için geri çekilme + jitter, kısmi başarısızlık); yerel modda eşzamanlılık CpuBudget'a bağlı (varsayılan 1) | API modunda 20 kart < 60 sn; 429 simülasyonu geçer; yerel modda süre ölçülür (bütçeyi aşarsa API modu seçilir) |
+| [x] K-308 | Reduce, AnalysisResult; önbellek anahtarı (transkript_hash + prompt_sürümü) | İkinci çalıştırmada LLM çağrısı yok |
+| [x] K-309 | Prompt eval harness: sabit veri seti, otomatik puan raporu | Prompt değişikliği raporla kıyaslanır |
 
 **Çıkış kriteri:** 20 video için transkript + analiz < 3 dk; üretim başına maliyet tavanın altında; CUDA kapalıyken devre kesici doğru tetiklenir; CPU bağlı çıkarım sırasında event loop yanıt verir.
 

@@ -12,3 +12,6 @@ target/
 hustler_stress.db
 runs/
 .DS_Store
+*.mp4
+*.ass
+tools/video_ids.json

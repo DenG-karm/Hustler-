@@ -16,8 +16,12 @@ from contextlib import asynccontextmanager
 
 import structlog
 import uvicorn
+from pathlib import Path
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from services.core.hustler.db import Database
+from services.core.hustler.storage.cache import YouTubeCache
 
 log = structlog.get_logger()
 
@@ -41,10 +45,24 @@ def _get_free_port() -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     port: int = app.state.bind_port
+    app.state.session_token = SESSION_TOKEN
+    
+    # M2 Veri Katmanı Başlatma
+    db_path = Path("hustler_core.db")
+    db = Database(db_path)
+    await db.init()
+    
+    cache = YouTubeCache(db, ttl_seconds=3600)
+    await cache.init_tables()
+    
+    app.state.db = db
+    app.state.cache = cache
+    
     # Rust tarafı bu satırı okur
     print(f"HUSTLER_BIND::PORT={port}::TOKEN={SESSION_TOKEN}", flush=True)
     log.info("sidecar_started", port=port)
     yield
+    await db.close()
     log.info("sidecar_stopped")
 
 
@@ -53,6 +71,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Hustler Core", version="0.1.0", lifespan=lifespan)
 
+from services.core.hustler.api.routes.discovery import router as discovery_router
+app.include_router(discovery_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # RFC 9457 Problem Details hata işleyici
