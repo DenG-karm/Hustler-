@@ -44,8 +44,9 @@ from services.core.hustler.generators.subtitle_generator import (  # noqa: E402
     SubtitleStyle,
 )
 from services.core.hustler.infrastructure.asset_manager import AssetManager  # noqa: E402
-from services.core.hustler.infrastructure.hardware import detect_cuda  # noqa: E402
+from services.core.hustler.infrastructure.hardware import detect_cuda, select_video_encoder  # noqa: E402
 from services.core.hustler.infrastructure.llm_port import LLMPort  # noqa: E402
+from services.core.hustler.infrastructure.youtube_downloader import YouTubeDownloader  # noqa: E402
 from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming  # noqa: E402
 from services.core.hustler.infrastructure.tts_port import ElevenLabsAdapter  # noqa: E402
 from services.core.hustler.render.ffmpeg_runner import (  # noqa: E402
@@ -156,15 +157,15 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
             s1a.status = "PASS" if len(ids) >= 20 else "FAIL"
             if len(ids) < 20:
                 s1a.notes.append(f"20 sonuç istendi, {len(ids)} geldi.")
-            if ids:
-                state["video_id"] = ids[0]
+            state["video_ids"] = ids
         except Exception as exc:  # noqa: BLE001 - rapor için yakalanır, gizlenmez
             s1a.notes.append(f"{type(exc).__name__}: {exc}")
         s1a.seconds = round(time.perf_counter() - t0, 3)
 
+    t0 = time.perf_counter()
+    # Do?rudan URL indirme (AssetManager) a? h?z? referans? olarak ?l??l?r
     urls = [os.environ["E2E_ASSET_URL"]] if os.environ.get("E2E_ASSET_URL") else DEFAULT_ASSET_URLS
     manager = AssetManager(download_dir=str(OUT / "downloads"))
-    t0 = time.perf_counter()
     async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
         for url in urls:
             try:
@@ -172,32 +173,46 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
                 path = await manager.download_asset(url, client)
                 dt = time.perf_counter() - t_dl
                 size = os.path.getsize(path)
-                summary = probe_summary(await ffprobe(path))
                 s1b.metrics.update(
-                    url=url, bytes=size, seconds=round(dt, 3),
-                    mbit_per_s=round(size * 8 / 1e6 / max(dt, 1e-9), 2), **summary,
+                    direct_url=url, direct_bytes=size, direct_seconds=round(dt, 3),
+                    direct_mbit_per_s=round(size * 8 / 1e6 / max(dt, 1e-9), 2),
                 )
-                state["video_path"] = path
-                s1b.status = "PASS"
+                state.setdefault("video_path", path)
                 break
             except Exception as exc:  # noqa: BLE001
                 s1b.notes.append(f"{url}: {type(exc).__name__}: {exc}")
-        if state.get("video_id"):
-            watch = f"https://www.youtube.com/watch?v={state['video_id']}"
-            try:
-                p = await manager.download_asset(watch, client, ext=".mp4")
-                await ffprobe(p)
-                s1b.notes.append("YouTube watch URL'si gerçek video olarak indirildi.")
-            except Exception as exc:  # noqa: BLE001
-                s1b.notes.append(
-                    f"BULGU: AssetManager YouTube videosunu indiremiyor ({type(exc).__name__}); "
-                    "httpx tabanlı, yt-dlp entegrasyonu yok."
-                )
-        else:
-            s1b.notes.append(
-                "BULGU: AssetManager yalnızca doğrudan medya URL'si indirir (httpx); "
-                "yt-dlp/YouTube video indirme kodu projede yok. Ağ hızı örnek bir doğrudan URL ile ölçüldü."
+
+    # Ger?ek YouTube indirme (yt-dlp): aramadan gelen ilk >=10 sn'lik video
+    yt_dl = YouTubeDownloader(download_dir=str(OUT / "youtube"), timeout_sec=240.0)
+    for vid in state.get("video_ids", [])[:5]:
+        watch = f"https://www.youtube.com/watch?v={vid}"
+        try:
+            t_v = time.perf_counter()
+            vpath = await yt_dl.download(watch, "video")
+            video_dt = time.perf_counter() - t_v
+            vsum = probe_summary(await ffprobe(vpath))
+            if vsum["duration_sec"] < RENDER_SECONDS:
+                s1b.notes.append(f"{vid}: {vsum['duration_sec']:.1f} sn < {RENDER_SECONDS} sn, atland?.")
+                continue
+            t_a = time.perf_counter()
+            apath = await yt_dl.download(watch, "audio")
+            audio_dt = time.perf_counter() - t_a
+            asum = probe_summary(await ffprobe(apath))
+            vbytes = os.path.getsize(vpath)
+            s1b.metrics.update(
+                youtube_id=vid, youtube_video_seconds=round(video_dt, 3), youtube_video_bytes=vbytes,
+                youtube_video_mbit_per_s=round(vbytes * 8 / 1e6 / max(video_dt, 1e-9), 2),
+                youtube_video_resolution=vsum["resolution"], youtube_video_codec=vsum["video_codec"],
+                youtube_audio_seconds=round(audio_dt, 3), youtube_audio_bytes=os.path.getsize(apath),
+                youtube_audio_codec=asum["audio_codec"],
             )
+            state["video_path"] = vpath
+            s1b.status = "PASS" if asum["audio_codec"] == "mp3" else "FAIL"
+            break
+        except Exception as exc:  # noqa: BLE001
+            s1b.notes.append(f"{vid}: {type(exc).__name__}: {str(exc)[:300]}")
+    if s1b.status != "PASS" and not state.get("video_ids"):
+        s1b.notes.append("YouTube indirme denenemedi: A?ama 1a sonu? vermedi.")
     s1b.seconds = round(time.perf_counter() - t0, 3)
     return [s1a, s1b]
 
@@ -239,11 +254,11 @@ async def stage2_llm(state: dict[str, Any]) -> Stage:
         st.metrics["B_flagged_claims"] = len(report_b.flagged_claims)
         st.metrics["tokens_used"] = llm.ledger.current_usage
 
-        ok_a = status_a == "APPROVED"
+        ok_a = status_a == "APPROVED" and st.metrics["A_semantic"] == "OK"
         ok_b = status_b == "REJECTED"
         st.status = "PASS" if ok_a and ok_b else "FAIL"
         if not ok_a:
-            st.notes.append(f"Senaryo A temiz olmasına rağmen {status_a}.")
+            st.notes.append(f"Senaryo A kabul edilmedi: claims={status_a}, semantic={st.metrics['A_semantic']}.")
         if not ok_b:
             st.notes.append(f"KRİTİK: şiddet/dolandırıcılık metni {status_b} (REJECTED beklenirdi).")
     except Exception as exc:  # noqa: BLE001
@@ -324,9 +339,12 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
         ass_path.write_text(AssDocument.generate(words, SubtitleStyle()), encoding="utf-8")
 
         out_path = OUT / "render.mp4"
-        cmd = FFmpegCompiler.build_render_command(make_template(), audio, str(ass_path), [video], str(out_path))
+        encoder = await select_video_encoder()
+        cmd = FFmpegCompiler.build_render_command(
+            make_template(), audio, str(ass_path), [video], str(out_path), encoder=encoder
+        )
         cmd[-1:-1] = ["-t", str(RENDER_SECONDS)]
-        st.metrics["encoder_in_filtergraph"] = cmd[cmd.index("-c:v") + 1]
+        st.metrics["encoder_in_filtergraph"] = encoder
         st.metrics["filter_complex"] = cmd[cmd.index("-filter_complex") + 1]
 
         cuda = await detect_cuda()
@@ -359,21 +377,24 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
             and abs(summary["duration_sec"] - RENDER_SECONDS) < 1.0
         )
         st.status = "PASS" if completed and ok_media else "FAIL"
-        if st.metrics["encoder_in_filtergraph"] == "libx264" and cuda:
-            st.notes.append(
-                "BULGU: NVIDIA GPU var ama compiler libx264 (CPU) sabitliyor; donanım ivmelenmesi KULLANILMIYOR."
+        hw_used = encoder != "libx264"
+        st.metrics["hardware_encoder_used"] = hw_used
+        if cuda and st.metrics["h264_nvenc_in_ffmpeg_build"] and not hw_used:
+            st.status = "FAIL"
+            st.notes.append("KR?T?K: GPU ve NVENC mevcut ama se?ici libx264'e d??t?.")
+        if not hw_used and not cuda:
+            st.notes.append("Donan?m encoder'? bulunamad?; yaz?l?m yede?i (libx264) kullan?ld?.")
+        if hw_used:
+            cpu_cmd = FFmpegCompiler.build_render_command(
+                make_template(), audio, str(ass_path), [video], str(OUT / "render_cpu.mp4"),
+                encoder="libx264",
             )
-        if st.metrics["encoder_in_filtergraph"] == "libx264" and not cuda:
-            st.notes.append("NVIDIA GPU algılanmadı; ürün yalnızca CPU (libx264) ile encode ediyor.")
-
-        if cuda and st.metrics["h264_nvenc_in_ffmpeg_build"]:
-            nv_cmd = [("h264_nvenc" if c == "libx264" else c) for c in cmd]
-            nv_cmd[-1] = str(OUT / "render_nvenc.mp4")
+            cpu_cmd[-1:-1] = ["-t", str(RENDER_SECONDS)]
             t1 = time.perf_counter()
-            code, _, err = await run_cmd(*nv_cmd)
-            st.metrics["nvenc_comparison_seconds"] = round(time.perf_counter() - t1, 3) if code == 0 else None
+            code, _, err = await run_cmd(*cpu_cmd)
+            st.metrics["libx264_comparison_seconds"] = round(time.perf_counter() - t1, 3) if code == 0 else None
             if code != 0:
-                st.notes.append(f"NVENC karşılaştırma encode başarısız: {err[-150:]}")
+                st.notes.append(f"libx264 kar??la?t?rma encode ba?ar?s?z: {err[-150:]}")
     except Exception as exc:  # noqa: BLE001
         st.notes.append(f"{type(exc).__name__}: {exc}")
         st.notes.append(traceback.format_exc(limit=4).splitlines()[-1])

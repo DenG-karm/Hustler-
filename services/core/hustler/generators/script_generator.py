@@ -6,6 +6,7 @@ from pydantic import ValidationError
 from services.core.hustler.domain.models.script import ScriptDoc
 from services.core.hustler.domain.models.template import TemplateSpec
 from services.core.hustler.infrastructure.llm_port import LLMPort
+from services.core.hustler.validation.semantic import SemanticValidator
 
 logger = structlog.get_logger()
 
@@ -70,9 +71,12 @@ class ScriptGenerator:
 
     async def generate_script(self, template: TemplateSpec, context: str) -> ScriptDoc:
         """Senaryo üretimi dışa açık API'si. Maksimum limit aşılırsa çökme yerine ScriptGenerationError fırlatır."""
+        target_words = round(template.target_duration_sec * SemanticValidator.WPM / 60)
         prompt = (
             f"Senaryo Şablonu: {template.name}\n"
             f"Hedef Süre: {template.target_duration_sec} sn\n"
+            f"Hedef Kelime Sayısı: {target_words} (hook + body + cta toplamı, ±%10; "
+            f"{SemanticValidator.WPM} kelime/dk ile seslendirilecek)\n"
             f"Maksimum Sahne: {template.max_scenes}\n"
             f"İzin Verilen Tonlar: {', '.join(template.allowed_tones)}\n\n"
             f"Bağlam (İçerik): {context}"
@@ -82,4 +86,7 @@ class ScriptGenerator:
             return await self._attempt_generation(prompt)
         except Exception as e:
             logger.error("script_gen_fatal", error=str(e), msg="Maksimum deneme (3) aşıldı! Senaryo üretilemedi.")
-            raise ScriptGenerationError(f"Senaryo üretimi {template.name} için başarısız oldu.") from e
+            detail = f"{type(e).__name__}: {str(e)[:500]}"
+            raise ScriptGenerationError(
+                f"Senaryo üretimi {template.name} için başarısız oldu. {detail}"
+            ) from e

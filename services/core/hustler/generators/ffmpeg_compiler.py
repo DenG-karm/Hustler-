@@ -1,6 +1,15 @@
 from typing import List, Optional
 from services.core.hustler.domain.models.template import TemplateSpec
 
+SOFTWARE_ENCODER = "libx264"
+
+# Donanım encoder'ları (öncelik sırasıyla) ve yazılım yedeği; seçim hardware.select_video_encoder'da.
+VIDEO_ENCODER_ARGS: dict[str, list[str]] = {
+    "h264_nvenc": ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"],
+    "h264_amf": ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "23"],
+    SOFTWARE_ENCODER: ["-c:v", "libx264", "-preset", "fast", "-crf", "23"],
+}
+
 class FFmpegCompiler:
     """
     M6 K-603: FFmpeg Derleyici (Compiler)
@@ -25,10 +34,13 @@ class FFmpegCompiler:
         ass_path: str, 
         assets: List[str], 
         output_path: str,
-        bg_music_path: Optional[str] = None
+        bg_music_path: Optional[str] = None,
+        encoder: str = SOFTWARE_ENCODER,
     ) -> List[str]:
         if not assets:
             raise ValueError("En az bir görsel asset (video/resim) verilmelidir.")
+        if encoder not in VIDEO_ENCODER_ARGS:
+            raise ValueError(f"Desteklenmeyen video encoder'ı: {encoder}")
             
         cmd = ["ffmpeg", "-y"]
         
@@ -88,9 +100,7 @@ class FFmpegCompiler:
             "-filter_complex", filter_complex_str,
             "-map", "[out_v]",
             "-map", audio_map,
-            "-c:v", "libx264",
-            "-preset", "fast",
-            "-crf", "23",
+            *VIDEO_ENCODER_ARGS[encoder],
             "-c:a", "aac",
             "-b:a", "192k",
             output_path

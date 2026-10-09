@@ -23,6 +23,49 @@ async def detect_cuda() -> bool:
     except Exception:
         return False
 
+HARDWARE_ENCODERS = ("h264_nvenc", "h264_amf")
+SOFTWARE_ENCODER = "libx264"
+
+async def _run_ffmpeg(args: list[str], timeout: float) -> tuple[int, str]:
+    """ffmpeg'i çalıştırır; (çıkış kodu, stdout+stderr) döner. Süre aşımında süreci öldürür."""
+    proc = await asyncio.create_subprocess_exec(
+        "ffmpeg", "-hide_banner", *args,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.STDOUT,
+    )
+    try:
+        out, _ = await asyncio.wait_for(proc.communicate(), timeout=timeout)
+    except asyncio.TimeoutError:
+        proc.kill()
+        await proc.wait()
+        return -1, "timeout"
+    return proc.returncode or 0, out.decode("utf-8", errors="replace")
+
+async def select_video_encoder() -> str:
+    """
+    Donanım hızlandırmalı encoder'ı (NVENC, sonra AMF) seçer; yoksa libx264'e düşer.
+    Derlemede listelenmesi yetmez (sürücü/GPU yoksa başlatma başarısız olur):
+    her aday 1 karelik gerçek bir test kodlamasıyla doğrulanır.
+    """
+    try:
+        code, listing = await _run_ffmpeg(["-encoders"], timeout=10.0)
+    except FileNotFoundError:
+        return SOFTWARE_ENCODER
+    if code != 0:
+        return SOFTWARE_ENCODER
+
+    for encoder in HARDWARE_ENCODERS:
+        if encoder not in listing:
+            continue
+        code, _ = await _run_ffmpeg(
+            ["-f", "lavfi", "-i", "color=c=black:s=256x256:d=0.2", "-frames:v", "1",
+             "-c:v", encoder, "-f", "null", "-"],
+            timeout=15.0,
+        )
+        if code == 0:
+            return encoder
+    return SOFTWARE_ENCODER
+
 def run_rtf_benchmark() -> float:
     """
     Sistemin CPU/İşlem performansını ölçen basit matematiksel benchmark.

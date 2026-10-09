@@ -122,3 +122,32 @@ def test_command_building_is_deterministic(template: TemplateSpec) -> None:
     assert FFmpegCompiler.build_render_command(
         *args
     ) == FFmpegCompiler.build_render_command(*args)
+
+
+@pytest.mark.parametrize(
+    ("encoder", "expected"),
+    [
+        ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"]),
+        ("h264_amf", ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "23"]),
+        ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]),
+    ],
+)
+def test_encoder_selection_changes_only_video_codec_args(
+    template: TemplateSpec, encoder: str, expected: list[str]
+) -> None:
+    base = FFmpegCompiler.build_render_command(template, "t.mp3", "s.ass", ["a.mp4"], "o.mp4")
+    cmd = FFmpegCompiler.build_render_command(
+        template, "t.mp3", "s.ass", ["a.mp4"], "o.mp4", encoder=encoder
+    )
+
+    start = cmd.index("-c:v")
+    assert cmd[start : start + len(expected)] == expected
+    assert cmd[:start] == base[: base.index("-c:v")]
+    assert cmd[start + len(expected) :] == ["-c:a", "aac", "-b:a", "192k", "o.mp4"]
+
+
+def test_unknown_encoder_is_rejected(template: TemplateSpec) -> None:
+    with pytest.raises(ValueError, match="encoder"):
+        FFmpegCompiler.build_render_command(
+            template, "t.mp3", "s.ass", ["a.mp4"], "o.mp4", encoder="h264_bogus"
+        )

@@ -3,6 +3,7 @@
 import json
 from collections.abc import Callable
 
+import httpx
 import pytest
 from pydantic import ValidationError
 
@@ -13,6 +14,7 @@ from services.core.hustler.generators.script_generator import (
     ScriptGenerator,
 )
 
+from services.core.hustler.infrastructure.llm_port import LLMHTTPError
 from tests.conftest import LLMFactory
 
 VALID = {
@@ -49,6 +51,7 @@ async def test_prompt_contains_template_fields_and_schema(
     p = h.prompts[0]
     assert "Senaryo Şablonu: Test" in p
     assert "Hedef Süre: 30 sn" in p
+    assert "Hedef Kelime Sayısı: 70 " in p  # 30 sn * 140 WPM / 60
     assert "Maksimum Sahne: 3" in p
     assert "İzin Verilen Tonlar: ciddi" in p
     assert "Bağlam (İçerik): BAGLAM-XYZ" in p
@@ -135,4 +138,23 @@ async def test_non_object_json_is_wrapped_without_retry(
         await ScriptGenerator(h.port).generate_script(template, "x")
 
     assert isinstance(exc.value.__cause__, TypeError)
+    assert len(h.prompts) == 1
+
+
+async def test_http_error_detail_is_not_masked(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    resp = httpx.Response(
+        404,
+        json={"error": {"message": "model gone"}},
+        request=httpx.Request("POST", "https://example.test/x"),
+    )
+    h = llm_factory([LLMHTTPError(resp)])
+
+    with pytest.raises(ScriptGenerationError) as info:
+        await ScriptGenerator(h.port).generate_script(template, "x")
+
+    assert "LLMHTTPError" in str(info.value)
+    assert "404" in str(info.value) and "model gone" in str(info.value)
+    assert isinstance(info.value.__cause__, LLMHTTPError)
     assert len(h.prompts) == 1

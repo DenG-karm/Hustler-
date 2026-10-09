@@ -1,9 +1,24 @@
 import httpx
 from dataclasses import dataclass
 import structlog
-from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
+from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception
 
 logger = structlog.get_logger()
+
+GEMINI_MODEL = "gemini-2.5-flash"
+_ERROR_BODY_LIMIT = 500
+
+
+class LLMHTTPError(httpx.HTTPStatusError):
+    """HTTP hatası; durum kodu ve yanıt gövdesi mesajda görünür (hata maskelenmez)."""
+
+    def __init__(self, response: httpx.Response) -> None:
+        body = response.text[:_ERROR_BODY_LIMIT]
+        super().__init__(
+            f"LLM HTTP {response.status_code}: {body}",
+            request=response.request,
+            response=response,
+        )
 
 class TokenLimitExceededError(Exception):
     """Token bütçesi aşıldığında fırlatılır."""
@@ -39,14 +54,14 @@ class LLMPort:
         self.api_key = api_key
         self.ledger = CostLedger(max_tokens)
         self.client = httpx.AsyncClient(timeout=30.0)
-        self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
+        self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
 
     async def close(self) -> None:
         """httpx client'ı güvenle kapatır."""
         await self.client.aclose()
 
     @staticmethod
-    def _should_retry_error(exc: Exception) -> bool:
+    def _should_retry_error(exc: BaseException) -> bool:
         """Sadece 429 ve 50x hatalarında yeniden dener."""
         if isinstance(exc, httpx.HTTPStatusError):
             return exc.response.status_code in (429, 500, 502, 503, 504)
@@ -57,7 +72,8 @@ class LLMPort:
     @retry(
         wait=wait_exponential(multiplier=1, min=2, max=10),
         stop=stop_after_attempt(3),
-        retry=retry_if_exception_type((httpx.HTTPStatusError, httpx.RequestError))
+        retry=retry_if_exception(_should_retry_error),
+        reraise=True,
     )
     async def _execute_network_request(self, prompt: str) -> LLMResponse:
         """Gerçek ağ isteği (Tenacity ile korunur)"""
@@ -65,8 +81,15 @@ class LLMPort:
             "contents": [{"parts": [{"text": prompt}]}]
         }
         
-        resp = await self.client.post(self.endpoint, json=payload)
-        resp.raise_for_status()
+        resp = await self.client.post(
+            self.endpoint,
+            json=payload,
+            headers={"x-goog-api-key": self.api_key},
+        )
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise LLMHTTPError(resp) from e
         
         data = resp.json()
         
