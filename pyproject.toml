@@ -12,7 +12,7 @@ members = ["services/core"]
 core = { workspace = true }
 
 [tool.pytest.ini_options]
-testpaths = ["services/core/tests"]
+testpaths = ["tests", "services/core/tests"]
 pythonpath = ["."]
 asyncio_mode = "auto"
 addopts = "-ra --strict-markers --strict-config"
@@ -21,6 +21,7 @@ markers = [
     "dryrun: FFmpeg null-muxer kuru çalıştırma testi",
     "slow: uzun süren test",
     "gpu: CUDA/GPU gerektiren test",
+    "ffmpeg: gerçek ffmpeg binary'si gerektirir (yoksa FAIL, skip değil)",
 ]
 
 [tool.ruff]
@@ -28,13 +29,28 @@ markers = [
 extend-exclude = ["tools/smoke"]
 
 [tool.ruff.lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+# Eski borç (2 ihlal); S0-2'de kapanır. Yeni dosya eklenmez.
+"services/core/hustler/api/routes/discovery.py" = ["ANN401"]
+
+[tool.coverage.run]
+# source_dirs: __init__.py'siz alt paketleri de (hiç import edilmeseler bile) ölç.
+source_dirs = ["services/core/hustler"]
+branch = true
+
+[tool.coverage.report]
+include_namespace_packages = true
+show_missing = true
+skip_covered = false
 
 [dependency-groups]
 dev = [
     "mypy>=2.4.0",
     "pytest>=9.1.1",
     "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
     "ruff>=0.16.10",
     "types-aiofiles>=25.1.0.20260518",
     "types-colorama>=0.4.15.20260508",

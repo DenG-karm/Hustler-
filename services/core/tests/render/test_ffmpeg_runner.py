@@ -10,6 +10,8 @@ from services.core.hustler.render.ffmpeg_runner import (
     FFmpegRunner, RenderProgress, RenderComplete, RenderTimeout, RenderStalled, RenderFailed
 )
 
+pytestmark = pytest.mark.ffmpeg
+
 def is_pid_alive(pid: int) -> bool:
     if sys.platform != "win32":
         return False
