@@ -2,6 +2,7 @@
 
 import time
 
+import aiosqlite
 import pytest
 
 from services.core.hustler.db import Database
@@ -97,8 +98,32 @@ async def test_corrupt_json_does_not_crash_and_returns_none(
     assert await cache.get("k") is None
 
 
-async def test_get_before_init_tables_swallows_error(db: Database) -> None:
-    assert await YouTubeCache(db).get("k") is None
+async def test_get_before_init_tables_swallows_error_and_closes_reader(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    opened: list[aiosqlite.Connection] = []
+    real_get_reader = db.get_reader
+
+    async def tracking_get_reader() -> aiosqlite.Connection:
+        conn = await real_get_reader()
+        opened.append(conn)
+        return conn
+
+    monkeypatch.setattr(db, "get_reader", tracking_get_reader)
+
+    result = await YouTubeCache(db).get("k")
+
+    leaked: list[aiosqlite.Connection] = []
+    for c in opened:
+        try:
+            await c.execute("SELECT 1")
+        except ValueError:  # aiosqlite: kapalı bağlantı
+            continue
+        leaked.append(c)
+        await c.close()  # sızıntı süreci kilitlemesin
+    assert result is None
+    # BULGU: cache.get hata yolunda reader bağlantısını kapatmıyor (üretim kodu düzelene dek KIRMIZI)
+    assert leaked == []
 
 
 async def test_set_non_serializable_raises_type_error(db: Database) -> None:
