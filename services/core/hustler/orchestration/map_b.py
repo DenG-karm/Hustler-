@@ -59,7 +59,7 @@ class MapBExecutor:
         
         final_output = []
         for v, result in zip(videos, results):
-            if isinstance(result, Exception):
+            if isinstance(result, BaseException):
                 logger.error("map_b_partial_failure", video_id=v["video_id"], error=str(result))
                 final_output.append({
                     "video_id": v["video_id"], 

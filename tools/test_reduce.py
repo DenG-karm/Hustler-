@@ -5,10 +5,10 @@ import structlog
 from pathlib import Path
 
 # Windows Unicode sorunları için
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -24,7 +24,7 @@ async def mock_execute(prompt: str) -> LLMResponse:
     await asyncio.sleep(0.5)
     return LLMResponse("Sentetik Reduce Analizi", 10, 10, 20)
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-308: REDUCE VE ÖNBELLEK YÖNETİMİ TESTİ ---")
     
     # 1. Altyapı Hazırlığı (Geçici Test Veritabanı)
@@ -37,7 +37,7 @@ async def main():
     
     # LLMPort mock ayarı
     llm_port = LLMPort(api_key="MOCK_KEY", max_tokens=10000)
-    llm_port._execute_network_request = mock_execute
+    setattr(llm_port, "_execute_network_request", mock_execute)
     
     # 2. Reduce Orkestratörünü Kur ve Tabloyu Hazırla
     reduce_engine = ReduceOrchestrator(db, llm_port)

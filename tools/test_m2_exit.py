@@ -1,3 +1,4 @@
+from typing import Any
 import asyncio
 import os
 import re
@@ -14,7 +15,7 @@ from services.core.hustler.storage.maintenance import prune_expired_cache
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if not api_key:
         logger.error("YOUTUBE_API_KEY eksik! (Set $env:YOUTUBE_API_KEY)")
@@ -38,7 +39,7 @@ async def main():
     
     while time.time() - start_time < 15:
         try:
-            line_bytes = await asyncio.wait_for(proc.stdout.readline(), timeout=1.0)
+            line_bytes = (await asyncio.wait_for(proc.stdout.readline(), timeout=1.0) if proc.stdout else b"")
             if not line_bytes:
                 continue
             line = line_bytes.decode('utf-8', errors='ignore')
@@ -59,9 +60,9 @@ async def main():
     logger.info("Sunucu bağlandı", port=port, token=token)
     
     # Kalan satırları arka planda okuyan asenkron task (Pipe deadlock'u önler)
-    async def log_reader():
+    async def log_reader() -> None:
         while True:
-            line = await proc.stdout.readline()
+            line = await proc.stdout.readline() if proc.stdout else b""
             if not line:
                 break
     
@@ -75,7 +76,7 @@ async def main():
         "Content-Type": "application/json"
     }
     
-    async def fetch_discovery(client: httpx.AsyncClient, topic: str):
+    async def fetch_discovery(client: httpx.AsyncClient, topic: str) -> Any:
         payload = {"topic": topic, "max_results": 10, "score_threshold": 5.0}
         # 120 saniyeye çıkardık çünkü Rate Limit kaynaklı backoff uzun sürebilir
         resp = await client.post(url, json=payload, headers=headers, timeout=120.0)
@@ -86,7 +87,7 @@ async def main():
     req_start = time.perf_counter()
     async with httpx.AsyncClient() as client:
         tasks = [fetch_discovery(client, t) for t in topics]
-        results = await asyncio.gather(*tasks, return_exceptions=True)
+        results: list[Any] = await asyncio.gather(*tasks, return_exceptions=True)
         
     req_elapsed = time.perf_counter() - req_start
     
@@ -100,6 +101,8 @@ async def main():
             errors += 1
             logger.error("İstek Çöktü (Exception)", error=str(res))
         else:
+            if isinstance(res, BaseException): continue
+            if isinstance(res, BaseException): continue
             topic, status, data = res
             if status == 200:
                 successes += 1

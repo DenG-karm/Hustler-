@@ -2,7 +2,7 @@ import asyncio
 from dataclasses import dataclass
 from typing import Optional
 from youtube_transcript_api import YouTubeTranscriptApi
-from youtube_transcript_api import TranscriptsDisabled, NoTranscriptFound, VideoUnavailable
+from youtube_transcript_api import TranscriptsDisabled, VideoUnavailable
 
 @dataclass
 class TranscriptResult:

@@ -1,5 +1,4 @@
 import asyncio
-import time
 import structlog
 
 from services.core.hustler.db import Database
@@ -8,7 +7,7 @@ from services.core.hustler.storage.maintenance import prune_expired_cache
 
 logger = structlog.get_logger()
 
-async def discovery_loop(orchestrator: DiscoveryOrchestrator, topic: str, interval_sec: int):
+async def discovery_loop(orchestrator: DiscoveryOrchestrator, topic: str, interval_sec: int) -> None:
     """
     Otonom Keşif Döngüsü
     Verilen aralıklarla arka planda video araması ve skorlaması yapar.
@@ -37,7 +36,7 @@ async def discovery_loop(orchestrator: DiscoveryOrchestrator, topic: str, interv
             )
 
 
-async def maintenance_loop(db: Database, cache_ttl_sec: int, interval_sec: int):
+async def maintenance_loop(db: Database, cache_ttl_sec: int, interval_sec: int) -> None:
     """
     Veritabanı Bakım ve Temizlik Döngüsü
     Süresi dolmuş önbelleği (Cache) siler ve incremental_vacuum ile boşalan RAM/Diski OS'e iade eder.

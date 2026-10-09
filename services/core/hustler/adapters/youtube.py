@@ -1,5 +1,5 @@
 import httpx
-from typing import Optional, AsyncGenerator
+from typing import Optional, AsyncGenerator, Any
 from tenacity import (
     AsyncRetrying,
     retry_if_exception,
@@ -28,16 +28,16 @@ class YouTubeClient:
         self._client: Optional[httpx.AsyncClient] = None
         self.quota_used = 0
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "YouTubeClient":
         """Asenkron bağlam (async context manager) desteği"""
         self._client = httpx.AsyncClient(timeout=15.0)
         return self
         
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> None:
         if self._client:
             await self._client.aclose()
 
-    async def _fetch_with_retry(self, method: str, url: str, params: dict) -> dict:
+    async def _fetch_with_retry(self, method: str, url: str, params: dict[str, Any]) -> dict[str, Any]:
         """Cache denetimli ve Tenacity backoff mekanizmalı API Çağrısı"""
         
         # 1. Önbellek kontrolü
@@ -78,14 +78,14 @@ class YouTubeClient:
                 if self.cache:
                     await self.cache.set(cache_key, data)
                     
-                return data
+                return dict(data) if isinstance(data, dict) else {}
         
         raise RuntimeError("Tenacity beklenmedik şekilde sonlandı.")
 
-    async def search_shorts(self, topic: str, max_results: int = 40) -> AsyncGenerator[dict, None]:
+    async def search_shorts(self, topic: str, max_results: int = 40) -> AsyncGenerator[dict[str, Any], None]:
         """Arama için sayfalama (pagination) mantığı. Shorts'ları sayfa sayfa yield eder."""
         url = f"{self.base_url}/search"
-        params = {
+        params: dict[str, Any] = {
             "part": "snippet",
             "type": "video",
             "videoDuration": "short",
@@ -111,7 +111,7 @@ class YouTubeClient:
                 break
             params["pageToken"] = next_token
 
-    async def get_videos_details(self, video_ids: list[str]) -> list[dict]:
+    async def get_videos_details(self, video_ids: list[str]) -> list[dict[str, Any]]:
         """Detay end-pointi (50'şerli batching ile sayfalama mantığı)."""
         url = f"{self.base_url}/videos"
         results = []

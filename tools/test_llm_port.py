@@ -4,10 +4,10 @@ import asyncio
 import structlog
 
 # Windows Unicode sorunları için
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -15,7 +15,7 @@ from services.core.hustler.infrastructure.llm_port import LLMPort, TokenLimitExc
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-305: LLM PORT VE MALİYET DEFTERİ TESTİ ---")
     
     # Müşterinin paylaştığı API anahtarı
@@ -31,7 +31,7 @@ async def main():
         await asyncio.sleep(0.1)
         return LLMResponse("Mocked Response", 5, 5, 10)
     
-    port._execute_network_request = mock_execute
+    setattr(port, "_execute_network_request", mock_execute)
     
     prompts = [
         "Sadece tek kelime ile cevap ver: Gökyüzü ne renktir?",
@@ -52,7 +52,7 @@ async def main():
             import httpx
             if isinstance(e, RetryError):
                 if isinstance(e.last_attempt.exception(), httpx.HTTPStatusError):
-                    logger.error("HTTP Hatası", status=e.last_attempt.exception().response.status_code, body=e.last_attempt.exception().response.text)
+                    logger.error("HTTP Hatası", status=getattr(getattr(e.last_attempt.exception(), "response", None), "status_code", 500), body=getattr(getattr(e.last_attempt.exception(), "response", None), "text", ""))
                 else:
                     logger.error("Beklenmeyen hata (Retry)", error=str(e.last_attempt.exception()))
             else:

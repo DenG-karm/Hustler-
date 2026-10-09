@@ -11,7 +11,7 @@ from services.core.hustler.infrastructure.hardware import init_hardware_profile,
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-301: HARDWARE PROFILE TESTİ BAŞLIYOR ---")
     
     db_path = Path("hustler_core.db")

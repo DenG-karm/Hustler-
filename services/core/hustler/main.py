@@ -21,6 +21,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from services.core.hustler.db import Database
+from services.core.hustler.api.routes.discovery import router as discovery_router
 from services.core.hustler.storage.cache import YouTubeCache
 
 log = structlog.get_logger()
@@ -36,7 +37,7 @@ def _get_free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
         s.bind(("127.0.0.1", 0))
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        return s.getsockname()[1]
+        return int(s.getsockname()[1])
 
 
 # ---------------------------------------------------------------------------
@@ -71,7 +72,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Hustler Core", version="0.1.0", lifespan=lifespan)
 
-from services.core.hustler.api.routes.discovery import router as discovery_router
 app.include_router(discovery_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------

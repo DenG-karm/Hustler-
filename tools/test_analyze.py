@@ -1,8 +1,8 @@
+from typing import Any
 import asyncio
 import json
 import random
 import time
-from typing import Optional
 
 import structlog
 from pydantic import BaseModel, ValidationError
@@ -33,7 +33,7 @@ class SummaryCard(BaseModel):
 
 
 class MockLLMAdapter:
-    def __init__(self):
+    def __init__(self) -> None:
         self.total_tokens = 0
         self.call_count = 0
 
@@ -62,7 +62,7 @@ llm_metrics = {
     "failed": 0,
 }
 
-async def map_phase_task(video_id: str, adapter: MockLLMAdapter, semaphore: asyncio.Semaphore):
+async def map_phase_task(video_id: str, adapter: MockLLMAdapter, semaphore: asyncio.Semaphore) -> Any:
     """Eşzamanlı Map aşaması ve Validation Error Retry (Maks 2)"""
     async with semaphore:
         for attempt in range(3):  # 1 ilk deneme + 2 retry
@@ -77,14 +77,14 @@ async def map_phase_task(video_id: str, adapter: MockLLMAdapter, semaphore: asyn
                     llm_metrics["retry_success"] += 1
                 return card
             
-            except (json.JSONDecodeError, ValidationError) as e:
+            except (json.JSONDecodeError, ValidationError):
                 logger.debug("LLM Şema Hatası, Retry tetikleniyor", video_id=video_id, attempt=attempt+1)
                 if attempt == 2:
                     llm_metrics["failed"] += 1
                     logger.error("LLM Çağrısı Başarısız (Tüm Retry'lar tükendi)", video_id=video_id)
                     return None
 
-async def run_llm_test():
+async def run_llm_test() -> None:
     logger.info("--- GÖREV 1: LLM Şema Uyumu ve Map-Reduce Testi ---")
     adapter = MockLLMAdapter()
     semaphore = asyncio.Semaphore(5)
@@ -119,7 +119,7 @@ class CircuitBreakerOpenError(Exception):
     pass
 
 class CircuitBreaker:
-    def __init__(self, max_consecutive=5, max_time_budget=10.0):
+    def __init__(self, max_consecutive: int=5, max_time_budget: float=10.0) -> None:
         self.max_consecutive = max_consecutive
         self.max_time_budget = max_time_budget
         
@@ -127,7 +127,7 @@ class CircuitBreaker:
         self.total_time_spent = 0.0
         self.is_open = False
 
-    def record_usage(self, duration: float):
+    def record_usage(self, duration: float) -> None:
         if self.is_open:
             return
             
@@ -139,12 +139,12 @@ class CircuitBreaker:
             self.is_open = True
             logger.warning("DEVRE KESİCİ AÇILDI (OPEN)", reason="Limit Aşıldı", count=self.consecutive_count, time=round(self.total_time_spent, 2))
 
-    def check(self):
+    def check(self) -> None:
         if self.is_open:
             raise CircuitBreakerOpenError("Devre Kesici AÇIK. Yeni işlem reddedildi.")
 
 
-def synthetic_cpu_heavy_task(duration_sec: float):
+def synthetic_cpu_heavy_task(duration_sec: float) -> float:
     """Event loop'u bloklama potansiyeli olan sentetik CPU ağır işlem (Whisper simülasyonu)."""
     start = time.time()
     while time.time() - start < duration_sec:
@@ -152,7 +152,7 @@ def synthetic_cpu_heavy_task(duration_sec: float):
     return time.time() - start
 
 
-async def process_transcript(video_id: str, cb: CircuitBreaker):
+async def process_transcript(video_id: str, cb: CircuitBreaker) -> str:
     try:
         cb.check()
     except CircuitBreakerOpenError as e:
@@ -171,7 +171,7 @@ cb_metrics = {
     "max_delay_ms": 0.0
 }
 
-async def event_loop_monitor():
+async def event_loop_monitor() -> None:
     """Arka planda çalışarak event loop gecikmesini ölçer (Bloklanmayı tespit eder)."""
     while True:
         start = time.perf_counter()
@@ -183,7 +183,7 @@ async def event_loop_monitor():
             break
 
 
-async def run_circuit_breaker_test():
+async def run_circuit_breaker_test() -> None:
     logger.info("--- GÖREV 2: CPU Darboğazı ve Devre Kesici Testi ---")
     cb = CircuitBreaker(max_consecutive=5, max_time_budget=10.0)
     
@@ -210,7 +210,7 @@ async def run_circuit_breaker_test():
     logger.info("GÖREV 2 BAŞARILI.")
 
 
-async def main():
+async def main() -> None:
     await run_llm_test()
     print("\n" + "="*50 + "\n")
     await run_circuit_breaker_test()

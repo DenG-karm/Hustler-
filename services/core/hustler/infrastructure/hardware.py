@@ -1,3 +1,4 @@
+from typing import Any
 import time
 import asyncio
 from services.core.hustler.db import Database
@@ -49,7 +50,7 @@ async def init_hardware_profile(db: Database) -> None:
     """
     await db.execute_write(query)
 
-async def measure_and_save_profile(db: Database) -> dict:
+async def measure_and_save_profile(db: Database) -> dict[str, Any]:
     """Donanımı tarar ve sonucu veritabanına kaydeder."""
     has_cuda = await detect_cuda()
     

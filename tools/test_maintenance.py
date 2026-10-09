@@ -12,7 +12,7 @@ from services.core.hustler.tasks.scheduler import maintenance_loop
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     logger.info("--- K-203 VERİ KATMANI BAKIMI TESTİ BAŞLIYOR ---")
     
     db_path = Path("test_maintenance.db")

@@ -66,7 +66,7 @@ def fetch_transcript_metadata_sync(video_id: str) -> bool:
             return False
 
 
-async def check_transcript_async(video_id: str):
+async def check_transcript_async(video_id: str) -> None:
     """
     Her video için Semafor üzerinden geçen ve event loop'u bloklamayan wrapper.
     """
@@ -85,7 +85,7 @@ async def check_transcript_async(video_id: str):
             logger.debug("Durum: Whisper_Icin_Isaretlendi", video_id=video_id)
 
 
-async def main():
+async def main() -> None:
     logger.info("M1 Faz 0 Doğrulama Testi: Transcript Kapsama Ölçümü Başlatılıyor", concurrency_limit=CONCURRENCY_LIMIT)
     
     # Tüm videolar için asenkron task listesi oluştur

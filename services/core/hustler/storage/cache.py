@@ -1,6 +1,6 @@
 import time
 import json
-from typing import Optional
+from typing import Any, Optional
 
 import structlog
 from services.core.hustler.db import Database
@@ -12,7 +12,7 @@ class YouTubeCache:
         self.db = db
         self.ttl_seconds = ttl_seconds
         
-    async def init_tables(self):
+    async def init_tables(self) -> None:
         """Tabloyu oluşturur (Eğer yoksa). Yazma kuyruğu üzerinden geçer."""
         await self.db.execute_write("""
             CREATE TABLE IF NOT EXISTS youtube_cache (
@@ -22,7 +22,7 @@ class YouTubeCache:
             )
         """)
         
-    async def get(self, cache_key: str) -> Optional[dict]:
+    async def get(self, cache_key: str) -> Optional[dict[str, Any]]:
         """Süresi dolmamış (TTL) cache verisini getirir."""
         try:
             # ReaderPool üzerinden kilitsiz okuma (WAL)
@@ -36,7 +36,8 @@ class YouTubeCache:
                 response_json, created_at = row
                 if time.time() - created_at <= self.ttl_seconds:
                     logger.debug("Cache Hit (Veritabanından)", cache_key=cache_key)
-                    return json.loads(response_json)
+                    res = json.loads(response_json)
+                    return dict(res) if isinstance(res, dict) else None
                 else:
                     logger.debug("Cache Expired (Süresi dolmuş)", cache_key=cache_key)
             else:
@@ -46,7 +47,7 @@ class YouTubeCache:
             logger.error("Cache get hatası", error=str(e))
             return None
             
-    async def set(self, cache_key: str, data: dict) -> None:
+    async def set(self, cache_key: str, data: dict[str, Any]) -> None:
         """Veriyi M0 WriterQueue üzerinden SQLite'a yazar. (Doğrudan INSERT yoktur, kuyruğa iş eklenir)"""
         data_json = json.dumps(data)
         created_at = time.time()

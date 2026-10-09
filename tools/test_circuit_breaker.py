@@ -2,13 +2,12 @@ import sys
 import os
 import asyncio
 import structlog
-from pathlib import Path
 
 # Windows konsolunda UnicodeEncodeError almamak için stdout ve stderr UTF-8'e zorlanır
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -18,7 +17,7 @@ from services.core.hustler.infrastructure.circuit_breaker import (
 
 logger = structlog.get_logger()
 
-async def dummy_whisper_operation(breaker: CircuitBreaker, duration: int, should_fail: bool):
+async def dummy_whisper_operation(breaker: CircuitBreaker, duration: int, should_fail: bool) -> str:
     """Sentetik yük: CircuitBreaker bağlamında (context) çalışan işlev."""
     # Bütçe kontrolü (Devre açık olmasa bile çok uzun videoları baştan reddeder)
     breaker.check_budget(duration)
@@ -32,8 +31,9 @@ async def dummy_whisper_operation(breaker: CircuitBreaker, duration: int, should
         # İşlem simülasyonu
         await asyncio.sleep(0.1) 
         return "İşlem Başarılı"
+    return "Skipped"
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-303: DEVRE KESİCİ (CIRCUIT BREAKER) TESTİ ---")
     
     # Testi hızlı yapabilmek için soğuma süresini (cooldown) sadece 2 saniye tutuyoruz.

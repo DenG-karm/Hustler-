@@ -24,7 +24,7 @@ def setup_logging(is_dev: bool = True) -> None:
             event_dict["run_id"] = run_id
         return event_dict
 
-    processors = [
+    processors: list[Any] = [
         structlog.stdlib.add_log_level,
         structlog.stdlib.add_logger_name,
         structlog.processors.TimeStamper(fmt="iso"),

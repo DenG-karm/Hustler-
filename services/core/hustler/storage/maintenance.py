@@ -4,7 +4,7 @@ from services.core.hustler.db import Database
 
 logger = structlog.get_logger()
 
-async def prune_expired_cache(db: Database, ttl_seconds: int = 3600):
+async def prune_expired_cache(db: Database, ttl_seconds: int = 3600) -> None:
     """
     K-203: Önbellek (Cache) Temizleme ve Disk İade Etme (Vacuum) Rutini.
     Disk I/O darboğazını önlemek için işlemler asenkron WriterQueue üzerinden ilerler.

@@ -5,10 +5,10 @@ import time
 import structlog
 
 # Windows Unicode sorunları için
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -16,7 +16,7 @@ from services.core.hustler.infrastructure.inference import InferencePort
 
 logger = structlog.get_logger()
 
-async def ping_loop(stop_event: asyncio.Event):
+async def ping_loop(stop_event: asyncio.Event) -> float:
     """
     Ana event loop'ta her 100 ms'de bir uyanarak gecikmeyi ölçen heartbeat döngüsü.
     Eğer ana GIL kilitlenirse veya event loop boğulursa bu gecikme büyük ölçüde artar.
@@ -40,7 +40,7 @@ async def ping_loop(stop_event: asyncio.Event):
             
     return max_delay
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-306: İŞLEM İZOLASYONU VE EVENT-LOOP GECİKME TESTİ ---")
     
     # CpuBudget=1 olarak InferencePort başlatılıyor
@@ -63,7 +63,7 @@ async def main():
     
     # İşlem bitti, sayaç döngüsünü durdur ve max gecikmeyi oku
     stop_event.set()
-    max_delay = await ping_task
+    max_delay: float = await ping_task
     
     logger.info("Event Loop Maksimum Gecikmesi", max_gecikme_sn=round(max_delay, 4))
     

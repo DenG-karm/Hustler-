@@ -39,14 +39,14 @@ class EvalHarness:
             actual_val = actual.get(k)
             
             # Tip Uyuşmazlığı Cezası (Boolean yerine string "True" döndürmek vs.)
-            if type(ideal_val) != type(actual_val):
+            if type(ideal_val) is not type(actual_val):
                 continue
                 
             if isinstance(ideal_val, bool):
                 # Mantıksal Birebir Eşleşme
                 if ideal_val == actual_val:
                     score += weight
-            elif isinstance(ideal_val, str):
+            if isinstance(ideal_val, str) and isinstance(actual_val, str):
                 # Anlamsal kapsama eşleşmesi (Birebir değil, kelime içermesi yeterli)
                 # LLM büyük harf veya noktalama kullanmış olabilir
                 if ideal_val == "" and actual_val == "":

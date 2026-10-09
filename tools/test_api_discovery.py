@@ -9,7 +9,7 @@ import sys
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if not api_key:
         logger.error("YOUTUBE_API_KEY eksik!")
@@ -35,7 +35,7 @@ async def main():
     # Uygulamanın stdout çıktısını okuyarak Port ve Token'ı çek
     start_time = time.time()
     while time.time() - start_time < 15:
-        line = proc.stdout.readline()
+        line = proc.stdout.readline() if proc.stdout else ""
         if not line:
             continue
             

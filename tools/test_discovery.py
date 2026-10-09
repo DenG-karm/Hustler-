@@ -13,7 +13,7 @@ from services.core.hustler.services.discovery import DiscoveryOrchestrator
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if not api_key:
         logger.error("YOUTUBE_API_KEY eksik!")

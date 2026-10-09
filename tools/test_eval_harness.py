@@ -5,10 +5,10 @@ import json
 import structlog
 
 # Windows Unicode sorunları için
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -49,11 +49,11 @@ async def mock_execute(prompt: str) -> LLMResponse:
             
     return LLMResponse(json.dumps(res), 10, 10, 20)
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-309: PROMPT DEĞERLENDİRME TAKIMI (EVAL HARNESS) TESTİ ---")
     
     llm_port = LLMPort(api_key="MOCK", max_tokens=99999)
-    llm_port._execute_network_request = mock_execute
+    setattr(llm_port, "_execute_network_request", mock_execute)
     
     dataset_path = os.path.join(os.path.dirname(__file__), '..', 'tests', 'data', 'eval_dataset.json')
     harness = EvalHarness(dataset_path, llm_port)

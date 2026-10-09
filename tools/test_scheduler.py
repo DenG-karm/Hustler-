@@ -1,3 +1,5 @@
+from services.core.hustler.services.discovery import DiscoveryOrchestrator
+from typing import Any
 import asyncio
 import os
 import sys
@@ -12,11 +14,11 @@ from services.core.hustler.tasks.scheduler import discovery_loop, maintenance_lo
 logger = structlog.get_logger()
 
 # Mock Orchestrator: Hata simülasyonu için
-class MockOrchestrator:
-    def __init__(self):
+class MockOrchestrator(DiscoveryOrchestrator):
+    def __init__(self) -> None:
         self.call_count = 0
         
-    async def run_discovery(self, topic: str, max_results: int = 50, score_threshold: float = 30.0):
+    async def run_discovery(self, topic: str, max_results: int = 50, score_threshold: float = 30.0) -> dict[str, Any]:
         self.call_count += 1
         logger.info("MockOrchestrator.run_discovery cagirildi", call_count=self.call_count)
         
@@ -26,9 +28,10 @@ class MockOrchestrator:
             raise RuntimeError("YouTube API 500 Internal Server Error (Kasıtlı Çökme)")
         else:
             logger.info("MockOrchestrator.run_discovery başarılı (2. Çağrı)")
+            return {"status": "success"}
 
 
-async def main():
+async def main() -> None:
     logger.info("--- K-206 ZAMANLAYICI VE HATA İZOLASYON TESTİ BAŞLIYOR ---")
     
     db_path = Path("test_scheduler.db")

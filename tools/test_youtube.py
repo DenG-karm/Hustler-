@@ -1,3 +1,4 @@
+from typing import Any
 import asyncio
 import os
 import re
@@ -68,7 +69,7 @@ def check_rate_limit(exception: BaseException) -> bool:
 
 
 # 3. Direnç (Resilience): Üstel geri çekilme + Jitter
-async def fetch_with_retry(client: httpx.AsyncClient, method: str, url: str, **kwargs) -> httpx.Response:
+async def fetch_with_retry(client: httpx.AsyncClient, method: str, url: str, **kwargs: Any) -> httpx.Response:
     """API isteklerini tenacity ile sarar, hata durumunda tekrar dener."""
     async for attempt in AsyncRetrying(
         retry=retry_if_exception_type(httpx.HTTPStatusError) & retry_if_exception(check_rate_limit),
@@ -146,7 +147,7 @@ async def fetch_video_details(client: httpx.AsyncClient, video_ids: List[str]) -
         logger.error("Videos detayi hatasi", status=e.response.status_code, error=str(e))
 
 
-async def main():
+async def main() -> None:
     if not YOUTUBE_API_KEY:
         logger.error("YOUTUBE_API_KEY çevre değişkeni bulunamadı. Script sonlandırılıyor.")
         return
@@ -167,8 +168,8 @@ async def main():
         for res in search_results:
             all_video_ids.update(res)
             
-        all_video_ids = list(all_video_ids)
-        logger.info("Toplam benzersiz short videoları bulundu", count=len(all_video_ids))
+        all_video_list = list(all_video_ids)
+        logger.info("Toplam benzersiz short videoları bulundu", count=len(all_video_list))
         
         import json
         with open(os.path.join(os.path.dirname(__file__), "video_ids.json"), "w", encoding="utf-8") as f:
@@ -176,7 +177,7 @@ async def main():
         
         # API Kota optimizasyonu için 50'şerli gruplara ayır
         batch_size = 50
-        batches = [all_video_ids[i:i + batch_size] for i in range(0, len(all_video_ids), batch_size)]
+        batches = [all_video_list[i:i + batch_size] for i in range(0, len(all_video_list), batch_size)]
         
         # Tüm grupları eşzamanlı detaylandır
         detail_tasks = [fetch_video_details(client, batch) for batch in batches]

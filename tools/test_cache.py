@@ -24,7 +24,7 @@ structlog.configure(
 )
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     api_key = os.environ.get("YOUTUBE_API_KEY")
     if not api_key:
         logger.error("YOUTUBE_API_KEY eksik! Lütfen $env:YOUTUBE_API_KEY ayarlayın.")

@@ -1,3 +1,4 @@
+from typing import Any
 import os
 import secrets
 from fastapi import APIRouter, Request, HTTPException
@@ -14,7 +15,7 @@ class DiscoveryRunRequest(BaseModel):
     max_results: int = 50
     score_threshold: float = 30.0
 
-def verify_token(request: Request):
+def verify_token(request: Request) -> Any:
     """Gelen isteğin Bearer token'ını doğrular (Tauri köprüsü)"""
     auth = request.headers.get("Authorization", "")
     if not auth.startswith("Bearer "):
@@ -26,7 +27,7 @@ def verify_token(request: Request):
         raise HTTPException(status_code=403, detail="Invalid token")
 
 @router.post("/discovery/run")
-async def run_discovery(payload: DiscoveryRunRequest, request: Request):
+async def run_discovery(payload: DiscoveryRunRequest, request: Request) -> Any:
     """
     K-205: Discovery Orchestrator Tetikleyicisi
     Belirtilen anahtar kelime için Shorts videolarını tarar, puanlar ve eşiği geçenleri veritabanına yazar.

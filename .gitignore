@@ -15,3 +15,23 @@ runs/
 *.mp4
 *.ass
 tools/video_ids.json
+
+# Üretilen test/denetim çıktıları
+.cache/
+.coverage
+.pytest_cache/
+audit_out/
+test_assets/
+mock_*.py
+*.sqlite-wal
+*.sqlite-shm
+
+# Geçici tek-seferlik betikler ve ham çıktılar
+/fix_*.py
+/auto_fix_mypy.py
+/build_k601.py
+/patch_test.py
+/print_lines.py
+/lines.txt
+/mypy_out*.txt
+/mypy_output.txt

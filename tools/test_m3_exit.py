@@ -6,10 +6,10 @@ import structlog
 from pathlib import Path
 
 # Windows Unicode sorunları için
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -28,7 +28,7 @@ async def mock_llm_execute(prompt: str) -> LLMResponse:
     await asyncio.sleep(0.5)
     return LLMResponse("Analiz sonucu OK", 50, 50, 100)
 
-async def ping_loop(stop_event: asyncio.Event):
+async def ping_loop(stop_event: asyncio.Event) -> float:
     max_delay = 0.0
     interval = 0.1
     while not stop_event.is_set():
@@ -39,7 +39,7 @@ async def ping_loop(stop_event: asyncio.Event):
             max_delay = actual_delay
     return max_delay
 
-async def main():
+async def main() -> None:
     logger.info("=========================================")
     logger.info("   M3 ÇIKIŞ KRİTERLERİ (EXIT CRITERIA)   ")
     logger.info("=========================================")
@@ -58,7 +58,7 @@ async def main():
     
     # 5000 Token Bütçesi
     llm_port = LLMPort(api_key="MOCK", max_tokens=5000)
-    llm_port._execute_network_request = mock_llm_execute
+    setattr(llm_port, "_execute_network_request", mock_llm_execute)
     
     reduce_engine = ReduceOrchestrator(db, llm_port)
     await reduce_engine.init_table()
@@ -115,7 +115,7 @@ async def main():
     await inference_port.run_inference("Test Video")
     
     stop_event.set()
-    max_delay = await ping_task
+    max_delay: float = await ping_task
     
     inference_port.shutdown()
     

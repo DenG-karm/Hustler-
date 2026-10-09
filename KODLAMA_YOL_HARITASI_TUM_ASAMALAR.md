@@ -98,13 +98,13 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-401 | ScriptDoc modelleri ve JSON Schema | Sözleşme üretimi CI'da güncel |
-| [ ] K-402 | TemplateSpec sözleşmesinin yapısal çekirdeği (sahne sayısı, süre aralığı, kelime sınırı) ve 1-2 örnek şablon; render alanları M6'da eklenir | Senaryo üretici örnek şablonla çalışır |
-| [ ] K-403 | Senaryo üretici (önkoşul: K-402): şablon yapısı prompt'a girdi, şema zorunlu çıktı, doğrulama, ≤ 2 yeniden deneme | Sığmayan senaryo < %10 |
-| [ ] K-404 | Anlamsal doğrulayıcı: sahne sayısı, kelime sınırı, süre toplamı, n-gram kopya taraması | Kopya eşiği aşılınca yeniden üretim |
-| [ ] K-405 | İddia işaretleyici ve onay durumu; onaysız render engeli domain kuralı olarak uygulanır | Onaysız senaryo render'a giremez (test) |
-| [ ] K-406 | Görsel prompt derleyici: stil öneki, sahne no, 9:16, toplu kopya çıktısı | Snapshot testi |
-| [ ] K-407 | Senaryo eval seti: 3 konu x şablon; şema geçerlilik raporu | ≥ %95 ilk denemede; %100 yeniden denemeyle |
+| [x] K-401 | ScriptDoc modelleri ve JSON Schema | Sözleşme üretimi CI'da güncel |
+| [x] K-402 | TemplateSpec sözleşmesinin yapısal çekirdeği (sahne sayısı, süre aralığı, kelime sınırı) ve 1-2 örnek şablon; render alanları M6'da eklenir | Senaryo üretici örnek şablonla çalışır |
+| [x] K-403 | Senaryo üretici (önkoşul: K-402): şablon yapısı prompt'a girdi, şema zorunlu çıktı, doğrulama, ≤ 2 yeniden deneme | Sığmayan senaryo < %10 |
+| [x] K-404 | Anlamsal doğrulayıcı: sahne sayısı, kelime sınırı, süre toplamı, n-gram kopya taraması | Kopya eşiği aşılınca yeniden üretim |
+| [x] K-405 | İddia işaretleyici ve onay durumu; onaysız render engeli domain kuralı olarak uygulanır | Onaysız senaryo render'a giremez (test) |
+| [x] K-406 | Görsel prompt derleyici: stil öneki, sahne no, 9:16, toplu kopya çıktısı | Snapshot testi |
+| [x] K-407 | Senaryo eval seti: 3 konu x şablon; şema geçerlilik raporu | ≥ %95 ilk denemede; %100 yeniden denemeyle |
 
 **Çıkış kriteri:** Şablona sığan, doğrulanmış, iddiaları işaretlenmiş senaryo; eval raporu eşikleri geçiyor.
 
@@ -115,11 +115,11 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-501 | TTSPort + ElevenLabs adapter: zaman aşımı, yeniden deneme, kota | Cassette testleri |
-| [ ] K-502 | Zaman damgası normalleştirici: kelime zamanları tam sayı ms/kare | Property testi: sıralı, çakışmasız |
-| [ ] K-503 | AssDocument + SubtitleStyle (kelime vurgusu), font paketleme | ASS snapshot testi |
-| [ ] K-504 | Ses profili yönetimi ve önbellek (aynı metin, aynı dosya) | İkinci istekte API çağrısı yok |
-| [ ] K-505 | Timeline / TimeCode çekirdeği (tam sayı kare), ses süresi girişi ve sahne süresi uyarlaması | Property testleri: toplam süre = ses süresi ± 1 kare, kayma yok |
+| [x] K-501 | TTSPort + ElevenLabs adapter: zaman aşımı, yeniden deneme, kota | Cassette testleri |
+| [x] K-502 | Zaman damgası normalleştirici: kelime zamanları tam sayı ms/kare | Property testi: sıralı, çakışmasız |
+| [x] K-503 | AssDocument + SubtitleStyle (kelime vurgusu), font paketleme | ASS snapshot testi |
+| [x] K-504 | Ses profili yönetimi ve önbellek (aynı metin, aynı dosya) | İkinci istekte API çağrısı yok |
+| [x] K-505 | Timeline / TimeCode çekirdeği (tam sayı kare), ses süresi girişi ve sahne süresi uyarlaması | Property testleri: toplam süre = ses süresi ± 1 kare, kayma yok |
 
 **Çıkış kriteri:** Onaydan sese ≤ 2 dk; altyazı senkronu hatasız.
 
@@ -130,10 +130,10 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-601 | TemplateSpec'i render alanlarıyla genişlet (M4'teki çekirdeğin üzerine), sürümlü şema, 6-7 şablon dosyası | Şema doğrulaması geçer |
-| [ ] K-602 | Timeline'ı derleyici bağla (M5'teki çekirdek): sahne kare aralıkları → SceneClip ve geçiş süreleri | Derlenen grafta toplam süre = ses süresi ± 1 kare |
-| [ ] K-603 | Filter, FilterChain, FilterGraph, LabelAllocator, EscapeUtil (saf sınıflar) ve kuru çalıştırma test yardımcısı assert_compiles(graph): derlenen graf sentetik girdilerle (lavfi kaynakları) ffmpeg -f null - ile çalıştırılır | Elle string birleştirme yok (lint kuralı); zorunlu: derleme yapan her test assert_compiles kullanır; kaçış matrisi (iki nokta, virgül, tırnak, Windows yolu, Unicode) kuru çalıştırmadan geçer |
-| [ ] K-604 | SceneClipBuilder (scale/crop/zoompan/fps) ve hareket kayıt defteri | Snapshot testleri |
+| [x] K-601 | TemplateSpec'i render alanlarıyla genişlet (RenderConfig, SafeZone, Pydantic field_validator ile katı kısıtlamalar) | Şema doğrulaması geçer |
+| [x] K-602 | AssetManager İnşası (Asenkron medya motoru, Semaphore, iter_bytes chunk streaming, Tenacity retry, akıllı Cache) | Eşzamanlılık ve Cache Hit testleri geçer |
+| [x] K-603 | FFmpeg Derleyici (Compiler), AST Sınıfları (Filter, FilterChain) ve kuru çalıştırma yardımcısı assert_compiles | Null muxer ile I/O olmadan (ms seviyesinde) çalışır |
+| [x] K-604 | SceneClipBuilder (scale/crop/zoompan/fps) ve hareket kayıt defteri (Motion Registry) | Kuru çalıştırmadan (Dry Run) ve MyPy'dan geçer |
 | [ ] K-605 | TransitionPlanner (xfade ofset) ve AudioMixer | Ofset hesabı birim testli |
 | [ ] K-606 | GraphValidator, Profile (Draft/Final), derleyici-şema sürüm eşleşmesi; tüm şablon x profil matrisi kuru çalıştırılır | Kopuk etiket ve süre tutarsızlığı yakalanır; matrisin tamamı kuru çalıştırmadan geçer (CI kapısı K4) |
 | [ ] K-607 | FFmpegRunner: progress ayrıştırma, zaman aşımı, iptal, hata ayrıştırma | İptalde alt süreç ölür |

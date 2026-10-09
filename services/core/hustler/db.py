@@ -18,7 +18,7 @@ log = structlog.get_logger()
 @dataclass
 class WriteJob:
     query: str
-    params: tuple = ()
+    params: tuple[Any, ...] = ()
     is_maintenance: bool = False
     result_fut: Optional[asyncio.Future[Any]] = None
 
@@ -55,7 +55,7 @@ class Database:
         await conn.execute("PRAGMA busy_timeout=5000;")
         return conn
 
-    async def execute_write(self, query: str, params: tuple = ()) -> None:
+    async def execute_write(self, query: str, params: tuple[Any, ...] = ()) -> None:
         """Sistemin hiçbir yerinden doğrudan yazma yapılmaz, istek kuyruğa eklenir."""
         loop = asyncio.get_running_loop()
         fut = loop.create_future()

@@ -5,10 +5,10 @@ import time
 import structlog
 
 # Windows konsolunda UnicodeEncodeError almamak için stdout ve stderr UTF-8'e zorlanır
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -16,7 +16,7 @@ from services.core.hustler.providers.transcript import TranscriptProvider
 
 logger = structlog.get_logger()
 
-async def main():
+async def main() -> None:
     logger.info("--- M3 K-302: TRANSCRIPT PROVIDER (PRIORITY ROUTING) TESTİ BAŞLIYOR ---")
     
     provider = TranscriptProvider(target_language="en")

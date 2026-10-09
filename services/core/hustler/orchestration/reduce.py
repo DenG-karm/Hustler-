@@ -1,8 +1,7 @@
-import asyncio
 import hashlib
 import json
 import structlog
-from typing import Dict, Any, Optional
+from typing import Dict, Any
 
 from services.core.hustler.db import Database
 from services.core.hustler.infrastructure.llm_port import LLMPort
@@ -20,7 +19,7 @@ class ReduceOrchestrator:
         self.db = db
         self.llm_port = llm_port
 
-    async def init_table(self):
+    async def init_table(self) -> None:
         """Veritabanında önbellek tablosunu hazırlar."""
         query = """
         CREATE TABLE IF NOT EXISTS analysis_results (
@@ -59,7 +58,8 @@ class ReduceOrchestrator:
                         prompt_version=prompt_version, 
                         msg="Önbellek eşleşti! Sıfır LLM maliyetiyle sonuç dönülüyor."
                     )
-                    return json.loads(row[0])
+                    res = json.loads(row[0])
+                    return dict(res) if isinstance(res, dict) else {}
         finally:
             await reader.close()
 

@@ -1,7 +1,6 @@
 import asyncio
 from concurrent.futures import ProcessPoolExecutor
 import structlog
-from typing import Optional
 
 logger = structlog.get_logger()
 
@@ -9,7 +8,7 @@ logger = structlog.get_logger()
 # Bu sayede ağır modeller süreç başına sadece 1 kere yüklenir (Singleton).
 _MODEL_INSTANCE = None
 
-def _initialize_worker():
+def _initialize_worker() -> None:
     """
     Her ProcessPool worker ayağa kalktığında bir kez tetiklenir.
     Ağır modellerin (Whisper vs.) bellek yönetimi burada yapılır.
@@ -67,6 +66,6 @@ class InferencePort:
             )
             return result
 
-    def shutdown(self):
+    def shutdown(self) -> None:
         """Worker pool'u güvenli şekilde sonlandırır."""
         self.executor.shutdown(wait=True)

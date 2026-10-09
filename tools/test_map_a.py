@@ -3,10 +3,10 @@ import os
 import structlog
 
 # Windows Unicode sorunları için stdout UTF-8 zorlaması
-if sys.stdout.encoding.lower() != 'utf-8':
-    sys.stdout.reconfigure(encoding='utf-8')
-if sys.stderr.encoding.lower() != 'utf-8':
-    sys.stderr.reconfigure(encoding='utf-8')
+if hasattr(sys.stdout, 'reconfigure') and sys.stdout.encoding.lower() != 'utf-8':
+    getattr(sys.stdout, 'reconfigure')(encoding='utf-8')
+if hasattr(sys.stderr, 'reconfigure') and sys.stderr.encoding.lower() != 'utf-8':
+    getattr(sys.stderr, 'reconfigure')(encoding='utf-8')
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
@@ -14,7 +14,7 @@ from services.core.hustler.domain.map_a import analyze_transcript
 
 logger = structlog.get_logger()
 
-def main():
+def main() -> None:
     logger.info("--- M3 K-304: MAP A (Deterministik Filtreleme) TESTİ ---")
     
     # SENARYO 1: Kelime Barajına Takılan (Kısa) veya Çok Yavaş
@@ -38,7 +38,7 @@ def main():
     ]
     
     for s in scenarios:
-        res = analyze_transcript(s["text"], s["duration"])
+        res = analyze_transcript(str(s["text"]), int(str(s["duration"])))
         
         if res.is_accepted:
             logger.info("✅ GEÇTİ", 

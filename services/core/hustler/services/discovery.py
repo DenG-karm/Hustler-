@@ -1,3 +1,4 @@
+from typing import Any
 import structlog
 import time
 from services.core.hustler.adapters.youtube import YouTubeClient
@@ -11,7 +12,7 @@ class DiscoveryOrchestrator:
         self.youtube = youtube_client
         self.db = db
         
-    async def init_tables(self):
+    async def init_tables(self) -> None:
         """K-205 kapsamında kazanan videoları saklayacağımız veritabanı tablosu"""
         await self.db.execute_write("""
             CREATE TABLE IF NOT EXISTS discovery_videos (
@@ -23,7 +24,7 @@ class DiscoveryOrchestrator:
             )
         """)
 
-    async def run_discovery(self, topic: str, max_results: int = 50, score_threshold: float = 30.0) -> dict:
+    async def run_discovery(self, topic: str, max_results: int = 50, score_threshold: float = 30.0) -> dict[str, Any]:
         """
         1. API/Cache üzerinden Shorts'ları çeker.
         2. Saf skorlama fonksiyonu üzerinden geçirir.

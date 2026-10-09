@@ -1,4 +1,4 @@
-import os
+from typing import Any
 import subprocess
 import time
 from dataclasses import dataclass, field
@@ -28,7 +28,7 @@ logger = structlog.get_logger()
 @dataclass
 class FilterNode:
     name: str
-    args: dict = field(default_factory=dict)
+    args: dict[str, Any] = field(default_factory=dict[str, Any])
     inputs: list[str] = field(default_factory=list)
     outputs: list[str] = field(default_factory=list)
 
@@ -47,10 +47,10 @@ class FilterChain:
         return ",".join(n.render() for n in self.nodes)
 
 class FilterGraph:
-    def __init__(self):
+    def __init__(self) -> None:
         self.chains: list[FilterChain] = []
 
-    def add_chain(self, chain: FilterChain):
+    def add_chain(self, chain: FilterChain) -> None:
         self.chains.append(chain)
 
     def compile(self) -> str:
@@ -61,7 +61,7 @@ class FilterGraph:
 # YARDIMCI METOTLAR
 # =====================================================================
 
-def generate_test_ass(filepath: str):
+def generate_test_ass(filepath: str) -> None:
     ass_content = """[Script Info]
 ScriptType: v4.00+
 [V4+ Styles]
@@ -108,7 +108,7 @@ def build_graph() -> FilterGraph:
 # ANA TEST AKIŞI
 # =====================================================================
 
-def main():
+def main() -> None:
     logger.info("--- GÖREV 3: OOP Filtergraph ve Render Kararlılığı Başlıyor ---")
     
     # 2. Girdilerin Hazırlanması

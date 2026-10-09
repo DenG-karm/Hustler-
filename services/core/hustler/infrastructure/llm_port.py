@@ -1,5 +1,4 @@
 import httpx
-from typing import Optional
 from dataclasses import dataclass
 import structlog
 from tenacity import retry, wait_exponential, stop_after_attempt, retry_if_exception_type
@@ -23,12 +22,12 @@ class CostLedger:
         self.max_tokens = max_tokens
         self.current_usage = 0
         
-    def check_budget(self):
+    def check_budget(self) -> None:
         """Pre-flight check: Bütçe aşıldıysa anında hata fırlat (Fail-Fast)"""
         if self.current_usage >= self.max_tokens:
             raise TokenLimitExceededError(f"Token limiti aşıldı! Mevcut: {self.current_usage}, Limit: {self.max_tokens}")
             
-    def add_usage(self, tokens: int):
+    def add_usage(self, tokens: int) -> None:
         self.current_usage += tokens
 
 class LLMPort:
@@ -42,10 +41,11 @@ class LLMPort:
         self.client = httpx.AsyncClient(timeout=30.0)
         self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={self.api_key}"
 
-    async def close(self):
+    async def close(self) -> None:
         """httpx client'ı güvenle kapatır."""
         await self.client.aclose()
 
+    @staticmethod
     def _should_retry_error(exc: Exception) -> bool:
         """Sadece 429 ve 50x hatalarında yeniden dener."""
         if isinstance(exc, httpx.HTTPStatusError):

@@ -1,0 +1,77 @@
+[
+  {
+    "id": "perfect_script",
+    "description": "Kusursuz senaryo.",
+    "expected_result": "PASS",
+    "expected_failure_stage": null,
+    "raw_data": {
+      "hook": "Bu harika bir kanca cümlesi.",
+      "body": [
+        "Tamamen normal uzunlukta.", 
+        "Kelimeleri birbirinden farklı bir senaryo kurguluyoruz.", 
+        "Bu sayede süre sapması olmuyor ve güvenlik filtresine takılmıyoruz.", 
+        "Ayrıca tekrar eden aynı anlamsız bloklar veya halüsinasyonlar bulunmuyor.", 
+        "Son olarak da yasa dışı veya sahte vaat içeren bir finansal iddia kesinlikle yok.", 
+        "Buraya eklediğim kelimelerle yeterli optimum video uzunluğuna ulaşıyoruz ki sistem patlamasın.", 
+        "Videoyu burada tamamlıyoruz ve kapanışa geçiyoruz."
+      ],
+      "cta": "Kanala abone ol",
+      "estimated_duration": 30
+    }
+  },
+  {
+    "id": "duration_violation",
+    "description": "Aşırı kısa (süre ihlali).",
+    "expected_result": "FAIL",
+    "expected_failure_stage": "K-404_SEMANTIC",
+    "raw_data": {
+      "hook": "Kısa kanca.",
+      "body": ["Bitti."],
+      "cta": "Abone ol",
+      "estimated_duration": 30
+    }
+  },
+  {
+    "id": "hallucination",
+    "description": "N-gram tekrarı.",
+    "expected_result": "FAIL",
+    "expected_failure_stage": "K-404_SEMANTIC",
+    "raw_data": {
+      "hook": "Tekrar başlangıç.",
+      "body": [
+        "ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım ben çok iyi bir yapay zekayım"
+      ],
+      "cta": "Kapanış",
+      "estimated_duration": 30
+    }
+  },
+  {
+    "id": "toxic_claim",
+    "description": "Toksik/finansal iddia.",
+    "expected_result": "FAIL",
+    "expected_failure_stage": "K-405_CLAIM",
+    "raw_data": {
+      "hook": "Zengin olmanın sırrı.",
+      "body": [
+        "Sistemi kırmak çok basit dostum. Kesin %100 kazanacaksınız, hemen yatırım yapın. Bu sistemle risksiz para kazanacaksınız.", 
+        "Uzunluk uysun diye fazladan birkaç kelime daha ekliyorum ama iddialar gerçekten çok tehlikeli.", 
+        "Asla kaybetmeyeceksiniz, garantili, hemen şimdi satın alın ve borsa kralı olun.", 
+        "Bu sistem tamamen garantili bir şekilde paranızı ikiye katlayacaktır.", 
+        "Bu yüzden mutlaka bu tokeni denemelisiniz dostlarım, paranız kısa sürede inanılmaz katlanacak."
+      ],
+      "cta": "Satın al",
+      "estimated_duration": 30
+    }
+  },
+  {
+    "id": "schema_violation",
+    "description": "Eksik alan (Pydantic ValidationError).",
+    "expected_result": "FAIL",
+    "expected_failure_stage": "K-401_PYDANTIC",
+    "raw_data": {
+      "hook": "Sınırı aşan kanca: Bu kanca o kadar uzun ki kesinlikle yüz elli karakter sınırını rahatlıkla geçecek ve katı kurallarımızdaki Pydantic'in ValidationError fırlatmasına anında sebep olacak. Gördüğünüz gibi devam ediyor ve hala daha bitmiyor. Daha da yazmaya inatla devam ediyorum ki Pydantic duvarına şiddetle çarpsın.",
+      "body": ["Sahne 1"],
+      "estimated_duration": 30
+    }
+  }
+]

@@ -38,7 +38,7 @@ class CircuitBreaker:
         self.failure_count = 0
         self.last_failure_time = 0.0
 
-    def check_budget(self, video_duration_seconds: int):
+    def check_budget(self, video_duration_seconds: int) -> None:
         """
         Videoyu işleme almadan önce bütçe kontrolü yapar. 
         Fail-fast mantığının ilk basamağıdır.
@@ -51,7 +51,7 @@ class CircuitBreaker:
             )
             raise CircuitBreakerRejectedError(f"Video süresi bütçeyi aşıyor: {video_duration_seconds}s > {self.config.max_video_duration_seconds}s")
 
-    async def __aenter__(self):
+    async def __aenter__(self) -> "CircuitBreaker":
         """Asenkron bağlam yöneticisi (Context Manager) girişi"""
         if self.state == CircuitBreakerState.OPEN:
             # Soğuma süresi bitti mi?
@@ -63,7 +63,7 @@ class CircuitBreaker:
                 raise CircuitBreakerOpenError(f"[{self.name}] Devre AÇIK. İstek işlenmeden reddedildi.")
         return self
 
-    async def __aexit__(self, exc_type, exc_val, exc_tb):
+    async def __aexit__(self, exc_type: type[BaseException] | None, exc_val: BaseException | None, exc_tb: object) -> bool:
         """Asenkron bağlam yöneticisi çıkışı"""
         if exc_type is None:
             # İşlem Başarılı

@@ -1,6 +1,7 @@
 import datetime
+from typing import Optional
 
-def calculate_score(published_at_iso: str, view_count: int, like_count: int, comment_count: int, current_time: datetime.datetime = None) -> float:
+def calculate_score(published_at_iso: str, view_count: int, like_count: int, comment_count: int, current_time: Optional[datetime.datetime] = None) -> float:
     """
     K-204: Skorlama Algoritması (Pure Function)
     Hiçbir yan etki içermez (DB bağımsız, I/O bağımsız).
