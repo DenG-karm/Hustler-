@@ -15,6 +15,10 @@ from services.core.hustler.generators.script_generator import (
 )
 
 from services.core.hustler.infrastructure.llm_port import LLMHTTPError
+from services.core.hustler.validation.semantic import (
+    SemanticValidationError,
+    SemanticValidator,
+)
 from tests.conftest import LLMFactory
 
 VALID = {
@@ -158,3 +162,107 @@ async def test_http_error_detail_is_not_masked(
     assert "404" in str(info.value) and "model gone" in str(info.value)
     assert isinstance(info.value.__cause__, LLMHTTPError)
     assert len(h.prompts) == 1
+
+
+def _doc_with_words(n: int) -> str:
+    """Tam n kelimelik (hook=1, cta=1, kalan? body), tekrars?z senaryo JSON'u."""
+    words = [f"kelime{chr(97 + i // 26)}{chr(97 + i % 26)}" for i in range(n)]
+    return json.dumps(
+        {
+            "hook": words[0],
+            "body": [" ".join(words[1:-1])],
+            "cta": words[-1],
+            "estimated_duration": 30,
+        }
+    )
+
+
+async def test_semantic_feedback_loop_regenerates_with_reason_and_counts(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory([_doc_with_words(40), _doc_with_words(70)])
+    generator = ScriptGenerator(h.port, validate_semantics=True)
+
+    doc = await generator.generate_script(template, "kedi")
+
+    assert SemanticValidator.word_count(doc.hook, *doc.body, doc.cta) == 70
+    assert generator.semantic_attempts == 2
+    assert len(h.prompts) == 2
+    assert "?NCEK? DENEME REDDED?LD?" not in h.prompts[0]
+    assert "?NCEK? DENEME REDDED?LD?" in h.prompts[1]
+    assert "?nceki metin 40 kelimeydi; hedef 70 kelime" in h.prompts[1]
+    assert "yakla??k 30 kelime fark" in h.prompts[1]
+    assert "daha uzun" in h.prompts[1]
+
+
+async def test_semantic_feedback_says_shorter_when_too_long(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory([_doc_with_words(120), _doc_with_words(70)])
+
+    await ScriptGenerator(h.port, validate_semantics=True).generate_script(template, "x")
+
+    assert "daha k?sa" in h.prompts[1]
+
+
+async def test_semantic_feedback_gives_up_after_max_attempts(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory([_doc_with_words(40)])
+    generator = ScriptGenerator(h.port, validate_semantics=True, max_semantic_attempts=3)
+
+    with pytest.raises(ScriptGenerationError, match="SemanticValidationError") as info:
+        await generator.generate_script(template, "x")
+
+    assert isinstance(info.value.__cause__, SemanticValidationError)
+    assert generator.semantic_attempts == 3
+    assert len(h.prompts) == 3
+
+
+async def test_semantic_validation_is_opt_in(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory([_doc_with_words(40)])
+
+    doc = await ScriptGenerator(h.port).generate_script(template, "x")
+
+    assert SemanticValidator.word_count(doc.hook, *doc.body, doc.cta) == 40
+    assert len(h.prompts) == 1
+
+
+async def test_semantic_pass_on_first_attempt_makes_single_call(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory([_doc_with_words(70)])
+    generator = ScriptGenerator(h.port, validate_semantics=True)
+
+    await generator.generate_script(template, "x")
+
+    assert generator.semantic_attempts == 1
+    assert len(h.prompts) == 1
+
+
+async def test_schema_violation_is_fed_back_instead_of_blind_retry(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    too_long_cta = json.dumps({**json.loads(_doc_with_words(70)), "cta": "x" * 101})
+    h = llm_factory([too_long_cta, _doc_with_words(70)])
+    generator = ScriptGenerator(h.port, validate_semantics=True)
+
+    doc = await generator.generate_script(template, "x")
+
+    assert len(doc.cta) <= 100
+    assert generator.semantic_attempts == 2
+    assert "?NCEK? DENEME REDDED?LD?: cta: String should have at most 100 characters" in h.prompts[1]
+
+
+async def test_invalid_json_is_fed_back(
+    llm_factory: LLMFactory, template: TemplateSpec
+) -> None:
+    h = llm_factory(["not json at all", _doc_with_words(70)])
+    generator = ScriptGenerator(h.port, validate_semantics=True)
+
+    await generator.generate_script(template, "x")
+
+    assert generator.semantic_attempts == 2
+    assert "Ge?erli JSON de?il" in h.prompts[1]

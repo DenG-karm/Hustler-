@@ -73,11 +73,12 @@ def test_audio_args_extract_mp3_and_terminate_options_before_url() -> None:
     assert "--no-playlist" in args
 
 
-def test_video_args_merge_to_mp4_capped_at_1080p() -> None:
+def test_video_args_merge_to_mp4_and_cap_short_side_at_1080() -> None:
     args = YouTubeDownloader.build_args(URL, "video", "o")
 
     assert args[args.index("--merge-output-format") + 1] == "mp4"
-    assert "height<=1080" in args[args.index("-f") + 1]
+    assert args[args.index("-S") + 1].startswith("res:1080")
+    assert "height<=" not in args[args.index("-f") + 1]  # dikey 1080x1920'yi elemesin
     assert "-x" not in args
 
 

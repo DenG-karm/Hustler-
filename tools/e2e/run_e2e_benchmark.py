@@ -45,7 +45,7 @@ from services.core.hustler.generators.subtitle_generator import (  # noqa: E402
 )
 from services.core.hustler.infrastructure.asset_manager import AssetManager  # noqa: E402
 from services.core.hustler.infrastructure.hardware import detect_cuda, select_video_encoder  # noqa: E402
-from services.core.hustler.infrastructure.llm_port import LLMPort  # noqa: E402
+from services.core.hustler.infrastructure.llm_port import GEMINI_MODEL, LLMPort  # noqa: E402
 from services.core.hustler.infrastructure.youtube_downloader import YouTubeDownloader  # noqa: E402
 from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming  # noqa: E402
 from services.core.hustler.infrastructure.tts_port import ElevenLabsAdapter  # noqa: E402
@@ -120,6 +120,12 @@ def probe_summary(info: dict[str, Any]) -> dict[str, Any]:
         "video_codec": video.get("codec_name") if video else None,
         "resolution": f"{video.get('width')}x{video.get('height')}" if video else None,
         "audio_codec": audio.get("codec_name") if audio else None,
+        "fps": video.get("avg_frame_rate") if video else None,
+        "pix_fmt": video.get("pix_fmt") if video else None,
+        "video_kbps": round(int(video.get("bit_rate") or 0) / 1000) if video else None,
+        "audio_kbps": round(int(audio.get("bit_rate") or 0) / 1000) if audio else None,
+        "audio_hz": audio.get("sample_rate") if audio else None,
+        "total_kbps": round(int(info.get("format", {}).get("bit_rate") or 0) / 1000),
     }
 
 
@@ -203,6 +209,9 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
                 youtube_id=vid, youtube_video_seconds=round(video_dt, 3), youtube_video_bytes=vbytes,
                 youtube_video_mbit_per_s=round(vbytes * 8 / 1e6 / max(video_dt, 1e-9), 2),
                 youtube_video_resolution=vsum["resolution"], youtube_video_codec=vsum["video_codec"],
+                youtube_video_fps=vsum["fps"], youtube_video_pix_fmt=vsum["pix_fmt"],
+                youtube_video_kbps=vsum["video_kbps"], youtube_video_total_kbps=vsum["total_kbps"],
+                youtube_video_audio_kbps=vsum["audio_kbps"], youtube_video_duration=vsum["duration_sec"],
                 youtube_audio_seconds=round(audio_dt, 3), youtube_audio_bytes=os.path.getsize(apath),
                 youtube_audio_codec=asum["audio_codec"],
             )
@@ -224,11 +233,16 @@ async def stage2_llm(state: dict[str, Any]) -> Stage:
     if not key:
         return st
     template = make_template()
-    llm = LLMPort(api_key=key, max_tokens=200_000)
+    llm = LLMPort(
+        api_key=key, max_tokens=200_000, model=os.environ.get("GEMINI_MODEL", GEMINI_MODEL)
+    )
+    st.metrics["model"] = os.environ.get("GEMINI_MODEL", GEMINI_MODEL)
     t_all = time.perf_counter()
     try:
         t0 = time.perf_counter()
-        doc: ScriptDoc = await ScriptGenerator(llm).generate_script(template, CLEAN_CONTEXT)
+        generator = ScriptGenerator(llm, validate_semantics=True)
+        doc: ScriptDoc = await generator.generate_script(template, CLEAN_CONTEXT)
+        st.metrics["A_semantic_attempts"] = generator.semantic_attempts
         st.metrics["A_generate_seconds"] = round(time.perf_counter() - t0, 3)
         st.metrics["A_estimated_duration"] = doc.estimated_duration
         st.metrics["A_body_items"] = len(doc.body)

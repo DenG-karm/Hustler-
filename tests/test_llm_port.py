@@ -182,3 +182,11 @@ async def test_503_is_retried_then_succeeds(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert res.text == "ok"
     assert len(attempts) == 3
+
+
+async def test_model_is_configurable_per_instance() -> None:
+    port = LLMPort(api_key="k", model="gemini-2.5-flash-lite")
+    try:
+        assert port.endpoint.endswith("/models/gemini-2.5-flash-lite:generateContent")
+    finally:
+        await port.close()

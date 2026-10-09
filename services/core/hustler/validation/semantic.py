@@ -28,6 +28,11 @@ class SemanticValidator:
         return clean.split()
 
     @classmethod
+    def word_count(cls, *parts: str) -> int:
+        """Do?rulay?c?n?n kulland??? kelime say?m? (noktalama hari?)."""
+        return len(cls._extract_words(" ".join(parts)))
+
+    @classmethod
     def validate(cls, script: ScriptDoc, template: TemplateSpec) -> bool:
         """
         Senaryoyu anlamsal olarak doğrular.

@@ -49,8 +49,10 @@ class YouTubeDownloader:
         if kind == "audio":
             args += ["-f", "bestaudio/best", "-x", "--audio-format", "mp3"]
         else:
+            # res = k?sa kenar: dikey Shorts'ta 1080x1920, yatayda 1920x1080 se?ilir (height filtresi 608x1080'e d???r?rd?)
             args += [
-                "-f", "bv*[height<=1080]+ba/b[height<=1080]/b",
+                "-f", "bv*+ba/b",
+                "-S", "res:1080,vcodec:h264,acodec:aac",
                 "--merge-output-format", "mp4",
             ]
         return [*args, "--", url]

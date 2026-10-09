@@ -50,11 +50,11 @@ class LLMPort:
     K-305: Asenkron LLM Adaptörü (Gemini API Destekli)
     Ön kesici (Pre-flight check) ve Tenacity direnç mekanizmalarıyla korunur.
     """
-    def __init__(self, api_key: str, max_tokens: int = 100000):
+    def __init__(self, api_key: str, max_tokens: int = 100000, model: str = GEMINI_MODEL):
         self.api_key = api_key
         self.ledger = CostLedger(max_tokens)
         self.client = httpx.AsyncClient(timeout=30.0)
-        self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{GEMINI_MODEL}:generateContent"
+        self.endpoint = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
 
     async def close(self) -> None:
         """httpx client'ı güvenle kapatır."""
