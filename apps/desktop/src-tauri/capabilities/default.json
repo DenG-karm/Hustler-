@@ -1,11 +1,9 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "enables the default permissions",
+  "description": "Minimum yetki: yalnızca özel komutlar (proxy_request). OS/shell/fs/http izni yok.",
   "windows": [
     "main"
   ],
-  "permissions": [
-    "core:default"
-  ]
+  "permissions": []
 }

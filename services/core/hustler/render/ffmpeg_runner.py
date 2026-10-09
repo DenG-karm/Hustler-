@@ -8,6 +8,7 @@ from typing import List, AsyncGenerator, Any, Optional
 from dataclasses import dataclass
 import structlog
 
+from services.core.hustler.render.job_object import bind_pid_to_kill_on_close_job
 logger = structlog.get_logger()
 
 class HustlerError(Exception):
@@ -125,6 +126,8 @@ class FFmpegRunner:
                 stderr=asyncio.subprocess.PIPE,
                 creationflags=creationflags
             )
+            if sys.platform == "win32":
+                bind_pid_to_kill_on_close_job(proc.pid)
             
             assert proc.stdout is not None
             assert proc.stderr is not None
@@ -186,7 +189,7 @@ class FFmpegRunner:
                             raise RenderStalled("FFmpeg ilerlemesi durdu (Stall).")
                             
                         try:
-                            p = await asyncio.wait_for(progress_queue.get(), timeout=0.5)
+                            p = await asyncio.wait_for(progress_queue.get(), timeout=0.1)  # çıkış tespit gecikmesi üst sınırı
                             if p != float('-inf'):
                                 last_progress_time = loop.time()
                                 if p > current_progress:

@@ -27,10 +27,11 @@ class YouTubeCache:
         try:
             # ReaderPool üzerinden kilitsiz okuma (WAL)
             conn = await self.db.get_reader()
-            async with conn.execute("SELECT response_json, created_at FROM youtube_cache WHERE cache_key = ?", (cache_key,)) as cursor:
-                row = await cursor.fetchone()
-                
-            await conn.close()
+            try:
+                async with conn.execute("SELECT response_json, created_at FROM youtube_cache WHERE cache_key = ?", (cache_key,)) as cursor:
+                    row = await cursor.fetchone()
+            finally:
+                await conn.close()  # SQL hatasında da kapanmalı: aiosqlite thread'i süreci asılı bırakır
             
             if row:
                 response_json, created_at = row

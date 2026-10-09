@@ -1,30 +1,20 @@
 from typing import Any
 import os
-import secrets
-from fastapi import APIRouter, Request, HTTPException
+from fastapi import APIRouter, Depends, Request, HTTPException
 from pydantic import BaseModel
 import structlog
 from services.core.hustler.adapters.youtube import YouTubeClient
+from services.core.hustler.api.auth import verify_token
 from services.core.hustler.services.discovery import DiscoveryOrchestrator
 
 logger = structlog.get_logger()
-router = APIRouter()
+# Yetkilendirme istek gövdesi doğrulamasından önce çalışır (anonim çağrıya 422 değil 401)
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 class DiscoveryRunRequest(BaseModel):
     topic: str
     max_results: int = 50
     score_threshold: float = 30.0
-
-def verify_token(request: Request) -> Any:
-    """Gelen isteğin Bearer token'ını doğrular (Tauri köprüsü)"""
-    auth = request.headers.get("Authorization", "")
-    if not auth.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing Bearer token")
-    token = auth.removeprefix("Bearer ")
-    
-    session_token = getattr(request.app.state, "session_token", "")
-    if not secrets.compare_digest(token, session_token):
-        raise HTTPException(status_code=403, detail="Invalid token")
 
 @router.post("/discovery/run")
 async def run_discovery(payload: DiscoveryRunRequest, request: Request) -> Any:
@@ -32,8 +22,6 @@ async def run_discovery(payload: DiscoveryRunRequest, request: Request) -> Any:
     K-205: Discovery Orchestrator Tetikleyicisi
     Belirtilen anahtar kelime için Shorts videolarını tarar, puanlar ve eşiği geçenleri veritabanına yazar.
     """
-    verify_token(request)
-    
     db = getattr(request.app.state, "db", None)
     cache = getattr(request.app.state, "cache", None)
     

@@ -1,7 +1,7 @@
-"""Sidecar (gerçek main.app): token'sız/yanlış token istekleri reddedilir."""
+﻿"""Sidecar (gerçek main.app): token'sız/yanlış token istekleri reddedilir."""
 
 import json
-import re
+import os
 from collections.abc import AsyncIterator
 from pathlib import Path
 
@@ -46,13 +46,14 @@ async def test_events_with_malformed_authorization_header_returns_401(
 @pytest.mark.parametrize(
     "token", ["wrong", "", SESSION_TOKEN[:-1], SESSION_TOKEN + "x", "x" * 10_000]
 )
-async def test_events_with_wrong_token_returns_403(
+async def test_events_with_wrong_token_returns_401_with_challenge(
     client: httpx.AsyncClient, token: str
 ) -> None:
     response = await client.get("/events", headers={"Authorization": f"Bearer {token}"})
 
-    assert response.status_code == 403
-    assert response.json()["status"] == 403
+    assert response.status_code == 401
+    assert response.json()["status"] == 401
+    assert response.headers["www-authenticate"].startswith("Bearer")
 
 
 async def test_events_with_valid_token_streams_connected_event(
@@ -82,13 +83,12 @@ async def test_health_is_public_and_returns_ok(client: httpx.AsyncClient) -> Non
     assert response.json() == {"status": "ok"}
 
 
-async def test_lifespan_initializes_db_cache_and_announces_bind_line(
+async def test_lifespan_initializes_db_cache_and_never_prints_token(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
+    capfd: pytest.CaptureFixture[str],
 ) -> None:
     monkeypatch.chdir(tmp_path)
-    app.state.bind_port = 4242
 
     async with main.lifespan(app):
         assert app.state.session_token == SESSION_TOKEN
@@ -96,12 +96,64 @@ async def test_lifespan_initializes_db_cache_and_announces_bind_line(
         assert app.state.cache is not None
         assert (tmp_path / "hustler_core.db").exists()
 
-    out = capsys.readouterr().out
-    match = re.search(r"HUSTLER_BIND::PORT=(\d+)::TOKEN=([\w-]+)", out)
-    assert match is not None
-    assert match.group(1) == "4242"
-    assert match.group(2) == SESSION_TOKEN
+    captured = capfd.readouterr()
+    assert SESSION_TOKEN not in captured.out + captured.err
+    assert "HUSTLER_BIND" not in captured.out + captured.err
     assert len(SESSION_TOKEN) >= 32
+
+
+def test_token_is_taken_from_env_and_removed_from_environment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv(main.TOKEN_ENV_VAR, "from-parent-process")
+
+    assert main._load_session_token() == "from-parent-process"
+    assert main.TOKEN_ENV_VAR not in os.environ  # alt süreçlere (ffmpeg) sızmaz
+
+
+def test_token_falls_back_to_random_when_env_missing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.delenv(main.TOKEN_ENV_VAR, raising=False)
+
+    first, second = main._load_session_token(), main._load_session_token()
+
+    assert len(first) >= 32
+    assert first != second
+
+
+@pytest.mark.parametrize("raw", ["80", "abc", "70000", ""])
+def test_resolve_port_rejects_invalid_env_values(
+    monkeypatch: pytest.MonkeyPatch, raw: str
+) -> None:
+    monkeypatch.setenv(main.PORT_ENV_VAR, raw)
+
+    with pytest.raises(ValueError):
+        main._resolve_port()
+
+
+def test_resolve_port_uses_env_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv(main.PORT_ENV_VAR, "45678")
+
+    assert main._resolve_port() == 45678
+
+
+async def test_unconfigured_app_rejects_everything_fail_closed(
+    client: httpx.AsyncClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(app.state, "session_token", "", raising=False)
+
+    response = await client.get("/events", headers={"Authorization": "Bearer "})
+
+    assert response.status_code == 401
+
+
+async def test_non_ascii_token_returns_401_not_500(client: httpx.AsyncClient) -> None:
+    response = await client.get(
+        "/events", headers={b"Authorization": "Bearer ş".encode("utf-8")}
+    )
+
+    assert response.status_code == 401
 
 
 def test_free_port_helper_returns_valid_unprivileged_port() -> None:

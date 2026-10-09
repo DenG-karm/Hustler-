@@ -2,7 +2,7 @@
 //
 // K-006: Python sidecar başlatma
 //   - port=0 trick ile dinamik port
-//   - stdout'tan HUSTLER_BIND::PORT=x::TOKEN=y okunur
+//   - token/port env ile verilir, hazır olma /health ile yoklanır
 //   - Windows Job Object ile yetim süreç önlenir
 //
 // K-010: IPC Köprüsü
@@ -12,7 +12,8 @@
 
 use std::{
     collections::HashSet,
-    io::{BufRead, BufReader},
+    io::{Read, Write},
+    net::{TcpListener, TcpStream},
     process::{Child, Command, Stdio},
     sync::OnceLock,
     time::Duration,
@@ -116,7 +117,7 @@ fn attach_job_object(pid: u32) -> anyhow::Result<()> {
                 JOBOBJECT_EXTENDED_LIMIT_INFORMATION, JobObjectExtendedLimitInformation,
                 JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE,
             },
-            Threading::{OpenProcess, PROCESS_ALL_ACCESS},
+            Threading::{OpenProcess, PROCESS_SET_QUOTA, PROCESS_TERMINATE},
         },
     };
 
@@ -135,7 +136,7 @@ fn attach_job_object(pid: u32) -> anyhow::Result<()> {
         .context("Job bilgisi ayarlanamadı")?;
 
         let proc_handle =
-            OpenProcess(PROCESS_ALL_ACCESS, false, pid).context("Süreç handle alınamadı")?;
+            OpenProcess(PROCESS_SET_QUOTA | PROCESS_TERMINATE, false, pid).context("Süreç handle alınamadı")?;
 
         AssignProcessToJobObject(job, proc_handle).context("Job Object ataması başarısız")?;
     }
@@ -144,19 +145,60 @@ fn attach_job_object(pid: u32) -> anyhow::Result<()> {
 }
 
 // ---------------------------------------------------------------------------
-// Sidecar başlatma — stdout'tan port/token oku (K-006)
+// Sidecar başlatma (K-006)
+//   - Token Rust'ta üretilir, ortam değişkeniyle iletilir (argv süreç listesinde
+//     görünür, stdout loglara/pipe'lara sızar). Python okuyunca env'den siler.
+//   - Port Rust'ta ayrılır (HUSTLER_PORT); hazır olma /health yoklamasıyla anlaşılır.
+//   - stdout/stderr null: kimsenin okumadığı pipe dolunca sidecar bloklanır/kırılır.
 // ---------------------------------------------------------------------------
-fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
-    let mut core_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    core_dir.pop(); // src-tauri -> desktop
-    core_dir.pop(); // desktop -> apps
-    core_dir.pop(); // apps -> Hustler
-    let core_dir = core_dir.join("services").join("core");
+const TOKEN_ENV_VAR: &str = "HUSTLER_SESSION_TOKEN";
+const PORT_ENV_VAR: &str = "HUSTLER_PORT";
+const STARTUP_TIMEOUT: Duration = Duration::from_secs(20);
 
+fn generate_token() -> anyhow::Result<String> {
+    let mut bytes = [0u8; 32];
+    getrandom::fill(&mut bytes).map_err(|e| anyhow::anyhow!("CSPRNG hatası: {e}"))?;
+    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+}
+
+fn reserve_free_port() -> anyhow::Result<u16> {
+    let listener = TcpListener::bind(("127.0.0.1", 0)).context("Boş port bulunamadı")?;
+    Ok(listener.local_addr()?.port())
+}
+
+fn health_ok(port: u16) -> bool {
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(300)) else {
+        return false;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(500)));
+    if stream
+        .write_all(b"GET /health HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n")
+        .is_err()
+    {
+        return false;
+    }
+    let mut buf = [0u8; 32];
+    matches!(stream.read(&mut buf), Ok(n) if n > 0 && buf[..n].starts_with(b"HTTP/1.1 200"))
+}
+
+fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
+    let mut repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    repo_root.pop(); // src-tauri -> desktop
+    repo_root.pop(); // desktop -> apps
+    repo_root.pop(); // apps -> Hustler
+
+    let port = reserve_free_port()?;
+    let token = generate_token()?;
+
+    // Modül yolu `services.core.hustler...` olduğundan çalışma dizini repo kökü olmalı.
     let mut child = Command::new("uv")
-        .args(["run", "python", "-m", "hustler.main"])
-        .current_dir(&core_dir)
-        .stdout(Stdio::piped())
+        .args(["run", "python", "-m", "services.core.hustler.main"])
+        .current_dir(&repo_root)
+        .env(TOKEN_ENV_VAR, &token)
+        .env(PORT_ENV_VAR, port.to_string())
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .context("Python sidecar başlatılamadı")?;
@@ -165,41 +207,26 @@ fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
     #[cfg(windows)]
     {
         let pid = child.id();
-        attach_job_object(pid).context("Job Object ataması başarısız")?;
+        if let Err(e) = attach_job_object(pid) {
+            let _ = child.kill();
+            return Err(e.context("Job Object ataması başarısız"));
+        }
     }
-
-    // stdout'tan HUSTLER_BIND satırını oku
-    let stdout = child.stdout.take().context("stdout alınamadı")?;
-    let mut reader = BufReader::new(stdout);
-    let mut line = String::new();
 
     let start = std::time::Instant::now();
     loop {
-        if start.elapsed() > Duration::from_secs(10) {
-            anyhow::bail!("Sidecar 10 saniye içinde BIND mesajı basmadı");
+        if health_ok(port) {
+            return Ok((child, port, token));
         }
-        line.clear();
-        reader.read_line(&mut line)?;
-        if line.contains("HUSTLER_BIND::") {
-            break;
+        if let Some(status) = child.try_wait()? {
+            anyhow::bail!("Sidecar erken sonlandı: {status}");
         }
+        if start.elapsed() > STARTUP_TIMEOUT {
+            let _ = child.kill();
+            anyhow::bail!("Sidecar {STARTUP_TIMEOUT:?} içinde /health yanıtı vermedi");
+        }
+        std::thread::sleep(Duration::from_millis(150));
     }
-
-    // HUSTLER_BIND::PORT=xxxxx::TOKEN=yyyyy
-    let port = line
-        .split("PORT=")
-        .nth(1)
-        .and_then(|s| s.split("::").next())
-        .and_then(|s| s.trim().parse::<u16>().ok())
-        .context("Port ayrıştırılamadı")?;
-
-    let token = line
-        .split("TOKEN=")
-        .nth(1)
-        .map(|s| s.trim().to_string())
-        .context("Token ayrıştırılamadı")?;
-
-    Ok((child, port, token))
 }
 
 // ---------------------------------------------------------------------------

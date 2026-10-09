@@ -1,4 +1,4 @@
-"""Discovery route: gerçek sidecar/ağ yok; YouTube ve orkestratör sahtelenir."""
+﻿"""Discovery route: gerçek sidecar/ağ yok; YouTube ve orkestratör sahtelenir."""
 
 import time
 from collections.abc import AsyncIterator
@@ -101,14 +101,14 @@ async def test_discovery_rejects_request_without_token_with_401(
     assert FakeOrchestrator.calls == []
 
 
-async def test_discovery_rejects_wrong_token_with_403(
+async def test_discovery_rejects_wrong_token_with_401(
     client: httpx.AsyncClient,
 ) -> None:
     response = await client.post(
         URL, json=PAYLOAD, headers={"Authorization": "Bearer wrong"}
     )
 
-    assert response.status_code == 403
+    assert response.status_code == 401
     assert FakeOrchestrator.calls == []
 
 
