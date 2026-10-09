@@ -140,5 +140,4 @@ async def test_broken_llm_json_in_claim_stage_must_not_count_as_pass(
 
     r = await engine.evaluate_single(_case(GOOD, "PASS", None))
 
-    # BULGU: `except ValueError` JSONDecodeError'? da yutuyor; ?retim kodu d?zelene dek KIRMIZI
     assert r.actual_result != "PASS"

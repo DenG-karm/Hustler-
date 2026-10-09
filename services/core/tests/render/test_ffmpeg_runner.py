@@ -4,6 +4,7 @@ import asyncio
 import time
 import pytest
 import ctypes
+from pathlib import Path
 from typing import Any, AsyncGenerator
 
 from services.core.hustler.render.ffmpeg_runner import (
@@ -25,6 +26,11 @@ def is_pid_alive(pid: int) -> bool:
     if not success:
         return False
     return exit_code.value == 259
+
+@pytest.fixture(autouse=True)
+def _isolated_cwd(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Testler göreli yola (mock_*.py, *.mp4.part) yazar; repo köküne değil tmp_path'e düşsün
+    monkeypatch.chdir(tmp_path)
 
 @pytest.fixture
 def cpu_budget() -> asyncio.Semaphore:

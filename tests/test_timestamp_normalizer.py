@@ -61,7 +61,6 @@ def test_output_never_overlaps_for_chaotic_input() -> None:
     assert all(w.start_ms <= w.end_ms for w in out)
 
 
-@pytest.mark.xfail(strict=True, reason="BULGU: negatif zaman damgası reddedilmiyor")
 def test_negative_timestamp_is_rejected() -> None:
     with pytest.raises(ValueError):
         TimestampNormalizer.normalize_timings([_raw("a", -1.0, 0.5)])

@@ -10,6 +10,10 @@ from services.core.hustler.validation.claims import ClaimMarker, ScriptStatusDec
 
 logger = structlog.get_logger()
 
+class _StageFailed(Exception):
+    """Bir değerlendirme aşaması reddetti (sonuç zaten kaydedildi)."""
+
+
 @dataclass
 class EvalResult:
     scenario_id: str
@@ -54,7 +58,7 @@ class ScenarioEvaluationEngine:
                 actual_res = "FAIL"
                 actual_stage = "K-401_PYDANTIC"
                 err_msg = str(e)
-                raise ValueError("Validation Error")
+                raise _StageFailed
                 
             # 2. Aşama: K-404 Semantic Validation (Süre & N-Gram)
             try:
@@ -63,7 +67,7 @@ class ScenarioEvaluationEngine:
                 actual_res = "FAIL"
                 actual_stage = "K-404_SEMANTIC"
                 err_msg = str(e)
-                raise ValueError("Semantic Error")
+                raise _StageFailed
                 
             # 3. Aşama: K-405 Claim Marker (Toksik ve Yasadışı İddialar)
             script_text = doc.hook + " " + " ".join(doc.body) + " " + doc.cta
@@ -74,10 +78,14 @@ class ScenarioEvaluationEngine:
                 actual_res = "FAIL"
                 actual_stage = "K-405_CLAIM"
                 err_msg = f"Rejected with risk: {report.risk_level}"
-                raise ValueError("Claim Error")
+                raise _StageFailed
                 
-        except ValueError:
-            pass # Hata zaten actual_stage ve actual_res değişkenlerine kaydedildi
+        except _StageFailed:
+            pass  # Hata zaten actual_stage ve actual_res değişkenlerine kaydedildi
+        except Exception as e:  # noqa: BLE001 - beklenmeyen hata (örn. bozuk LLM JSON) asla PASS sayılmamalı
+            actual_res = "FAIL"
+            actual_stage = "ENGINE_ERROR"
+            err_msg = f"{type(e).__name__}: {e}"
             
         # Ground Truth Karşılaştırması
         is_correct = (actual_res == expected_res) and (actual_stage == expected_stage)

@@ -41,6 +41,9 @@ class TimestampNormalizer:
             start_ms = int(start_sec * 1000)
             end_ms = int(end_sec * 1000)
             
+            if start_ms < 0 or end_ms < 0:
+                raise ValueError(f"Negatif zaman damgası geçersiz: {word!r} ({start_sec}-{end_sec} sn)")
+
             # Zamanın geriye akmasını (hatalı çıktıları) engelle
             if start_ms > end_ms:
                 end_ms = start_ms

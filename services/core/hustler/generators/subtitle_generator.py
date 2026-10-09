@@ -29,6 +29,8 @@ class AssDocument:
         cs = centisecond (saniyenin yüzde biri, 2 hane).
         Örnek: 1900 ms -> 0:00:01.90
         """
+        if ms < 0:
+            raise ValueError(f"Negatif zaman damgası geçersiz: {ms} ms")
         total_seconds = ms / 1000.0
         hours = int(total_seconds // 3600)
         minutes = int((total_seconds % 3600) // 60)

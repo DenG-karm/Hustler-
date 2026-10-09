@@ -27,9 +27,6 @@ def test_ms_to_ass_time(ms: int, expected: str) -> None:
     assert AssDocument.ms_to_ass_time(ms) == expected
 
 
-@pytest.mark.xfail(
-    strict=True, reason="BULGU: negatif ms reddedilmiyor, bozuk ASS zamanı üretiliyor"
-)
 def test_negative_timestamp_is_rejected() -> None:
     with pytest.raises(ValueError):
         AssDocument.ms_to_ass_time(-500)
