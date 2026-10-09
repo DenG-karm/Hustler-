@@ -64,7 +64,9 @@ def test_text_without_cta_phrase_reports_no_cta() -> None:
     assert res.has_cta is False
 
 
-@pytest.mark.parametrize(("text", "duration"), [("", 60), ("kelime " * 100, 0), ("kelime", -5)])
+@pytest.mark.parametrize(
+    ("text", "duration"), [("", 60), ("kelime " * 100, 0), ("kelime", -5)]
+)
 def test_empty_text_or_invalid_duration_is_rejected_without_crash(
     text: str, duration: int
 ) -> None:

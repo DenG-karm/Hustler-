@@ -47,7 +47,8 @@ async def test_generate_text_records_token_usage_in_ledger(
 
 
 async def test_generate_text_blocks_without_network_when_budget_exhausted(
-    port: LLMPort, monkeypatch: pytest.MonkeyPatch,
+    port: LLMPort,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     calls: list[str] = []
 

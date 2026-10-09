@@ -41,7 +41,9 @@ def test_draft_profile_halves_resolution_and_skips_animation() -> None:
 def test_images_cycle_through_all_motion_types_in_order() -> None:
     builder = SceneClipBuilder()
     zs = [
-        builder.build_clip_chain("a.jpg", is_video=False, duration=1.0).filters[-1].kwargs["z"]
+        builder.build_clip_chain("a.jpg", is_video=False, duration=1.0)
+        .filters[-1]
+        .kwargs["z"]
         for _ in range(len(MotionType) + 1)
     ]
 

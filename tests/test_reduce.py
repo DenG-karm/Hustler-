@@ -30,7 +30,9 @@ class Harness:
 
 
 @pytest.fixture
-async def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[Harness]:
+async def harness(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> AsyncIterator[Harness]:
     db = Database(tmp_path / "reduce.sqlite")
     await db.init()
     llm = LLMPort(api_key="fake", max_tokens=10_000)
@@ -52,7 +54,9 @@ async def harness(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> AsyncItera
 
 async def test_first_request_is_cache_miss_and_calls_llm_once(harness: Harness) -> None:
     start = time.perf_counter()
-    res = AnalysisResult.model_validate(await harness.engine.analyze(TRANSCRIPT, "v1.2"))
+    res = AnalysisResult.model_validate(
+        await harness.engine.analyze(TRANSCRIPT, "v1.2")
+    )
     elapsed = time.perf_counter() - start
 
     assert len(harness.prompts) == 1

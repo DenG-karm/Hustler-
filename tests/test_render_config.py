@@ -5,7 +5,12 @@ from pydantic import ValidationError
 
 from services.core.hustler.domain.models.template import RenderConfig, SafeZone
 
-SAFE_ZONE = {"margin_top": 200, "margin_bottom": 250, "margin_left": 50, "margin_right": 50}
+SAFE_ZONE = {
+    "margin_top": 200,
+    "margin_bottom": 250,
+    "margin_left": 50,
+    "margin_right": 50,
+}
 
 
 def _data(**overrides: object) -> dict[str, object]:

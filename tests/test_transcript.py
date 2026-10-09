@@ -11,7 +11,10 @@ import pytest
 from youtube_transcript_api import TranscriptsDisabled, VideoUnavailable
 
 from services.core.hustler.providers import transcript as transcript_mod
-from services.core.hustler.providers.transcript import TranscriptProvider, TranscriptResult
+from services.core.hustler.providers.transcript import (
+    TranscriptProvider,
+    TranscriptResult,
+)
 
 
 @dataclass

@@ -10,7 +10,12 @@ RENDER = {
     "height": 1920,
     "fps": 30,
     "bg_color": "#000000",
-    "safe_zone": {"margin_top": 100, "margin_bottom": 100, "margin_left": 50, "margin_right": 50},
+    "safe_zone": {
+        "margin_top": 100,
+        "margin_bottom": 100,
+        "margin_left": 50,
+        "margin_right": 50,
+    },
 }
 
 

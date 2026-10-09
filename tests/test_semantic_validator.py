@@ -3,7 +3,11 @@
 import pytest
 
 from services.core.hustler.domain.models.script import ScriptDoc
-from services.core.hustler.domain.models.template import RenderConfig, SafeZone, TemplateSpec
+from services.core.hustler.domain.models.template import (
+    RenderConfig,
+    SafeZone,
+    TemplateSpec,
+)
 from services.core.hustler.validation.semantic import (
     SemanticValidationError,
     SemanticValidator,
@@ -34,7 +38,9 @@ def template() -> TemplateSpec:
     )
 
 
-def _script(body: str, hook: str = "Temiz başlangıç kancası", cta: str = "Abone ol dostum") -> ScriptDoc:
+def _script(
+    body: str, hook: str = "Temiz başlangıç kancası", cta: str = "Abone ol dostum"
+) -> ScriptDoc:
     return ScriptDoc(hook=hook, body=[body], cta=cta, estimated_duration=30)
 
 
@@ -56,8 +62,12 @@ def test_too_long_script_raises_duration_error(template: TemplateSpec) -> None:
         SemanticValidator.validate(script, template)
 
 
-def test_repeated_ngram_block_is_detected_as_hallucination(template: TemplateSpec) -> None:
-    script = _script("ben iyi bir yapay zekayım. " * 14, "Tekrar kancası", "Kapanış kısmı")
+def test_repeated_ngram_block_is_detected_as_hallucination(
+    template: TemplateSpec,
+) -> None:
+    script = _script(
+        "ben iyi bir yapay zekayım. " * 14, "Tekrar kancası", "Kapanış kısmı"
+    )
 
     with pytest.raises(SemanticValidationError, match="n-gram"):
         SemanticValidator.validate(script, template)

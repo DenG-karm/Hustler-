@@ -48,7 +48,9 @@ async def _cancel(task: "asyncio.Task[None]") -> None:
 async def test_discovery_loop_survives_failure_and_keeps_running() -> None:
     orch = FlakyOrchestrator()
     task = asyncio.create_task(
-        discovery_loop(cast(DiscoveryOrchestrator, orch), "topic", interval_sec=cast(int, 0.05))
+        discovery_loop(
+            cast(DiscoveryOrchestrator, orch), "topic", interval_sec=cast(int, 0.05)
+        )
     )
 
     deadline = time.perf_counter() + 2.0
@@ -83,7 +85,9 @@ async def test_maintenance_loop_prunes_only_expired_cache_rows(db: Database) -> 
     await db.execute_write(
         "INSERT INTO youtube_cache VALUES ('fresh', '{}', ?)", (now,)
     )
-    task = asyncio.create_task(maintenance_loop(db, cache_ttl_sec=3600, interval_sec=cast(int, 0.05)))
+    task = asyncio.create_task(
+        maintenance_loop(db, cache_ttl_sec=3600, interval_sec=cast(int, 0.05))
+    )
 
     await asyncio.sleep(0.4)
     await _cancel(task)
@@ -100,7 +104,9 @@ async def test_maintenance_loop_prunes_only_expired_cache_rows(db: Database) -> 
 async def test_maintenance_loop_survives_missing_table(tmp_path: Path) -> None:
     database = Database(tmp_path / "no_table.db")
     await database.init()
-    task = asyncio.create_task(maintenance_loop(database, cache_ttl_sec=1, interval_sec=cast(int, 0.05)))
+    task = asyncio.create_task(
+        maintenance_loop(database, cache_ttl_sec=1, interval_sec=cast(int, 0.05))
+    )
     try:
         await asyncio.sleep(0.3)
         still_running = not task.done()
