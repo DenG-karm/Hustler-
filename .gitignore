@@ -37,3 +37,4 @@ mock_*.py
 /mypy_output.txt
 
 *.egg-info/
+e2e_out/
