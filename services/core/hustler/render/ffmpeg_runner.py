@@ -251,6 +251,11 @@ class FFmpegRunner:
                             raise exc
                     raise getattr(e, "exceptions")[0]
                 raise e
+            finally:
+                # Okuyucular iptal edilirse Windows Proactor pipe/transport sızar (ResourceWarning).
+                transport = getattr(proc, "_transport", None)
+                if transport is not None:
+                    transport.close()
 
     async def _kill_process(self, proc: asyncio.subprocess.Process | None) -> None:
         """

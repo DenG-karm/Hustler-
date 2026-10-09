@@ -34,19 +34,17 @@ jobs:
           components: clippy, rustfmt
 
       - name: Install uv and just
-        run: |
-          pip install uv
-          cargo install just
+        uses: astral-sh/setup-uv@v5
+
+      - uses: extractions/setup-just@v2
 
       - name: Install dependencies
         run: |
           pnpm install
-          uv pip install -r services/core/pyproject.toml
+          uv sync --locked
 
       - name: Run checks
         run: just check
 
       - name: Verify Contracts
-        run: |
-          just gen
-          git diff --exit-code packages/contracts
+        run: just gen-check

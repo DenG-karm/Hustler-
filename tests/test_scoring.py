@@ -7,7 +7,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 
 from services.core.hustler.domain.scoring import calculate_score
 
-def test_scoring_new_viral_video():
+def test_scoring_new_viral_video() -> None:
     """Uç Senaryo: Yüksek ivmeli viral, 2 saat önce yüklenmiş, çılgın etkileşimli."""
     now = datetime.datetime(2026, 10, 6, 12, 0, tzinfo=datetime.timezone.utc)
     pub = "2026-10-06T10:00:00Z"
@@ -16,7 +16,7 @@ def test_scoring_new_viral_video():
     score = calculate_score(pub, 15000, 2800, 200, current_time=now)
     assert score == 100.0
 
-def test_scoring_old_video():
+def test_scoring_old_video() -> None:
     """Uç Senaryo: 10 yıllık eski, 10 Milyon izlenmeli ama ivmesi ölmüş video."""
     now = datetime.datetime(2026, 10, 6, 12, 0, tzinfo=datetime.timezone.utc)
     pub = "2016-10-06T10:00:00Z"
@@ -28,7 +28,7 @@ def test_scoring_old_video():
     # Puanı viral videoya göre ciddi düşük olmalı (örn. < 30)
     assert score < 30.0
 
-def test_scoring_zero_views():
+def test_scoring_zero_views() -> None:
     """Uç Senaryo: Yeni yayınlanmış ama hiç izlenmemiş ölü video."""
     now = datetime.datetime(2026, 10, 6, 12, 0, tzinfo=datetime.timezone.utc)
     pub = "2026-10-06T10:00:00Z"
@@ -36,7 +36,7 @@ def test_scoring_zero_views():
     score = calculate_score(pub, 0, 0, 0, current_time=now)
     assert score == 0.0
 
-def test_scoring_moderate_video():
+def test_scoring_moderate_video() -> None:
     """Orta seviye günlük video"""
     now = datetime.datetime(2026, 10, 6, 12, 0, tzinfo=datetime.timezone.utc)
     pub = "2026-10-05T12:00:00Z" # 24 saat önce

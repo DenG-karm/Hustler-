@@ -19,6 +19,8 @@ logger = structlog.get_logger()
 
 # Test için API çağrısını mockluyoruz (Network Rate-Limit yememek ve süreci hızlandırmak için)
 async def mock_execute(prompt: str) -> LLMResponse:
+    if "FAIL_ME" in prompt:
+        raise ValueError("Bilinçli Kısmi Başarısızlık Testi (Simülasyon)")
     # API ağ gecikmesi simülasyonu (0.5 saniye)
     await asyncio.sleep(0.5)
     return LLMResponse("Sentetik Analiz Sonucu (Kanca bulundu: Evet)", 50, 50, 100)
@@ -37,8 +39,9 @@ async def main() -> None:
     videos = []
     for i in range(1, 21):
         # 13. videoya kasıtlı olarak "FAIL_ME" veriyoruz
-        vid_id = "FAIL_ME" if i == 13 else f"vid_{i:02d}"
-        videos.append({"video_id": vid_id, "transcript": f"Bu {i}. videonun transkript içeriği..."})
+        vid_id = f"vid_{i:02d}"
+        transcript = "FAIL_ME" if i == 13 else f"Bu {i}. videonun transkript içeriği..."
+        videos.append({"video_id": vid_id, "transcript": transcript})
         
     logger.info("20 video Map B (API Modu - Semaphor 5) kuyruğuna gönderiliyor...")
     

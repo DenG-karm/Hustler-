@@ -35,3 +35,5 @@ mock_*.py
 /lines.txt
 /mypy_out*.txt
 /mypy_output.txt
+
+*.egg-info/

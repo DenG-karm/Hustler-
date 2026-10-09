@@ -3,7 +3,39 @@ name = "hustler-workspace"
 version = "0.1.0"
 description = "Hustler monorepo"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = ["core"]
 
 [tool.uv.workspace]
 members = ["services/core"]
+
+[tool.uv.sources]
+core = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "services/core/tests"]
+pythonpath = ["."]
+asyncio_mode = "auto"
+addopts = "-ra --strict-markers --strict-config"
+filterwarnings = ["error"]
+markers = [
+    "dryrun: FFmpeg null-muxer kuru çalıştırma testi",
+    "slow: uzun süren test",
+    "gpu: CUDA/GPU gerektiren test",
+]
+
+[tool.ruff]
+# Eski smoke betikleri (tools/test_*.py) S0-1 triyaj tablosuna göre dönüştürülene/taşınana kadar kapı dışı.
+extend-exclude = ["tools/test_*.py"]
+
+[tool.ruff.lint]
+select = ["E4", "E7", "E9", "F"]
+
+[dependency-groups]
+dev = [
+    "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-asyncio>=1.4.0",
+    "ruff>=0.16.10",
+    "types-aiofiles>=25.1.0.20260518",
+    "types-colorama>=0.4.15.20260508",
+]

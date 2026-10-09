@@ -14,8 +14,8 @@ def _initialize_worker() -> None:
     Ağır modellerin (Whisper vs.) bellek yönetimi burada yapılır.
     """
     global _MODEL_INSTANCE
-    # Gerçek dünyada model yükleme burada olacak: Whisper.load_model(...)
-    _MODEL_INSTANCE = "YUKLENMIS_WHISPER_MODELI"
+    # STUB: gerçek model yüklenmiyor (Whisper entegrasyonu yok); yalnızca süreç-izolasyon altyapısını doğrular.
+    _MODEL_INSTANCE = "STUB_MODEL"
 
 def _run_heavy_inference_sync(data: str) -> str:
     """

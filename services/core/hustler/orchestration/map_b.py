@@ -22,11 +22,7 @@ class MapBExecutor:
 
     async def _process_single(self, video_id: str, transcript: str, use_local_model: bool = False) -> Dict[str, Any]:
         """Tek bir videonun Map B (LLM/Yerel) analizini yapar."""
-        
-        # Test amaçlı kasıtlı hata fırlatma (Kısmi Başarısızlık İzolasyonunu doğrulamak için)
-        if video_id == "FAIL_ME":
-            raise ValueError("Bilinçli Kısmi Başarısızlık Testi (Simülasyon)")
-            
+
         if use_local_model:
             # YEREL MODEL MODU: CpuBudget (Semaphore 1) devreye girer
             if not self.inference_port:
