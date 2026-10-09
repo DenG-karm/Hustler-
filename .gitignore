@@ -14,7 +14,7 @@ runs/
 .DS_Store
 *.mp4
 *.ass
-tools/video_ids.json
+tools/smoke/video_ids.json
 
 # Üretilen test/denetim çıktıları
 .cache/
