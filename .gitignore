@@ -13,6 +13,7 @@ hustler_stress.db
 runs/
 .DS_Store
 *.mp4
+!tests/fixtures/golden/*.mp4
 *.ass
 tools/smoke/video_ids.json
 
@@ -25,6 +26,9 @@ test_assets/
 mock_*.py
 *.sqlite-wal
 *.sqlite-shm
+*.db-wal
+*.db-shm
+*.db-journal
 
 # Geçici tek-seferlik betikler ve ham çıktılar
 /fix_*.py

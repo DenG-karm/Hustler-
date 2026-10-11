@@ -1,0 +1,10 @@
+{
+  "name": "hustler-root",
+  "private": true,
+  "scripts": {
+    "tauri": "pnpm --filter @hustler/desktop tauri",
+    "dev": "pnpm --filter @hustler/desktop dev",
+    "build": "pnpm --filter @hustler/desktop build",
+    "test:ui": "pnpm --filter @hustler/desktop test"
+  }
+}

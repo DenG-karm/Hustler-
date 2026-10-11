@@ -130,6 +130,7 @@ def test_command_building_is_deterministic(template: TemplateSpec) -> None:
         ("h264_nvenc", ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"]),
         ("h264_amf", ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "23"]),
         ("libx264", ["-c:v", "libx264", "-preset", "fast", "-crf", "23"]),
+        ("libx264_test", ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "0"]),
     ],
 )
 def test_encoder_selection_changes_only_video_codec_args(

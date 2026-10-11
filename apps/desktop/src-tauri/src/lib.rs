@@ -11,17 +11,15 @@
 //   - İzin listesi dışı rotalar reddedilir
 
 use std::{
-    collections::HashSet,
     io::{Read, Write},
     net::{TcpListener, TcpStream},
     process::{Child, Command, Stdio},
-    sync::OnceLock,
     time::Duration,
 };
 
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use tauri::{Manager, State};
+use tauri::{Emitter, Manager, State};
 
 // ---------------------------------------------------------------------------
 // Sidecar durumu — Tauri State'e eklenir, frontend'e asla açılmaz
@@ -33,21 +31,31 @@ pub struct SidecarState {
 }
 
 // ---------------------------------------------------------------------------
-// İzin listesi — OpenAPI'den üretilecek, şimdilik sabit
+// İzin listesi — K-010 ve K-702 Akış Rotaları
 // ---------------------------------------------------------------------------
-static ALLOWED_ROUTES: OnceLock<HashSet<&'static str>> = OnceLock::new();
-
-fn allowed_routes() -> &'static HashSet<&'static str> {
-    ALLOWED_ROUTES.get_or_init(|| {
-        let mut s = HashSet::new();
-        s.insert("/health");
-        s.insert("/events");
-        s
-    })
+fn is_route_allowed(route: &str) -> bool {
+    let exact_matches = [
+        "/health",
+        "/events",
+        "/api/v1/discovery/run",
+        "/api/v1/jobs",
+        "/api/v1/pipeline/script",
+        "/api/v1/pipeline/audio",
+        "/api/v1/pipeline/assets",
+        "/api/v1/pipeline/preview",
+        "/api/v1/pipeline/render",
+    ];
+    if exact_matches.iter().any(|&r| r == route) {
+        return true;
+    }
+    if route.starts_with("/api/v1/jobs/") {
+        return true;
+    }
+    false
 }
 
 // ---------------------------------------------------------------------------
-// IPC proxy komutu (K-010)
+// IPC proxy komutu (K-010 ve K-702)
 // ---------------------------------------------------------------------------
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProxyRequest {
@@ -56,7 +64,7 @@ pub struct ProxyRequest {
     pub body: Option<serde_json::Value>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ProxyResponse {
     pub status: u16,
     pub body: serde_json::Value,
@@ -65,19 +73,19 @@ pub struct ProxyResponse {
 pub mod ipc {
     use super::*;
 
-    #[tauri::command]
-    pub async fn proxy_request(
-        req: ProxyRequest,
-        state: State<'_, SidecarState>,
+    pub async fn execute_sidecar_call(
+        state: &SidecarState,
+        method: &str,
+        route: &str,
+        body: Option<serde_json::Value>,
     ) -> Result<ProxyResponse, String> {
-        // İzin listesi denetimi
-        if !allowed_routes().contains(req.route.as_str()) {
-            return Err(format!("Route '{}' is not in the allowlist", req.route));
+        if !is_route_allowed(route) {
+            return Err(format!("Route '{}' is not in the allowlist", route));
         }
 
-        let url = format!("http://127.0.0.1:{}{}", state.port, req.route);
+        let url = format!("http://127.0.0.1:{}{}", state.port, route);
 
-        let mut builder = match req.method.to_uppercase().as_str() {
+        let mut builder = match method.to_uppercase().as_str() {
             "GET" => state.client.get(&url),
             "POST" => state.client.post(&url),
             "DELETE" => state.client.delete(&url),
@@ -86,8 +94,8 @@ pub mod ipc {
         .header("Authorization", format!("Bearer {}", state.token))
         .timeout(Duration::from_secs(30));
 
-        if let Some(body) = req.body {
-            builder = builder.json(&body);
+        if let Some(ref b) = body {
+            builder = builder.json(b);
         }
 
         let resp = builder
@@ -96,12 +104,121 @@ pub mod ipc {
             .map_err(|e| format!("Request failed: {e}"))?;
 
         let status = resp.status().as_u16();
-        let body: serde_json::Value = resp
+        let resp_body: serde_json::Value = resp
             .json()
             .await
             .unwrap_or(serde_json::json!({"raw": "non-json response"}));
 
-        Ok(ProxyResponse { status, body })
+        Ok(ProxyResponse {
+            status,
+            body: resp_body,
+        })
+    }
+
+    #[tauri::command]
+    pub async fn proxy_request(
+        req: ProxyRequest,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        execute_sidecar_call(&state, &req.method, &req.route, req.body).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_discovery_run(
+        topic: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "topic": topic,
+            "max_results": 20,
+            "score_threshold": 30.0
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/discovery/run", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_generate_script(
+        idea_id: String,
+        topic: String,
+        title: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "idea_id": idea_id,
+            "topic": topic,
+            "title": title
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/script", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_generate_audio(
+        script_id: String,
+        voice_id: String,
+        text: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "script_id": script_id,
+            "voice_id": voice_id,
+            "text": text
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/audio", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_prepare_assets(
+        script_id: String,
+        slots: Vec<serde_json::Value>,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "script_id": script_id,
+            "slots": slots
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/assets", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_generate_preview(
+        script_id: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "script_id": script_id
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/preview", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_trigger_render(
+        profile: String,
+        script_id: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "profile": profile,
+            "script_id": script_id
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/render", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_get_job_status(
+        job_id: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let route = format!("/api/v1/jobs/{}", job_id);
+        execute_sidecar_call(&state, "GET", &route, None).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_cancel_job(
+        job_id: String,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let route = format!("/api/v1/jobs/{}/cancel", job_id);
+        execute_sidecar_call(&state, "POST", &route, None).await
     }
 }
 
@@ -230,6 +347,93 @@ fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
 }
 
 // ---------------------------------------------------------------------------
+// K-703: SSE Olay Köprüsü (Tauri Event Bridge & Reconnect Resilience)
+// ---------------------------------------------------------------------------
+fn spawn_event_bridge(app_handle: tauri::AppHandle, port: u16, token: String) {
+    tauri::async_runtime::spawn(async move {
+        let client = reqwest::Client::builder()
+            .timeout(Duration::from_secs(3600))
+            .build()
+            .unwrap_or_default();
+
+        let url = format!("http://127.0.0.1:{port}/events");
+        let mut attempt = 0u32;
+
+        loop {
+            attempt += 1;
+            let state_str = if attempt == 1 { "connecting" } else { "reconnecting" };
+            let _ = app_handle.emit("hustler:connection_state", serde_json::json!({
+                "state": state_str,
+                "attempt": attempt
+            }));
+
+            log::info!("[SSE Bridge] Bağlantı deneniyor (deneme {attempt}): {url}");
+
+            let req = client
+                .get(&url)
+                .header("Authorization", format!("Bearer {token}"))
+                .send()
+                .await;
+
+            match req {
+                Ok(mut resp) if resp.status().is_success() => {
+                    log::info!("[SSE Bridge] SSE Akışına bağlandı: 200 OK");
+                    attempt = 0;
+                    let _ = app_handle.emit("hustler:connection_state", serde_json::json!({
+                        "state": "connected"
+                    }));
+
+                    let mut buffer = String::new();
+                    loop {
+                        match resp.chunk().await {
+                            Ok(Some(chunk)) => {
+                                if let Ok(text) = std::str::from_utf8(&chunk) {
+                                    buffer.push_str(text);
+                                    while let Some(pos) = buffer.find("\n\n") {
+                                        let message = buffer[..pos].to_string();
+                                        buffer = buffer[pos + 2..].to_string();
+
+                                        for line in message.lines() {
+                                            if let Some(json_str) = line.strip_prefix("data: ") {
+                                                if let Ok(val) = serde_json::from_str::<serde_json::Value>(json_str) {
+                                                    let _ = app_handle.emit("hustler:event", val);
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            Ok(None) => {
+                                log::warn!("[SSE Bridge] SSE akışı kapandı (EOF).");
+                                break;
+                            }
+                            Err(e) => {
+                                log::warn!("[SSE Bridge] SSE okuma hatası: {e}");
+                                break;
+                            }
+                        }
+                    }
+                }
+                Ok(resp) => {
+                    log::warn!("[SSE Bridge] Sunucu hatası: {}", resp.status());
+                }
+                Err(e) => {
+                    log::warn!("[SSE Bridge] Bağlantı açılamadı: {e}");
+                }
+            }
+
+            let _ = app_handle.emit("hustler:connection_state", serde_json::json!({
+                "state": "disconnected",
+                "attempt": attempt
+            }));
+
+            let backoff_ms = std::cmp::min(200u64.saturating_mul(1u64 << std::cmp::min(attempt, 5)), 5000u64);
+            tokio::time::sleep(Duration::from_millis(backoff_ms)).await;
+        }
+    });
+}
+
+// ---------------------------------------------------------------------------
 // Tauri giriş noktası
 // ---------------------------------------------------------------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -254,11 +458,24 @@ pub fn run() {
                 .build()
                 .expect("HTTP client oluşturulamadı");
 
+            let handle_clone = app.handle().clone();
+            spawn_event_bridge(handle_clone, port, token.clone());
+
             app.manage(SidecarState { port, token, client });
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![ipc::proxy_request])
+        .invoke_handler(tauri::generate_handler![
+            ipc::proxy_request,
+            ipc::flow_discovery_run,
+            ipc::flow_generate_script,
+            ipc::flow_generate_audio,
+            ipc::flow_prepare_assets,
+            ipc::flow_generate_preview,
+            ipc::flow_trigger_render,
+            ipc::flow_get_job_status,
+            ipc::flow_cancel_job
+        ])
         .run(tauri::generate_context!())
         .expect("Tauri başlatılamadı");
 }

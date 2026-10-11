@@ -1,3 +1,4 @@
+import os
 import httpx
 from dataclasses import dataclass
 import structlog
@@ -102,6 +103,42 @@ class LLMPort:
         
         return LLMResponse(text, prompt_tokens, completion_tokens, total_tokens)
 
+    @retry(
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+        stop=stop_after_attempt(3),
+        retry=retry_if_exception(_should_retry_error),
+        reraise=True,
+    )
+    async def _execute_groq_fallback(self, prompt: str, api_key: str) -> LLMResponse:
+        """Groq API'ye (Llama 3) fallback isteği (Tenacity ile korunur)"""
+        endpoint = "https://api.groq.com/openai/v1/chat/completions"
+        payload = {
+            "model": "llama3-8b-8192",
+            "messages": [
+                {"role": "system", "content": "Sen yaratıcı bir senaryo yazarısın. Çıktıların KESİNLİKLE saf JSON olmalıdır. Markdown veya ekstra metin kullanma."},
+                {"role": "user", "content": prompt}
+            ]
+        }
+        headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        
+        resp = await self.client.post(endpoint, json=payload, headers=headers, timeout=10.0)
+        try:
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            raise LLMHTTPError(resp) from e
+            
+        data = resp.json()
+        text = data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        usage = data.get("usage", {})
+        prompt_tokens = usage.get("prompt_tokens", 0)
+        completion_tokens = usage.get("completion_tokens", 0)
+        total_tokens = usage.get("total_tokens", 0)
+        
+        return LLMResponse(text, prompt_tokens, completion_tokens, total_tokens)
+
     async def generate_text(self, prompt: str) -> LLMResponse:
         """
         Dışarıya açık ana metod.
@@ -110,8 +147,16 @@ class LLMPort:
         # 1. Ön Kesici (Pre-flight check)
         self.ledger.check_budget()
         
-        # 2. Ağ İsteği (Retry mekanizmalı)
-        response = await self._execute_network_request(prompt)
+        # 2. Ağ İsteği (Retry mekanizmalı) ve Groq Fallback
+        try:
+            response = await self._execute_network_request(prompt)
+        except Exception as gemini_err:
+            groq_key = os.environ.get("GROQ_API_KEY")
+            if not groq_key:
+                raise  # Fallback yoksa orijinal hatayı fırlat
+                
+            logger.warning("gemini_failed_fallback_to_groq", error=str(gemini_err), msg="Gemini başarısız oldu, Groq (Llama 3) yedeğine geçiliyor.")
+            response = await self._execute_groq_fallback(prompt, groq_key)
         
         # 3. Maliyet Defterine İşle
         self.ledger.add_usage(response.total_tokens)

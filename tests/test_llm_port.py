@@ -190,3 +190,45 @@ async def test_model_is_configurable_per_instance() -> None:
         assert port.endpoint.endswith("/models/gemini-2.5-flash-lite:generateContent")
     finally:
         await port.close()
+
+async def test_groq_fallback_triggers_when_gemini_fails_and_key_is_present(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("GROQ_API_KEY", "fake-groq-key")
+    
+    attempts: list[str] = []
+    
+    def handler(request: httpx.Request) -> httpx.Response:
+        url = str(request.url)
+        attempts.append(url)
+        if "generativelanguage.googleapis.com" in url:
+            # Gemini 429 hatası versin
+            return httpx.Response(429, json={"error": "too many requests"})
+        elif "api.groq.com" in url:
+            # Groq başarılı dönsün
+            return httpx.Response(
+                200, 
+                json={
+                    "choices": [{"message": {"content": "Groq Response"}}],
+                    "usage": {"prompt_tokens": 1, "completion_tokens": 2, "total_tokens": 3}
+                }
+            )
+        return httpx.Response(500)
+
+    async def no_sleep(_: float) -> None:
+        return None
+
+    monkeypatch.setattr(LLMPort._execute_network_request.retry, "sleep", no_sleep)
+    
+    port = await _port_with_transport(handler)
+    try:
+        res = await asyncio.wait_for(port.generate_text("test prompt"), timeout=5)
+    finally:
+        await port.close()
+        
+    assert res.text == "Groq Response"
+    assert res.total_tokens == 3
+    # Gemini 3 kez denendi (Tenacity)
+    assert sum("generativelanguage" in url for url in attempts) == 3
+    # Groq 1 kez denendi (Fallback)
+    assert sum("api.groq.com" in url for url in attempts) == 1

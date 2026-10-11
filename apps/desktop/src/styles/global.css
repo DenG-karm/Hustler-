@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Color Tokens - Light */
+    --color-bg-app: hsl(220 20% 98%);
+    --color-bg-surface: hsl(0 0% 100%);
+    --color-bg-surface-hover: hsl(220 14% 96%);
+    --color-bg-elevated: hsl(0 0% 100%);
+
+    --color-border-subtle: hsl(220 13% 91%);
+    --color-border-default: hsl(220 13% 86%);
+    --color-border-strong: hsl(220 13% 70%);
+
+    --color-text-primary: hsl(224 71% 4%);
+    --color-text-secondary: hsl(220 9% 46%);
+    --color-text-muted: hsl(220 9% 60%);
+
+    --color-primary: hsl(262 83% 58%);
+    --color-primary-hover: hsl(262 83% 50%);
+    --color-primary-fg: hsl(0 0% 100%);
+
+    --color-secondary: hsl(220 14% 94%);
+    --color-secondary-hover: hsl(220 14% 88%);
+    --color-secondary-fg: hsl(224 71% 10%);
+
+    --color-destructive: hsl(0 84% 60%);
+    --color-destructive-hover: hsl(0 84% 50%);
+    --color-destructive-fg: hsl(0 0% 100%);
+
+    --color-accent: hsl(262 83% 96%);
+    --color-accent-hover: hsl(262 83% 92%);
+    --color-accent-fg: hsl(262 83% 45%);
+
+    --color-focus-ring: hsl(262 83% 58% / 0.4);
+
+    /* Spacing Tokens */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing-md: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-2xl: 3rem;
+
+    /* Radius Tokens */
+    --radius-sm: 0.25rem;
+    --radius-md: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-full: 9999px;
+
+    /* Font Tokens */
+    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+    color-scheme: light;
+  }
+
+  .dark {
+    /* Color Tokens - Dark */
+    --color-bg-app: hsl(224 32% 8%);
+    --color-bg-surface: hsl(224 30% 12%);
+    --color-bg-surface-hover: hsl(224 25% 16%);
+    --color-bg-elevated: hsl(224 25% 18%);
+
+    --color-border-subtle: hsl(224 20% 18%);
+    --color-border-default: hsl(224 20% 24%);
+    --color-border-strong: hsl(224 20% 36%);
+
+    --color-text-primary: hsl(210 20% 98%);
+    --color-text-secondary: hsl(215 16% 70%);
+    --color-text-muted: hsl(215 16% 50%);
+
+    --color-primary: hsl(263 70% 66%);
+    --color-primary-hover: hsl(263 70% 74%);
+    --color-primary-fg: hsl(224 71% 4%);
+
+    --color-secondary: hsl(224 25% 18%);
+    --color-secondary-hover: hsl(224 25% 24%);
+    --color-secondary-fg: hsl(210 20% 98%);
+
+    --color-destructive: hsl(0 72% 51%);
+    --color-destructive-hover: hsl(0 72% 60%);
+    --color-destructive-fg: hsl(0 0% 100%);
+
+    --color-accent: hsl(263 50% 20%);
+    --color-accent-hover: hsl(263 50% 26%);
+    --color-accent-fg: hsl(263 70% 80%);
+
+    --color-focus-ring: hsl(263 70% 66% / 0.5);
+
+    color-scheme: dark;
+  }
+
+  body {
+    background-color: var(--color-bg-app);
+    color: var(--color-text-primary);
+    font-family: var(--font-sans);
+    margin: 0;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+}

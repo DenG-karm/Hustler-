@@ -26,6 +26,10 @@ from typing import Any
 
 import httpx
 
+class MissingTimestampsError(Exception):
+    """Kelime zamanlamaları bulunamadığında fırlatılır (fail-fast)."""
+    pass
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
@@ -37,6 +41,7 @@ from services.core.hustler.domain.models.template import (  # noqa: E402
     SafeZone,
     TemplateSpec,
 )
+from services.core.hustler.domain.models.profile import RenderProfile  # noqa: E402
 from services.core.hustler.generators.ffmpeg_compiler import FFmpegCompiler  # noqa: E402
 from services.core.hustler.generators.script_generator import ScriptGenerator  # noqa: E402
 from services.core.hustler.generators.subtitle_generator import (  # noqa: E402
@@ -299,7 +304,16 @@ async def stage3_tts(state: dict[str, Any]) -> Stage:
     adapter = ElevenLabsAdapter(api_key=key)
     t0 = time.perf_counter()
     try:
-        await adapter.generate_audio_stream(state["script_text"], str(out), voice)
+        try:
+            timings = await adapter.generate_audio_with_timing(state["script_text"], str(out), voice)
+        except Exception as exc:
+            if "402" in str(exc) or "payment_required" in str(exc).lower():
+                st.notes.append(f"ElevenLabs 402 Hatası: Premium ses ({voice}) reddedildi, varsayılan George (JBFqnCBcs6RMkjVJQSmIP) sesine geçiliyor...")
+                fallback_voice = "JBFqnCBcs6RMkjVJQSmIP"
+                timings = await adapter.generate_audio_with_timing(state["script_text"], str(out), fallback_voice)
+            else:
+                raise
+                
         dt = time.perf_counter() - t0
         summary = probe_summary(await ffprobe(str(out)))
         st.metrics.update(
@@ -307,6 +321,7 @@ async def stage3_tts(state: dict[str, Any]) -> Stage:
             chars=adapter.get_total_chars_processed(), **summary,
         )
         state["audio_path"] = str(out)
+        state["word_timings"] = timings
         st.status = "PASS" if summary["duration_sec"] > 1 else "FAIL"
     except Exception as exc:  # noqa: BLE001
         st.notes.append(f"{type(exc).__name__}: {exc}")
@@ -341,14 +356,9 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
             audio = await _synthetic("audio", OUT / "synthetic_audio.mp3")
             st.notes.append("SYNTHETIC_INPUT: ses (Aşama 3 çalışmadı).")
 
-        text = state.get("script_text") or "Bu bir gerçek render ve altyazı hattı sınamasıdır test"
-        tokens = text.split()
-        step = (RENDER_SECONDS * 1000) // max(len(tokens), 1)
-        words = [WordTiming(word=w, start_ms=i * step, end_ms=(i + 1) * step) for i, w in enumerate(tokens)]
-        st.notes.append(
-            "BULGU: sistemde TTS->kelime zamanlama (forced alignment) hattı yok; "
-            "altyazı süreleri eşit dağıtıldı."
-        )
+        words = state.get("word_timings")
+        if not words:
+            raise MissingTimestampsError("Kelime zamanlamaları bulunamadı! Sentetik altyazı reddedildi. İşlem iptal ediliyor.")
         ass_path = OUT / "subs.ass"
         ass_path.write_text(AssDocument.generate(words, SubtitleStyle()), encoding="utf-8")
 
@@ -409,6 +419,29 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
             st.metrics["libx264_comparison_seconds"] = round(time.perf_counter() - t1, 3) if code == 0 else None
             if code != 0:
                 st.notes.append(f"libx264 kar??la?t?rma encode ba?ar?s?z: {err[-150:]}")
+
+        # K-611 DRAFT Profil Önizleme (< 10 sn)
+        draft_out = OUT / "render_draft.mp4"
+        draft_cmd = FFmpegCompiler.build_render_command(
+            make_template(), audio, str(ass_path), [video], str(draft_out),
+            profile=RenderProfile.DRAFT,
+            duration_sec=float(RENDER_SECONDS),
+        )
+        t_draft = time.perf_counter()
+        code_d, _, err_d = await run_cmd(*draft_cmd)
+        dt_draft = time.perf_counter() - t_draft
+        draft_summary = probe_summary(await ffprobe(str(draft_out))) if code_d == 0 else {}
+        st.metrics["draft_render_seconds"] = round(dt_draft, 3) if code_d == 0 else None
+        st.metrics["draft_speed_x_realtime"] = round(RENDER_SECONDS / max(dt_draft, 1e-9), 2) if code_d == 0 else None
+        st.metrics["draft_resolution"] = draft_summary.get("resolution")
+
+        # Katı Süre Kontrolleri
+        if dt_draft >= 10.0:
+            st.status = "FAIL"
+            st.notes.append(f"K-611 İhlali: DRAFT render süresi ({dt_draft:.2f}s) >= 10.0s!")
+        if dt >= 120.0:
+            st.status = "FAIL"
+            st.notes.append(f"K-611 İhlali: FINAL render süresi ({dt:.2f}s) >= 120.0s!")
     except Exception as exc:  # noqa: BLE001
         st.notes.append(f"{type(exc).__name__}: {exc}")
         st.notes.append(traceback.format_exc(limit=4).splitlines()[-1])

@@ -1,0 +1,370 @@
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { useFlowStore, InvalidStateTransitionError } from './flowStore'
+import { setIpcClient, resetIpcClient, type FlowIpcClient } from '../lib/ipc'
+
+describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
+  beforeEach(() => {
+    useFlowStore.getState().resetFlow()
+    resetIpcClient()
+  })
+
+  describe('Durum Makinesi Geçiş Kısıtlamaları (Strict FSM)', () => {
+    it('başlangıçta TOPIC adımında olmalıdır', () => {
+      const state = useFlowStore.getState()
+      expect(state.currentStep).toBe('TOPIC')
+      expect(state.canProceed()).toBe(false)
+    })
+
+    it('boş veya 3 karakterden kısa konuda nextStep() InvalidStateTransitionError fırlatmalıdır', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('ab')
+
+      expect(() => {
+        store.nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('TOPIC')
+    })
+
+    it('geçerli konuda nextStep() TOPIC -> TOP20 geçişi yapmalıdır', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka Tarihi')
+
+      expect(store.canProceed()).toBe(true)
+      store.nextStep()
+
+      expect(useFlowStore.getState().currentStep).toBe('TOP20')
+    })
+
+    it('TOP20 adımında fikir seçilmeden SCRIPT adımına geçiş reddedilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep() // TOP20'ye geçti
+
+      expect(() => {
+        useFlowStore.getState().nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('TOP20')
+    })
+
+    it('fikir seçildikten sonra TOP20 -> SCRIPT geçişi yapılabilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+
+      store.selectIdea({
+        id: 'idea_1',
+        title: 'Yapay Zekanın Geleceği',
+        hook: 'Bunu biliyor muydunuz?',
+        score: 95,
+      })
+
+      expect(useFlowStore.getState().canProceed()).toBe(true)
+      useFlowStore.getState().nextStep()
+
+      expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
+    })
+
+    it('SCRIPT adımında senaryo onaylanmadan AUDIO adımına geçiş reddedilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+      store.selectIdea({ id: 'idea_1', title: 'Fikir', hook: 'Kanca', score: 90 })
+      store.nextStep()
+
+      // Senaryo var ama isApproved = false
+      store.setScript({
+        id: 'scr_1',
+        title: 'Başlık',
+        hook: 'Kanca',
+        fullText: 'Bu yeterince uzun bir senaryo metnidir en az yirmi karakter.',
+        scenes: [],
+        isApproved: false,
+      })
+
+      expect(() => {
+        useFlowStore.getState().nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
+    })
+
+    it('senaryo onaylandığında SCRIPT -> AUDIO geçişi yapılabilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+      store.selectIdea({ id: 'idea_1', title: 'Fikir', hook: 'Kanca', score: 90 })
+      store.nextStep()
+
+      store.setScript({
+        id: 'scr_1',
+        title: 'Başlık',
+        hook: 'Kanca',
+        fullText: 'Bu yeterince uzun bir senaryo metnidir en az yirmi karakter.',
+        scenes: [],
+        isApproved: false,
+      })
+
+      store.approveScript()
+      expect(useFlowStore.getState().canProceed()).toBe(true)
+      useFlowStore.getState().nextStep()
+
+      expect(useFlowStore.getState().currentStep).toBe('AUDIO')
+    })
+
+    it('AUDIO adımında ses üretilmeden veya süresi 0 iken ASSETS adımına geçiş engellenmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+      store.selectIdea({ id: 'idea_1', title: 'Fikir', hook: 'Kanca', score: 90 })
+      store.nextStep()
+      store.setScript({
+        id: 'scr_1',
+        title: 'Başlık',
+        hook: 'Kanca',
+        fullText: 'Uzun senaryo metni yirmi karakterden fazla.',
+        scenes: [],
+        isApproved: true,
+      })
+      store.nextStep() // AUDIO adımında
+
+      expect(() => {
+        useFlowStore.getState().nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('AUDIO')
+    })
+
+    it('ASSETS adımında zorunlu slotlar dolmadan PREVIEW adımına geçiş engellenmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+      store.selectIdea({ id: 'idea_1', title: 'Fikir', hook: 'Kanca', score: 90 })
+      store.nextStep()
+      store.setScript({
+        id: 'scr_1',
+        title: 'Başlık',
+        hook: 'Kanca',
+        fullText: 'Uzun senaryo metni yirmi karakterden fazla.',
+        scenes: [],
+        isApproved: true,
+      })
+      store.nextStep()
+      store.setAudio({
+        scriptId: 'scr_1',
+        voiceId: 'tr-TR',
+        audioPath: 'assets/audio/test.mp3',
+        durationSeconds: 25,
+        isGenerated: true,
+      })
+      store.nextStep() // ASSETS adımında
+
+      // Varsayılan slotlar henüz atanmadı (assignedPath null)
+      expect(() => {
+        useFlowStore.getState().nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('ASSETS')
+    })
+
+    it('PREVIEW adımında doğrulama yapılmadan RENDER adımına geçiş engellenmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Yapay Zeka')
+      store.nextStep()
+      store.selectIdea({ id: 'idea_1', title: 'Fikir', hook: 'Kanca', score: 90 })
+      store.nextStep()
+      store.setScript({
+        id: 'scr_1',
+        title: 'Başlık',
+        hook: 'Kanca',
+        fullText: 'Uzun senaryo metni yirmi karakterden fazla.',
+        scenes: [],
+        isApproved: true,
+      })
+      store.nextStep()
+      store.setAudio({
+        scriptId: 'scr_1',
+        voiceId: 'tr-TR',
+        audioPath: 'assets/audio/test.mp3',
+        durationSeconds: 25,
+        isGenerated: true,
+      })
+      store.nextStep()
+
+      // Tüm zorunlu slotları doldur
+      store.assignAssetSlot('slot_intro_video', 'intro.mp4')
+      store.assignAssetSlot('slot_body_img1', 'img1.png')
+      store.assignAssetSlot('slot_body_img2', 'img2.png')
+      store.nextStep() // PREVIEW adımında
+
+      expect(useFlowStore.getState().currentStep).toBe('PREVIEW')
+
+      // Önizleme doğrulanmadı (isVerified = false)
+      expect(() => {
+        useFlowStore.getState().nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+    })
+  })
+
+  describe('Adım Atlama ve Bypass Koruması (Anti-Bypass)', () => {
+    it('TOPIC adımındayken doğrudan goToStep(RENDER) çağrıldığında ara adımlar eksik olduğu için reddedilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Büyük Konu')
+
+      expect(() => {
+        store.goToStep('RENDER')
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('TOPIC')
+    })
+
+    it('TOPIC adımındayken doğrudan goToStep(AUDIO) çağrıldığında TOP20 eksik olduğu için reddedilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Büyük Konu')
+
+      expect(() => {
+        store.goToStep('AUDIO')
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('TOPIC')
+    })
+
+    it('Geriye gitmeye (prevStep veya goToStep) her zaman izin verilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.setTopic('Büyük Konu')
+      store.nextStep() // TOP20'de
+
+      store.prevStep()
+      expect(useFlowStore.getState().currentStep).toBe('TOPIC')
+
+      store.nextStep() // Tekrar TOP20'ye geç
+      store.goToStep('TOPIC') // Geriye gitme
+      expect(useFlowStore.getState().currentStep).toBe('TOPIC')
+    })
+  })
+
+  describe('IPC Mocklama ve Tam Akış Doğrulaması', () => {
+    it('IPC çağrılarıyla baştan sona (TOPIC -> RENDER) tam akış başarıyla tamamlanmalıdır', async () => {
+      const mockIpc: FlowIpcClient = {
+        runDiscovery: vi.fn().mockResolvedValue({
+          status: 200,
+          body: [
+            { video_id: 'v1', title: 'Viral Video 1', hook: 'Kanca 1', score: 98 },
+            { video_id: 'v2', title: 'Viral Video 2', hook: 'Kanca 2', score: 85 },
+          ],
+        }),
+        generateScript: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            script_id: 'scr_mock_1',
+            title: 'Mock Senaryo',
+            hook: 'Şok Kanca!',
+            full_text: 'Bu tam teşekküllü test senaryosu yirmi karakterden uzundur.',
+            scenes: [{ order: 1, narration: 'Giriş', visual_prompt: 'Görsel 1' }],
+          },
+        }),
+        generateAudio: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            audio_path: 'assets/audio/mock.mp3',
+            duration_seconds: 28.5,
+          },
+        }),
+        prepareAssets: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            slots: [
+              { slot_id: 'slot_intro_video', name: 'Giriş', type: 'video', required: true, assigned_path: 'intro.mp4' },
+              { slot_id: 'slot_body_img1', name: 'Görsel 1', type: 'image', required: true, assigned_path: 'img1.png' },
+              { slot_id: 'slot_body_img2', name: 'Görsel 2', type: 'image', required: true, assigned_path: 'img2.png' },
+            ],
+          },
+        }),
+        generatePreview: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            preview_url: 'assets/previews/preview.mp4',
+            fps: 30,
+            resolution: '540x960',
+          },
+        }),
+        triggerRender: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            job_id: 'job_render_123',
+            profile: 'DRAFT',
+            output_path: 'renders/output.mp4',
+          },
+        }),
+        getJobStatus: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            job_id: 'job_render_123',
+            status: 'COMPLETED',
+            progress: 100,
+            output_path: 'renders/output.mp4',
+          },
+        }),
+        proxyRequest: vi.fn(),
+      }
+
+      setIpcClient(mockIpc)
+
+      const store = useFlowStore.getState()
+
+      // 1. TOPIC
+      store.setTopic('Finansal Özgürlük')
+      await store.fetchIdeasForTopic()
+      expect(mockIpc.runDiscovery).toHaveBeenCalledWith('Finansal Özgürlük')
+      expect(useFlowStore.getState().ideas).toHaveLength(2)
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('TOP20')
+
+      // 2. TOP20
+      const selected = useFlowStore.getState().ideas[0]
+      store.selectIdea(selected)
+      await store.generateScriptForIdea()
+      expect(mockIpc.generateScript).toHaveBeenCalledWith('v1', 'Finansal Özgürlük', 'Viral Video 1')
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
+
+      // 3. SCRIPT
+      expect(useFlowStore.getState().script?.title).toBe('Mock Senaryo')
+      store.approveScript()
+      await store.generateAudioForScript()
+      expect(mockIpc.generateAudio).toHaveBeenCalled()
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('AUDIO')
+
+      // 4. AUDIO
+      expect(useFlowStore.getState().audio?.durationSeconds).toBe(28.5)
+      await store.loadAssetsForScript()
+      expect(mockIpc.prepareAssets).toHaveBeenCalled()
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('ASSETS')
+
+      // 5. ASSETS
+      expect(useFlowStore.getState().assets.allSlotsFilled).toBe(true)
+      await store.buildPreviewForScript()
+      expect(mockIpc.generatePreview).toHaveBeenCalled()
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('PREVIEW')
+
+      // 6. PREVIEW
+      store.setPreviewVerified(true)
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('RENDER')
+
+      // 7. RENDER
+      await store.dispatchRenderJob('DRAFT')
+      expect(mockIpc.triggerRender).toHaveBeenCalledWith('DRAFT', 'scr_mock_1')
+      expect(useFlowStore.getState().render.jobId).toBe('job_render_123')
+
+      await store.pollJobStatus()
+      expect(mockIpc.getJobStatus).toHaveBeenCalledWith('job_render_123')
+      expect(useFlowStore.getState().render.status).toBe('COMPLETED')
+      expect(useFlowStore.getState().render.progress).toBe(100)
+    })
+  })
+})

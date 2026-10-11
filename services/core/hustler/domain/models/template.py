@@ -1,5 +1,23 @@
+from enum import Enum
 from pydantic import BaseModel, Field, field_validator
-from typing import List
+from typing import List, Optional
+
+class RecoveryStrategy(str, Enum):
+    CROP = "crop"
+    PAD = "pad"
+    SCALE = "scale"
+
+class AssetType(str, Enum):
+    VIDEO = "video"
+    AUDIO = "audio"
+    IMAGE = "image"
+
+class SlotSpec(BaseModel):
+    slot_id: str
+    expected_type: AssetType = AssetType.VIDEO
+    required: bool = True
+    aspect_ratio: Optional[str] = "9:16"
+    description: str = ""
 
 class SafeZone(BaseModel):
     margin_top: int = Field(..., description="Üst güvenlik marjı (piksel)")
@@ -64,3 +82,11 @@ class TemplateSpec(BaseModel):
         description="Kabul edilen anlatım tonları listesi (En az 1 ton içermelidir)."
     )
     render_config: RenderConfig
+    recovery_strategy: RecoveryStrategy = Field(
+        default=RecoveryStrategy.CROP,
+        description="En-boy oranı uyuşmazlığında otomatik kurtarma stratejisi (crop, pad, scale)."
+    )
+    slots: Optional[List[SlotSpec]] = Field(
+        default=None,
+        description="Şablona ait tanımlı medya slotları."
+    )

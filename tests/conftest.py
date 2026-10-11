@@ -83,3 +83,19 @@ def template() -> TemplateSpec:
             width=1080, height=1920, fps=30, bg_color="#000", safe_zone=zone
         ),
     )
+
+
+def pytest_addoption(parser: pytest.Parser) -> None:
+    parser.addoption(
+        "--update-snapshots",
+        action="store_true",
+        default=False,
+        help="Altın referans dosyaları (golden video snapshots) yeniden oluşturur ve günceller.",
+    )
+
+
+@pytest.fixture
+def update_snapshots(request: pytest.FixtureRequest) -> bool:
+    """--update-snapshots bayrağının durumunu döner."""
+    return bool(request.config.getoption("--update-snapshots"))
+

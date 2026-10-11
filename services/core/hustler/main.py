@@ -25,7 +25,10 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from services.core.hustler.api.auth import verify_token
 from services.core.hustler.db import Database
 from services.core.hustler.api.routes.discovery import router as discovery_router
+from services.core.hustler.api.routes.jobs import router as jobs_router
+from services.core.hustler.api.routes.pipeline import router as pipeline_router
 from services.core.hustler.storage.cache import YouTubeCache
+from services.core.hustler.storage.jobs import JobRepository
 
 log = structlog.get_logger()
 
@@ -64,11 +67,16 @@ def _resolve_port() -> int:
 
 
 # ---------------------------------------------------------------------------
+from services.core.hustler.infrastructure.event_broker import EventBroker
+
+# ---------------------------------------------------------------------------
 # Lifespan
 # ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.session_token = SESSION_TOKEN
+    app.state.event_broker = EventBroker()
+    app.state.running_jobs = {}
     
     # M2 Veri Katmanı Başlatma
     db_path = Path("hustler_core.db")
@@ -78,11 +86,20 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     cache = YouTubeCache(db, ttl_seconds=3600)
     await cache.init_tables()
     
+    job_repo = JobRepository(db)
+    await job_repo.init_table()
+    await job_repo.reap_zombies()
+    
     app.state.db = db
     app.state.cache = cache
+    app.state.job_repo = job_repo
     
     log.info("sidecar_started")  # token ve port burada bilinçli olarak yok
     yield
+    # Kapanışta çalışan işleri iptal et
+    for t in app.state.running_jobs.values():
+        if not t.done():
+            t.cancel()
     await db.close()
     log.info("sidecar_stopped")
 
@@ -92,27 +109,52 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Hustler Core", version="0.1.0", lifespan=lifespan)
 app.state.session_token = SESSION_TOKEN
+app.state.event_broker = EventBroker()
+app.state.running_jobs = {}
 
 app.include_router(discovery_router, prefix="/api/v1")
+app.include_router(jobs_router, prefix="/api/v1")
+app.include_router(pipeline_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
-# RFC 9457 Problem Details hata işleyici
+# RFC 7807 / RFC 9457 Problem Details hata işleyicileri
 # ---------------------------------------------------------------------------
 async def _problem_details_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    title = str(exc.detail) if isinstance(exc.detail, str) else "HTTP Hatası"
+    code = getattr(exc, "code", f"ERR_{exc.status_code}")
+    content = {
+        "type": f"https://hustler.local/errors/{exc.status_code}",
+        "title": title,
+        "status": exc.status_code,
+        "detail": str(exc.detail),
+        "instance": str(request.url.path),
+        "code": code,
+    }
     return JSONResponse(
         status_code=exc.status_code,
-        content={
-            "type": f"https://hustler.local/errors/{exc.status_code}",
-            "title": exc.detail,
-            "status": exc.status_code,
-            "instance": str(request.url.path),
-        },
-        # exc.headers (WWW-Authenticate vb.) düşmemeli
+        content=content,
         headers={**(exc.headers or {}), "Content-Type": "application/problem+json"},
     )
 
 
+async def _unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    log.error("unhandled_server_error", path=request.url.path, error=str(exc))
+    return JSONResponse(
+        status_code=500,
+        content={
+            "type": "https://hustler.local/errors/500",
+            "title": "Sunucu İşlem Hatası",
+            "status": 500,
+            "detail": "Sunucu tarafında beklenmeyen bir hata oluştu. Güvenlik nedeniyle teknik detaylar gizlendi.",
+            "instance": str(request.url.path),
+            "code": "INTERNAL_SERVER_ERROR",
+        },
+        headers={"Content-Type": "application/problem+json"},
+    )
+
+
 app.add_exception_handler(HTTPException, _problem_details_handler)  # type: ignore[arg-type]
+app.add_exception_handler(Exception, _unhandled_exception_handler)
 
 
 # ---------------------------------------------------------------------------
@@ -126,12 +168,18 @@ async def health() -> dict[str, str]:
 
 @app.get("/events", dependencies=[Depends(verify_token)])
 async def sse_stream(request: Request) -> StreamingResponse:
-    """Server-Sent Events — Tauri Channel'e köprülenir."""
-    async def _generate() -> AsyncIterator[str]:
-        yield "data: connected\n\n"
-        # Gerçek olaylar ilerleyen milestone'larda eklenir
-
-    return StreamingResponse(_generate(), media_type="text/event-stream")
+    """Server-Sent Events — Tauri Event köprüsüne yayınlanır."""
+    broker: EventBroker = getattr(request.app.state, "event_broker", None) or EventBroker()
+    request.app.state.event_broker = broker
+    return StreamingResponse(
+        broker.subscribe(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
 
 
 # ---------------------------------------------------------------------------

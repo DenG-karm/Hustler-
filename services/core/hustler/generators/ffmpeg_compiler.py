@@ -1,21 +1,29 @@
 from typing import List, Optional
 from services.core.hustler.domain.models.template import TemplateSpec
+from services.core.hustler.domain.models.profile import RenderProfile
 
 SOFTWARE_ENCODER = "libx264"
+TEST_ENCODER = "libx264_test"
+DRAFT_ENCODER = "libx264_draft"
 
 # Donanım encoder'ları (öncelik sırasıyla) ve yazılım yedeği; seçim hardware.select_video_encoder'da.
 VIDEO_ENCODER_ARGS: dict[str, list[str]] = {
     "h264_nvenc": ["-c:v", "h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "23", "-b:v", "0"],
     "h264_amf": ["-c:v", "h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "23", "-qp_p", "23"],
     SOFTWARE_ENCODER: ["-c:v", "libx264", "-preset", "fast", "-crf", "23"],
+    TEST_ENCODER: ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "0"],
+    DRAFT_ENCODER: ["-c:v", "libx264", "-preset", "ultrafast", "-crf", "32"],
 }
 
 class FFmpegCompiler:
     """
-    M6 K-603: FFmpeg Derleyici (Compiler)
+    M6 K-603 / K-611: FFmpeg Derleyici (Compiler)
     TemplateSpec üzerindeki katı kuralları (çözünürlük, fps vb.) baz alarak,
     saf, deterministik ve çalıştırılabilir bir FFmpeg komut dizisi üretir.
     I/O (subprocess) içermez, sadece komutu inşa eder.
+    
+    RenderProfile.DRAFT: 540x960 çözünürlük, ultrafast preset, crf 32.
+    RenderProfile.FINAL: 1080x1920 çözünürlük, donanım veya kaliteli CPU kodlama.
     """
     
     @staticmethod
@@ -35,10 +43,21 @@ class FFmpegCompiler:
         assets: List[str], 
         output_path: str,
         bg_music_path: Optional[str] = None,
-        encoder: str = SOFTWARE_ENCODER,
+        encoder: Optional[str] = None,
+        profile: RenderProfile = RenderProfile.FINAL,
+        duration_sec: Optional[float] = None,
     ) -> List[str]:
         if not assets:
             raise ValueError("En az bir görsel asset (video/resim) verilmelidir.")
+
+        if encoder is None:
+            if profile == RenderProfile.DRAFT:
+                encoder = DRAFT_ENCODER
+            elif profile == RenderProfile.TEST:
+                encoder = TEST_ENCODER
+            else:
+                encoder = SOFTWARE_ENCODER
+
         if encoder not in VIDEO_ENCODER_ARGS:
             raise ValueError(f"Desteklenmeyen video encoder'ı: {encoder}")
             
@@ -59,8 +78,16 @@ class FFmpegCompiler:
         # 2. Filtre Kompleksini (Filter Complex) İnşa Et
         filters = []
         concat_inputs = ""
-        width = template.render_config.width
-        height = template.render_config.height
+        
+        # DRAFT profilinde çözünürlük yarıya indirilir (540x960)
+        if profile == RenderProfile.DRAFT:
+            width = max(320, template.render_config.width // 2)
+            width = width - (width % 2)
+            height = max(480, template.render_config.height // 2)
+            height = height - (height % 2)
+        else:
+            width = template.render_config.width
+            height = template.render_config.height
         fps = template.render_config.fps
         
         # Görselleri normalize et (Center Crop, Scale, FPS)
@@ -103,7 +130,9 @@ class FFmpegCompiler:
             *VIDEO_ENCODER_ARGS[encoder],
             "-c:a", "aac",
             "-b:a", "192k",
-            output_path
         ])
+        if duration_sec is not None:
+            cmd.extend(["-t", str(duration_sec)])
+        cmd.append(output_path)
         
         return cmd

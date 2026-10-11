@@ -134,13 +134,13 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-602 | AssetManager İnşası (Asenkron medya motoru, Semaphore, iter_bytes chunk streaming, Tenacity retry, akıllı Cache) | Eşzamanlılık ve Cache Hit testleri geçer |
 | [x] K-603 | FFmpeg Derleyici (Compiler), AST Sınıfları (Filter, FilterChain) ve kuru çalıştırma yardımcısı assert_compiles | Null muxer ile I/O olmadan (ms seviyesinde) çalışır |
 | [x] K-604 | SceneClipBuilder (scale/crop/zoompan/fps) ve hareket kayıt defteri (Motion Registry) | Kuru çalıştırmadan (Dry Run) ve MyPy'dan geçer |
-| [ ] K-605 | TransitionPlanner (xfade ofset) ve AudioMixer | Ofset hesabı birim testli |
-| [ ] K-606 | GraphValidator, Profile (Draft/Final), derleyici-şema sürüm eşleşmesi; tüm şablon x profil matrisi kuru çalıştırılır | Kopuk etiket ve süre tutarsızlığı yakalanır; matrisin tamamı kuru çalıştırmadan geçer (CI kapısı K4) |
-| [ ] K-607 | FFmpegRunner: progress ayrıştırma, zaman aşımı, iptal, hata ayrıştırma | İptalde alt süreç ölür |
-| [ ] K-608 | Altın dosya ve snapshot altyapısı; her şablon için referans render | Kare farkı eşiği CI'da |
-| [ ] K-609 | Assets: izleme durum makinesi (aday → kararlılık → doğrulama → kopya) | Yavaş-kopyalama testinde çökme 0 |
-| [ ] K-610 | Slot eşleme, oran ve eksik dosya uyarıları | Yanlış oranda net uyarı |
-| [ ] K-611 | Taslak önizleme akışı | Taslak < 10 sn; nihai < 2 dk |
+| [x] K-605 | TransitionPlanner (xfade ofset) ve AudioMixer | Ofset hesabı birim testli |
+| [x] K-606 | GraphValidator, Profile (Draft/Final), derleyici-şema sürüm eşleşmesi; tüm şablon x profil matrisi kuru çalıştırılır | Kopuk etiket ve süre tutarsızlığı yakalanır; matrisin tamamı kuru çalıştırmadan geçer (CI kapısı K4) |
+| [x] K-607 | FFmpegRunner: progress ayrıştırma, zaman aşımı, iptal, hata ayrıştırma | İptalde alt süreç ölür |
+| [x] K-608 | Altın dosya ve snapshot altyapısı; her şablon için referans render | Kare farkı eşiği CI'da |
+| [x] K-609 | Assets: izleme durum makinesi (aday → kararlılık → doğrulama → kopya) | Yavaş-kopyalama testinde çökme 0 |
+| [x] K-610 | Slot eşleme, oran ve eksik dosya uyarıları | Yanlış oranda net uyarı |
+| [x] K-611 | Taslak önizleme akışı | Taslak < 10 sn; nihai < 2 dk |
 
 **Çıkış kriteri:** Bir senaryo, ses ve görsel seti klasöre bırakıldığında otomatik yerleşir; taslak < 10 sn, nihai render < 2 dk; kuru çalıştırma, altın dosya ve kararlılık testleri geçer.
 
@@ -151,9 +151,9 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-701 | Tasarım sistemi (renk/aralık tokenları, bileşenler), koyu tema | Bileşen testleri |
-| [ ] K-702 | Akış ekranları: Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render | Ana akış e2e testi; arayüz kodunda doğrudan ağ çağrısı yok |
-| [ ] K-703 | Olay istemcisi (Tauri Channel üzerinden), ilerleme çubuğu, iptal, Problem Details hata gösterimi | Hata türleri arayüzde eşlenir; bağlantı kopmasında yeniden abone olur |
+| [x] K-701 | Tasarım sistemi (renk/aralık tokenları, bileşenler), koyu tema | Bileşen testleri |
+| [x] K-702 | Akış ekranları: Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render | Ana akış e2e testi; arayüz kodunda doğrudan ağ çağrısı yok |
+| [x] K-703 | Olay istemcisi (Tauri Channel üzerinden), ilerleme çubuğu, iptal, Problem Details hata gösterimi | Hata türleri arayüzde eşlenir; bağlantı kopmasında yeniden abone olur |
 | [ ] K-704 | Senaryo editörü ve iddia onay paneli | Onaysız render düğmesi kapalı |
 | [ ] K-705 | Tek tık toplu prompt kopyalama ekranı | Kopya içeriği snapshot testli |
 | [ ] K-706 | Şablon yöneticisi: kategori, klonla, içe/dışa aktar | Şema doğrulamalı |

@@ -54,8 +54,8 @@ class SceneClipBuilder:
         
         filters = [scale_filter, crop_filter, setsar_filter, fps_filter]
         
-        if not is_video and profile == RenderProfile.FINAL:
-            # Sadece FINAL profilde animasyon ekle
+        if not is_video and profile in (RenderProfile.FINAL, RenderProfile.TEST):
+            # Sadece FINAL ve TEST profilde animasyon ekle
             motion = self._get_next_motion()
             params = MotionRegistry.get_formula(motion, duration, self.fps)
             # DRAFT için s argümanı formülde 1080x1920'ye sabitlendiğinden, DRAFT ise hiç girmeyiz.
