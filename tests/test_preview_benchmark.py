@@ -7,9 +7,7 @@ Katı Süre Kısıtlamaları (Hard Limits):
 
 from __future__ import annotations
 
-import asyncio
 from pathlib import Path
-import time
 from unittest.mock import patch
 import pytest
 
@@ -20,7 +18,6 @@ from services.core.hustler.domain.models.template import (
     TemplateSpec,
 )
 from services.core.hustler.generators.ffmpeg_compiler import (
-    DRAFT_ENCODER,
     SOFTWARE_ENCODER,
     FFmpegCompiler,
 )

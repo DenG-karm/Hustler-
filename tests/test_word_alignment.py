@@ -86,7 +86,7 @@ def test_overlapping_char_times_are_trimmed_by_existing_normalizer() -> None:
         {"characters": None, "character_start_times_seconds": [], "character_end_times_seconds": []},
     ],
 )
-def test_missing_or_malformed_alignment_raises(alignment: Any) -> None:
+def test_missing_or_malformed_alignment_raises(alignment: Any) -> None:  # noqa: ANN401
     with pytest.raises(AlignmentError):
         alignment_to_word_timings(alignment)
 
@@ -124,7 +124,17 @@ def test_alignment_drives_ass_with_real_unequal_durations() -> None:
             "character_end_times_seconds": [round((i + 1) * 0.1, 3) for i in range(len(chars))],
         }
     )
-    ass = AssDocument.generate(timings, SubtitleStyle())
+    ass = AssDocument.generate(
+        timings,
+        SubtitleStyle(
+            font_name="Arial",
+            font_size=90,
+            primary_color="&H00FFFFFF&",
+            highlight_color="&H0000FFFF&",
+            alignment=5,
+            margin_v=50,
+        ),
+    )
     dialogues = [ln for ln in ass.splitlines() if ln.startswith("Dialogue:")]
 
     assert len(dialogues) == 2

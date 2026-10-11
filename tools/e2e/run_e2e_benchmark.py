@@ -52,7 +52,6 @@ from services.core.hustler.infrastructure.asset_manager import AssetManager  # n
 from services.core.hustler.infrastructure.hardware import detect_cuda, select_video_encoder  # noqa: E402
 from services.core.hustler.infrastructure.llm_port import GEMINI_MODEL, LLMPort  # noqa: E402
 from services.core.hustler.infrastructure.youtube_downloader import YouTubeDownloader  # noqa: E402
-from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming  # noqa: E402
 from services.core.hustler.infrastructure.tts_port import ElevenLabsAdapter  # noqa: E402
 from services.core.hustler.render.ffmpeg_runner import (  # noqa: E402
     FFmpegRunner,

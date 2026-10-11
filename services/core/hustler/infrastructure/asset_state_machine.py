@@ -14,7 +14,6 @@ import asyncio
 from enum import Enum
 import hashlib
 import json
-import os
 from pathlib import Path
 import structlog
 from typing import Optional

@@ -29,6 +29,7 @@ from services.core.hustler.api.routes.jobs import router as jobs_router
 from services.core.hustler.api.routes.pipeline import router as pipeline_router
 from services.core.hustler.storage.cache import YouTubeCache
 from services.core.hustler.storage.jobs import JobRepository
+from services.core.hustler.infrastructure.event_broker import EventBroker
 
 log = structlog.get_logger()
 
@@ -65,9 +66,6 @@ def _resolve_port() -> int:
         raise ValueError(f"{PORT_ENV_VAR} out of range: {port}")
     return port
 
-
-# ---------------------------------------------------------------------------
-from services.core.hustler.infrastructure.event_broker import EventBroker
 
 # ---------------------------------------------------------------------------
 # Lifespan
@@ -109,8 +107,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Hustler Core", version="0.1.0", lifespan=lifespan)
 app.state.session_token = SESSION_TOKEN
-app.state.event_broker = EventBroker()
-app.state.running_jobs = {}
 
 app.include_router(discovery_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
@@ -169,8 +165,13 @@ async def health() -> dict[str, str]:
 @app.get("/events", dependencies=[Depends(verify_token)])
 async def sse_stream(request: Request) -> StreamingResponse:
     """Server-Sent Events — Tauri Event köprüsüne yayınlanır."""
-    broker: EventBroker = getattr(request.app.state, "event_broker", None) or EventBroker()
-    request.app.state.event_broker = broker
+    broker: EventBroker | None = getattr(request.app.state, "event_broker", None)
+    if broker is None:
+        async def _single_event() -> AsyncIterator[str]:
+            yield "data: connected\n\n"
+
+        return StreamingResponse(_single_event(), media_type="text/event-stream")
+
     return StreamingResponse(
         broker.subscribe(),
         media_type="text/event-stream",

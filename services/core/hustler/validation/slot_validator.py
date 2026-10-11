@@ -18,7 +18,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 import subprocess
-from typing import Optional
+from typing import Mapping, Optional
 import warnings
 
 import structlog
@@ -309,7 +309,7 @@ class SlotValidator:
 
     def validate_slots(
         self,
-        asset_map: dict[str, str | Path],
+        asset_map: Mapping[str, str | Path],
     ) -> dict[str, SlotValidationResult]:
         """Tüm slot sözleşmesini verilen varlık sözlüğüyle doğrular."""
         results: dict[str, SlotValidationResult] = {}

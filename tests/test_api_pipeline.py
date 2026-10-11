@@ -3,7 +3,7 @@ from httpx import ASGITransport, AsyncClient
 from services.core.hustler.main import app, SESSION_TOKEN
 
 @pytest.mark.asyncio
-async def test_pipeline_unauthorized():
+async def test_pipeline_unauthorized() -> None:
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         resp = await client.post("/api/v1/pipeline/script", json={"idea_id": "1", "topic": "t", "title": "tt"})
@@ -11,7 +11,7 @@ async def test_pipeline_unauthorized():
         assert resp.headers.get("content-type") == "application/problem+json"
 
 @pytest.mark.asyncio
-async def test_pipeline_generate_script():
+async def test_pipeline_generate_script() -> None:
     transport = ASGITransport(app=app)
     headers = {"Authorization": f"Bearer {SESSION_TOKEN}"}
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -28,7 +28,7 @@ async def test_pipeline_generate_script():
         assert data["is_approved"] is False
 
 @pytest.mark.asyncio
-async def test_pipeline_generate_audio():
+async def test_pipeline_generate_audio() -> None:
     transport = ASGITransport(app=app)
     headers = {"Authorization": f"Bearer {SESSION_TOKEN}"}
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -43,7 +43,7 @@ async def test_pipeline_generate_audio():
         assert data["duration_seconds"] > 0
 
 @pytest.mark.asyncio
-async def test_pipeline_prepare_assets():
+async def test_pipeline_prepare_assets() -> None:
     transport = ASGITransport(app=app)
     headers = {"Authorization": f"Bearer {SESSION_TOKEN}"}
     async with AsyncClient(transport=transport, base_url="http://test") as client:
@@ -58,7 +58,7 @@ async def test_pipeline_prepare_assets():
         assert data["all_slots_filled"] is True
 
 @pytest.mark.asyncio
-async def test_pipeline_preview():
+async def test_pipeline_preview() -> None:
     transport = ASGITransport(app=app)
     headers = {"Authorization": f"Bearer {SESSION_TOKEN}"}
     async with AsyncClient(transport=transport, base_url="http://test") as client:

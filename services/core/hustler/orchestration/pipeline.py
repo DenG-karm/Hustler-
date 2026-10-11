@@ -1,6 +1,6 @@
 import asyncio
 from dataclasses import dataclass, field
-from typing import Any, Awaitable, Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 import structlog
 
@@ -36,7 +36,7 @@ class PipelineResult:
     error_message: Optional[str] = None
     rejected: dict[str, str] = field(default_factory=dict)
     failed: dict[str, str] = field(default_factory=dict)
-    analyses: list[dict[str, Any]] = field(default_factory=list)
+    analyses: list[dict[str, object]] = field(default_factory=list)
 
 
 def _scale(span: tuple[int, int], done: int, total: int) -> int:

@@ -12,21 +12,19 @@ from __future__ import annotations
 import asyncio
 from pathlib import Path
 import sys
-import time
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO_ROOT))
 
-from services.core.hustler.domain.models.profile import RenderProfile
-from services.core.hustler.domain.models.template import (
+from services.core.hustler.domain.models.template import (  # noqa: E402
     RenderConfig,
     SafeZone,
     TemplateSpec,
 )
-from services.core.hustler.infrastructure.hardware import detect_cuda, select_video_encoder
-from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming
-from services.core.hustler.render.render_engine import RenderEngine
-from services.core.hustler.render.test_profile import (
+from services.core.hustler.infrastructure.hardware import detect_cuda, select_video_encoder  # noqa: E402
+from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming  # noqa: E402
+from services.core.hustler.render.render_engine import RenderEngine  # noqa: E402
+from services.core.hustler.render.test_profile import (  # noqa: E402
     generate_synthetic_audio_asset,
     generate_synthetic_subtitles,
     generate_synthetic_video_asset,

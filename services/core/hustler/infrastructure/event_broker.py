@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncIterator
+from typing import AsyncIterator
 import structlog
 
 logger = structlog.get_logger()
@@ -38,7 +38,7 @@ class EventBroker:
         finally:
             self._subscribers.discard(q)
 
-    def broadcast(self, event_type: str, payload: dict[str, Any]) -> None:
+    def broadcast(self, event_type: str, payload: dict[str, object]) -> None:
         """Tüm bağlı istemcilere JSON verisi fırlatır."""
         msg = json.dumps({"event": event_type, **payload})
         dead: list[asyncio.Queue[str]] = []

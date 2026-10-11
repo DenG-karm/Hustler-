@@ -1,4 +1,4 @@
-﻿"""Sidecar (gerçek main.app): token'sız/yanlış token istekleri reddedilir."""
+"""Sidecar (gerçek main.app): token'sız/yanlış token istekleri reddedilir."""
 
 import json
 import os

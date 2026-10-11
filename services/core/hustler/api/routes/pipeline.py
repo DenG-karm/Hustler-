@@ -4,48 +4,61 @@ Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render
 Tüm rotalar Bearer token korumalıdır (verify_token).
 """
 
-from typing import Any, Optional
 import uuid
 import asyncio
+from dataclasses import asdict, dataclass, field
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, Field
 import structlog
 
 from services.core.hustler.api.auth import verify_token
-from services.core.hustler.storage.jobs import Job, JobRepository, JobStatus
+from services.core.hustler.storage.jobs import JobRepository, JobStatus
 
 logger = structlog.get_logger()
 router = APIRouter(dependencies=[Depends(verify_token)], prefix="/pipeline")
 
 
-class ScriptRequest(BaseModel):
+@dataclass
+class ScriptRequest:
     idea_id: str
     topic: str
     title: str
 
 
-class AudioRequest(BaseModel):
+@dataclass
+class AudioRequest:
     script_id: str
-    voice_id: str = "tr-TR-Standard-A"
     text: str
+    voice_id: str = "tr-TR-Standard-A"
 
 
-class AssetsRequest(BaseModel):
+@dataclass
+class SlotItem:
+    slot_id: str
+    name: str
+    type: str
+    required: bool
+    assigned_path: str
+
+
+@dataclass
+class AssetsRequest:
     script_id: str
-    slots: list[dict[str, Any]] = Field(default_factory=list)
+    slots: list[SlotItem] = field(default_factory=list)
 
 
-class PreviewRequest(BaseModel):
+@dataclass
+class PreviewRequest:
     script_id: str
 
 
-class RenderRequest(BaseModel):
+@dataclass
+class RenderRequest:
+    script_id: str
     profile: str = "DRAFT"  # DRAFT veya FINAL
-    script_id: str
 
 
 @router.post("/script")
-async def generate_script(payload: ScriptRequest) -> dict[str, Any]:
+async def generate_script(payload: ScriptRequest) -> dict[str, object]:
     """Top 20'den seçilen fikir için 3 perdeli senaryo üretir."""
     logger.info("Pipeline: Senaryo üretiliyor", idea_id=payload.idea_id, topic=payload.topic)
     script_id = f"scr_{uuid.uuid4().hex[:8]}"
@@ -66,7 +79,7 @@ async def generate_script(payload: ScriptRequest) -> dict[str, Any]:
             },
             {
                 "order": 2,
-                "narration": f"Detaylı incelemeler şaşırtıcı sonuçlar veriyor.",
+                "narration": "Detaylı incelemeler şaşırtıcı sonuçlar veriyor.",
                 "visual_prompt": f"Infographic data visual about {payload.topic}, neon colors, vertical",
             },
             {
@@ -80,7 +93,7 @@ async def generate_script(payload: ScriptRequest) -> dict[str, Any]:
 
 
 @router.post("/audio")
-async def generate_audio(payload: AudioRequest) -> dict[str, Any]:
+async def generate_audio(payload: AudioRequest) -> dict[str, object]:
     """Senaryo metni için TTS ses üretimi gerçekleştirir."""
     logger.info("Pipeline: Ses sentezleniyor", script_id=payload.script_id, voice=payload.voice_id)
     # 1 kelime ~ 0.35 saniye yaklaşımı
@@ -96,25 +109,31 @@ async def generate_audio(payload: AudioRequest) -> dict[str, Any]:
 
 
 @router.post("/assets")
-async def prepare_assets(payload: AssetsRequest) -> dict[str, Any]:
+async def prepare_assets(payload: AssetsRequest) -> dict[str, object]:
     """Görsel slotları doğrular ve hazırlar."""
     logger.info("Pipeline: Slotlar hazırlanıyor", script_id=payload.script_id, count=len(payload.slots))
-    default_slots = [
+    default_slots: list[dict[str, object]] = [
         {"slot_id": "slot_intro_video", "name": "Giriş Kancası (Video)", "type": "video", "required": True, "assigned_path": "assets/video/hook.mp4"},
         {"slot_id": "slot_body_img1", "name": "Gövde Sahne 1 (Görsel)", "type": "image", "required": True, "assigned_path": "assets/img/scene1.png"},
         {"slot_id": "slot_body_img2", "name": "Gövde Sahne 2 (Görsel)", "type": "image", "required": True, "assigned_path": "assets/img/scene2.png"},
         {"slot_id": "slot_bg_audio", "name": "Arka Plan Müziği", "type": "audio", "required": False, "assigned_path": "assets/audio/bg_music.mp3"},
     ]
-    slots = payload.slots if payload.slots else default_slots
+    slots: list[dict[str, object]] = (
+        [asdict(s) for s in payload.slots] if payload.slots else default_slots
+    )
     return {
         "script_id": payload.script_id,
         "slots": slots,
-        "all_slots_filled": all(s.get("assigned_path") for s in slots if s.get("required")),
+        "all_slots_filled": all(
+            bool(s.get("assigned_path"))
+            for s in slots
+            if s.get("required")
+        ),
     }
 
 
 @router.post("/preview")
-async def generate_preview(payload: PreviewRequest) -> dict[str, Any]:
+async def generate_preview(payload: PreviewRequest) -> dict[str, object]:
     """Taslak önizleme render'ı üretir."""
     logger.info("Pipeline: Önizleme oluşturuluyor", script_id=payload.script_id)
     return {
@@ -127,24 +146,23 @@ async def generate_preview(payload: PreviewRequest) -> dict[str, Any]:
 
 
 @router.post("/render")
-async def trigger_render(payload: RenderRequest, request: Request) -> dict[str, Any]:
+async def trigger_render(payload: RenderRequest, request: Request) -> dict[str, object]:
     """Nihai veya taslak video render işi başlatır ve SSE olaylarını yayınlar."""
     db = getattr(request.app.state, "db", None)
     if not db:
         raise HTTPException(status_code=500, detail="DB not initialized")
     repo = JobRepository(db)
     broker = getattr(request.app.state, "event_broker", None)
-    
-    job_id = f"rnd_{uuid.uuid4().hex[:8]}"
-    job = Job(
-        id=job_id,
-        topic=f"Pipeline Render ({payload.profile})",
-        status=JobStatus.RENDERING,
-        progress=5,
+
+    job_id = await repo.create()
+    logger.info("Pipeline: Render tetiklendi", job_id=job_id, profile=payload.profile)
+
+    await repo.update(
+        job_id,
+        JobStatus.RENDERING,
+        progress_pct=5,
         current_step="Render kuyruğuna alındı",
     )
-    await repo.create(job)
-    logger.info("Pipeline: Render tetiklendi", job_id=job_id, profile=payload.profile)
 
     if broker:
         broker.broadcast("job_progress", {
@@ -157,7 +175,7 @@ async def trigger_render(payload: RenderRequest, request: Request) -> dict[str, 
 
     out_path = f"renders/{job_id}_{payload.profile.lower()}.mp4"
 
-    async def _render_runner():
+    async def _render_runner() -> None:
         try:
             # 5 adımdan oluşan deterministik render ilerlemesi
             for p in (20, 45, 70, 90, 100):

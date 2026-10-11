@@ -2,7 +2,7 @@ import time
 import uuid
 from dataclasses import dataclass
 from enum import Enum
-from typing import Optional
+from typing import Optional, Sequence
 
 import structlog
 
@@ -159,7 +159,7 @@ class JobRepository:
         logger.info("job_status", job_id=job_id, status=status.value, progress_pct=progress_pct, step=current_step)
 
 
-def _to_job(row: tuple[object, ...]) -> Job:
+def _to_job(row: Sequence[object]) -> Job:
     return Job(
         job_id=str(row[0]),
         status=JobStatus(str(row[1])),

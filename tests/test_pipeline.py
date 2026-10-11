@@ -31,8 +31,23 @@ class SpyJobs(JobRepository):
         super().__init__(db)
         self.history: list[tuple[JobStatus, int]] = []
 
-    async def update(self, job_id: str, status: JobStatus, progress_pct: Optional[int] = None, *args: object, **kw: object) -> None:  # type: ignore[override]
-        await super().update(job_id, status, progress_pct, *args, **kw)  # type: ignore[arg-type]
+    async def update(
+        self,
+        job_id: str,
+        status: JobStatus,
+        progress_pct: Optional[int] = None,
+        current_step: Optional[str] = None,
+        error_message: Optional[str] = None,
+        output_path: Optional[str] = None,
+    ) -> None:
+        await super().update(
+            job_id,
+            status,
+            progress_pct=progress_pct,
+            current_step=current_step,
+            error_message=error_message,
+            output_path=output_path,
+        )
         job = await self.get(job_id)
         assert job is not None
         self.history.append((job.status, job.progress_pct))

@@ -28,7 +28,7 @@ async def test_strict_transitions_prevent_skipping(tmp_path: Path) -> None:
     file_path.write_bytes(b"data")
 
     fsm = AssetStateMachine(file_path)
-    assert fsm.state == AssetState.CANDIDATE
+    assert fsm.state.value == AssetState.CANDIDATE.value
 
     # Doğrudan READY'e geçiş yasaktır
     with pytest.raises(InvalidStateTransitionError, match="Geçersiz durum geçişi"):
@@ -40,7 +40,7 @@ async def test_strict_transitions_prevent_skipping(tmp_path: Path) -> None:
 
     # Sadece STABILIZING veya FAILED'a geçebilir
     await fsm.transition_to(AssetState.STABILIZING)
-    assert fsm.state == AssetState.STABILIZING
+    assert fsm.state.value == AssetState.STABILIZING.value
 
 
 @pytest.mark.asyncio
@@ -95,13 +95,13 @@ async def test_corrupt_file_rejected(tmp_path: Path) -> None:
     )
 
     await fsm.stabilize()
-    assert fsm.state == AssetState.STABILIZING
+    assert fsm.state.value == AssetState.STABILIZING.value
 
     # Bütünlük denetiminde ffprobe dosyayı reddetmeli
     with pytest.raises(CorruptFileError, match="Bozuk medya dosyası"):
         await fsm.verify()
 
-    assert fsm.state == AssetState.FAILED
+    assert fsm.state.value == AssetState.FAILED.value
     # cleanup_on_failure=True olduğundan bozuk dosya diskten temizlenmiş olmalıdır
     assert not corrupt_file.exists(), "Bozuk dosya silinmedi (zombi dosya kaldı)!"
 

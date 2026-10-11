@@ -157,6 +157,16 @@ def generate_synthetic_subtitles(
             WordTiming(word="Golden", start_ms=950, end_ms=1900),
         ]
 
-    content = AssDocument.generate(words, SubtitleStyle(font_size=80))
+    content = AssDocument.generate(
+        words,
+        SubtitleStyle(
+            font_name="Arial",
+            font_size=80,
+            primary_color="&H00FFFFFF&",
+            highlight_color="&H0000FFFF&",
+            alignment=5,
+            margin_v=50,
+        ),
+    )
     out_path.write_text(content, encoding="utf-8")
     return str(out_path)

@@ -1,4 +1,4 @@
-from typing import Any, Mapping, Sequence
+from typing import Mapping, Sequence
 
 from services.core.hustler.infrastructure.timestamp_normalizer import (
     TimestampNormalizer,
@@ -10,11 +10,15 @@ class AlignmentError(ValueError):
     """TTS karakter hizalaması eksik, tutarsız veya bozuk."""
 
 
+# Kelime bazlı ham zamanlama: her eleman {"word": str, "start": float, "end": float}
+_WordRaw = dict[str, object]
+
+
 def characters_to_words(
     characters: Sequence[str],
     starts: Sequence[float],
     ends: Sequence[float],
-) -> list[dict[str, Any]]:
+) -> list[_WordRaw]:
     """
     Karakter bazlı zamanlamayı (saniye) kelime bazlı ham zamanlamaya çevirir.
     Kelime = boşlukla ayrılmış ardışık karakterler (noktalama kelimeye bağlı kalır).
@@ -26,7 +30,7 @@ def characters_to_words(
             f"characters={len(characters)} starts={len(starts)} ends={len(ends)}"
         )
 
-    words: list[dict[str, Any]] = []
+    words: list[_WordRaw] = []
     buffer: list[str] = []
     word_start = 0.0
     word_end = 0.0
@@ -49,15 +53,25 @@ def characters_to_words(
     return words
 
 
-def alignment_to_word_timings(alignment: Mapping[str, Any] | None) -> list[WordTiming]:
+def alignment_to_word_timings(alignment: Mapping[str, object] | None) -> list[WordTiming]:
     """ElevenLabs `alignment` nesnesini normalize edilmiş WordTiming listesine çevirir."""
     if not alignment:
         raise AlignmentError("Yanıtta alignment verisi yok")
     try:
+        chars = alignment["characters"]
+        starts = alignment["character_start_times_seconds"]
+        ends = alignment["character_end_times_seconds"]
+        # Runtime validation — mypy Sequence[str/float] olduğunu bilemez
+        if not isinstance(chars, (list, tuple)):
+            raise AlignmentError("characters bir dizi olmalıdır")
+        if not isinstance(starts, (list, tuple)):
+            raise AlignmentError("character_start_times_seconds bir dizi olmalıdır")
+        if not isinstance(ends, (list, tuple)):
+            raise AlignmentError("character_end_times_seconds bir dizi olmalıdır")
         raw = characters_to_words(
-            alignment["characters"],
-            alignment["character_start_times_seconds"],
-            alignment["character_end_times_seconds"],
+            [str(c) for c in chars],
+            [float(s) for s in starts],
+            [float(e) for e in ends],
         )
     except (KeyError, TypeError) as exc:
         raise AlignmentError(f"Alignment şeması bozuk: {type(exc).__name__}: {exc}") from exc

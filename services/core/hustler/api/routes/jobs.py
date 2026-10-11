@@ -1,9 +1,10 @@
+import asyncio
 from dataclasses import asdict
-from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 
 from services.core.hustler.api.auth import verify_token
+from services.core.hustler.infrastructure.event_broker import EventBroker
 from services.core.hustler.storage.jobs import Job, JobRepository, JobStatus
 
 router = APIRouter(dependencies=[Depends(verify_token)])
@@ -11,7 +12,7 @@ router = APIRouter(dependencies=[Depends(verify_token)])
 
 def _repo(request: Request) -> JobRepository:
     repo = getattr(request.app.state, "job_repo", None)
-    if repo:
+    if isinstance(repo, JobRepository):
         return repo
     db = getattr(request.app.state, "db", None)
     if not db:
@@ -19,20 +20,20 @@ def _repo(request: Request) -> JobRepository:
     return JobRepository(db)
 
 
-def _serialize(job: Job) -> dict[str, Any]:
-    data = asdict(job)
+def _serialize(job: Job) -> dict[str, object]:
+    data: dict[str, object] = asdict(job)
     data["status"] = job.status.value
     return data
 
 
 @router.get("/jobs")
-async def list_jobs(request: Request, limit: int = Query(50, ge=1, le=500)) -> list[dict[str, Any]]:
+async def list_jobs(request: Request, limit: int = Query(50, ge=1, le=500)) -> list[dict[str, object]]:
     """Arayüzün iş listesi / ilerleme çubuğu için son işler."""
     return [_serialize(j) for j in await _repo(request).list_recent(limit)]
 
 
 @router.get("/jobs/{job_id}")
-async def get_job(job_id: str, request: Request) -> dict[str, Any]:
+async def get_job(job_id: str, request: Request) -> dict[str, object]:
     job = await _repo(request).get(job_id)
     if job is None:
         raise HTTPException(status_code=404, detail="Job bulunamadı")
@@ -40,7 +41,7 @@ async def get_job(job_id: str, request: Request) -> dict[str, Any]:
 
 
 @router.post("/jobs/{job_id}/cancel")
-async def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
+async def cancel_job(job_id: str, request: Request) -> dict[str, object]:
     """Hard-Cancel: Çalışan görevi ve bağlı tüm alt süreçleri (FFmpeg vb.) durdurur."""
     repo = _repo(request)
     job = await repo.get(job_id)
@@ -54,17 +55,18 @@ async def cancel_job(job_id: str, request: Request) -> dict[str, Any]:
         )
 
     # Çalışan arka plan asyncio task'ını iptal et
-    running_jobs = getattr(request.app.state, "running_jobs", {})
-    task = running_jobs.pop(job_id, None)
-    if task and not task.done():
-        task.cancel()
+    running_jobs_raw = getattr(request.app.state, "running_jobs", {})
+    if isinstance(running_jobs_raw, dict):
+        task = running_jobs_raw.pop(job_id, None)
+        if isinstance(task, asyncio.Task) and not task.done():
+            task.cancel()
 
     # Veritabanında terminal duruma geç
     await repo.update(job_id, JobStatus.CANCELLED, error_message="Kullanıcı tarafından iptal edildi")
 
     # Event broker üzerinden iptal olayını yayınla
     broker = getattr(request.app.state, "event_broker", None)
-    if broker:
+    if isinstance(broker, EventBroker):
         broker.broadcast("job_cancelled", {
             "job_id": job_id,
             "status": "CANCELLED",
