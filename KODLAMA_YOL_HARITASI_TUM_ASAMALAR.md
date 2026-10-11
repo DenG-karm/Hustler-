@@ -154,7 +154,7 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-701 | Tasarım sistemi (renk/aralık tokenları, bileşenler), koyu tema | Bileşen testleri |
 | [x] K-702 | Akış ekranları: Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render | Ana akış e2e testi; arayüz kodunda doğrudan ağ çağrısı yok |
 | [x] K-703 | Olay istemcisi (Tauri Channel üzerinden), ilerleme çubuğu, iptal, Problem Details hata gösterimi | Hata türleri arayüzde eşlenir; bağlantı kopmasında yeniden abone olur |
-| [ ] K-704 | Senaryo editörü ve iddia onay paneli | Onaysız render düğmesi kapalı |
+| [x] K-704 | Senaryo editörü ve iddia onay paneli | Onaysız render düğmesi kapalı |
 | [ ] K-705 | Tek tık toplu prompt kopyalama ekranı | Kopya içeriği snapshot testli |
 | [ ] K-706 | Şablon yöneticisi: kategori, klonla, içe/dışa aktar | Şema doğrulamalı |
 | [ ] K-707 | Süre paneli: 15 dk hedefine göre durum | Timer olaylarından beslenir |

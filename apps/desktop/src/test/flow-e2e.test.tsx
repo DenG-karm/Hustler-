@@ -98,6 +98,14 @@ describe('K-702: Akış Ekranları Uçtan Uca (E2E) Testi', () => {
           status: 'CANCELLED',
         },
       }),
+      saveScript: vi.fn().mockResolvedValue({
+        status: 200,
+        body: {
+          status: 'SAVED',
+          script_id: 'scr_e2e_456',
+          is_idempotent: true,
+        },
+      }),
       proxyRequest: vi.fn(),
     }
 
@@ -167,8 +175,19 @@ describe('K-702: Akış Ekranları Uçtan Uca (E2E) Testi', () => {
     expect(scriptSubmitBtn).toBeDisabled()
     expect(screen.getByTestId('script-status-badge')).toHaveTextContent('Onay Bekliyor')
 
-    // Senaryoyu onayla
     const approveBtn = screen.getByTestId('script-approve-btn')
+    // İddialar doğrulanmadan Onayla butonu kilitli olmalıdır (UI seviyesinde katı kilit)
+    expect(approveBtn).toBeDisabled()
+
+    // Tüm iddia checkbox'larını işaretle
+    const claimCheckboxes = screen.getAllByRole('checkbox')
+    expect(claimCheckboxes.length).toBeGreaterThan(0)
+    for (const cb of claimCheckboxes) {
+      fireEvent.click(cb)
+    }
+
+    // Artık onay butonu aktif olmalıdır
+    expect(approveBtn).toBeEnabled()
     fireEvent.click(approveBtn)
 
     expect(screen.getByTestId('script-status-badge')).toHaveTextContent('Onaylandı ✓')

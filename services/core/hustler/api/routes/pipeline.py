@@ -12,6 +12,7 @@ import structlog
 
 from services.core.hustler.api.auth import verify_token
 from services.core.hustler.storage.jobs import JobRepository, JobStatus
+from services.core.hustler.storage.scripts import ScriptRepository
 
 logger = structlog.get_logger()
 router = APIRouter(dependencies=[Depends(verify_token)], prefix="/pipeline")
@@ -57,6 +58,26 @@ class RenderRequest:
     profile: str = "DRAFT"  # DRAFT veya FINAL
 
 
+@dataclass
+class SaveScriptRequest:
+    script_id: str
+    title: str
+    full_text: str
+    scenes: list[dict[str, object]] = field(default_factory=list)
+    claims: list[dict[str, object]] = field(default_factory=list)
+    is_approved: bool = False
+
+
+def _script_repo(request: Request) -> ScriptRepository:
+    repo = getattr(request.app.state, "script_repo", None)
+    if isinstance(repo, ScriptRepository):
+        return repo
+    db = getattr(request.app.state, "db", None)
+    if not db:
+        raise HTTPException(status_code=500, detail="DB not initialized in app.state")
+    return ScriptRepository(db)
+
+
 @router.post("/script")
 async def generate_script(payload: ScriptRequest) -> dict[str, object]:
     """Top 20'den seçilen fikir için 3 perdeli senaryo üretir."""
@@ -88,8 +109,39 @@ async def generate_script(payload: ScriptRequest) -> dict[str, object]:
                 "visual_prompt": "Dynamic subscribe button animation, youtube shorts style",
             },
         ],
+        "claims": [
+            {
+                "id": "claim_1",
+                "text": f"{payload.topic} konusundaki veriler resmi kaynaklarla doğrulanmıştır.",
+                "verified": False,
+            },
+            {
+                "id": "claim_2",
+                "text": "Sunulan rakamlar ve test sonuçları güncel araştırmalara dayanmaktadır.",
+                "verified": False,
+            },
+            {
+                "id": "claim_3",
+                "text": "Metin yanıltıcı veya asılsız sağlık/finansal vaatler içermemektedir.",
+                "verified": False,
+            },
+        ],
         "is_approved": False,
     }
+
+
+@router.post("/script/save")
+async def save_script(payload: SaveScriptRequest, request: Request) -> dict[str, object]:
+    """K-704 Idempotent senaryo kayıt endpoint'i."""
+    repo = _script_repo(request)
+    return await repo.save(
+        script_id=payload.script_id,
+        title=payload.title,
+        full_text=payload.full_text,
+        scenes=payload.scenes,
+        claims=payload.claims,
+        is_approved=payload.is_approved,
+    )
 
 
 @router.post("/audio")

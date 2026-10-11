@@ -42,6 +42,10 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
           body: { job_id: jobId, status: 'CANCELLED' },
         })
       }),
+      saveScript: vi.fn().mockResolvedValue({
+        status: 200,
+        body: { status: 'SAVED', is_idempotent: true },
+      }),
       proxyRequest: vi.fn(),
     }
 

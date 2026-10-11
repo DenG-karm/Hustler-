@@ -29,6 +29,7 @@ from services.core.hustler.api.routes.jobs import router as jobs_router
 from services.core.hustler.api.routes.pipeline import router as pipeline_router
 from services.core.hustler.storage.cache import YouTubeCache
 from services.core.hustler.storage.jobs import JobRepository
+from services.core.hustler.storage.scripts import ScriptRepository
 from services.core.hustler.infrastructure.event_broker import EventBroker
 
 log = structlog.get_logger()
@@ -87,10 +88,14 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     job_repo = JobRepository(db)
     await job_repo.init_table()
     await job_repo.reap_zombies()
+
+    script_repo = ScriptRepository(db)
+    await script_repo.init_table()
     
     app.state.db = db
     app.state.cache = cache
     app.state.job_repo = job_repo
+    app.state.script_repo = script_repo
     
     log.info("sidecar_started")  # token ve port burada bilinçli olarak yok
     yield

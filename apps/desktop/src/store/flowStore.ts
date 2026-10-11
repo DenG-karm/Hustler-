@@ -14,7 +14,7 @@
  */
 
 import { create } from 'zustand'
-import { getIpcClient } from '../lib/ipc'
+import { getIpcClient, type ProxyResponse } from '../lib/ipc'
 import { getEventBridge, type HustlerEvent, type ConnectionStatePayload } from '../lib/events'
 import { parseProblemDetails, type UIError } from '../lib/problemDetails'
 
@@ -65,13 +65,23 @@ export interface ScriptScene {
   visualPrompt: string
 }
 
+export interface ScriptClaim {
+  id: string
+  text: string
+  verified: boolean
+}
+
 export interface ScriptData {
   id: string
   title: string
   hook: string
   fullText: string
   scenes: ScriptScene[]
+  claims: ScriptClaim[]
   isApproved: boolean
+  lastSavedAt?: number
+  isSaving?: boolean
+  saveStatus?: 'IDLE' | 'SAVING' | 'SAVED' | 'UNCHANGED' | 'ERROR'
 }
 
 export interface AudioData {
@@ -147,6 +157,9 @@ export interface FlowState {
   setTopic: (topic: string) => void
   selectIdea: (idea: VideoIdea) => void
   setScript: (script: Partial<ScriptData>) => void
+  toggleClaim: (claimId: string) => void
+  setClaimVerified: (claimId: string, verified: boolean) => void
+  saveScriptContent: (titleOverride?: string, fullTextOverride?: string) => Promise<ProxyResponse | null>
   approveScript: () => void
   setAudio: (audio: Partial<AudioData>) => void
   assignAssetSlot: (slotId: string, path: string) => void
@@ -227,6 +240,13 @@ function checkStepValidation(state: FlowState, step: FlowStep): { valid: boolean
       }
       if (!state.script.fullText || state.script.fullText.trim().length < 20) {
         return { valid: false, reason: 'Senaryo metni en az 20 karakter olmalıdır.' }
+      }
+      const unverifiedClaims = (state.script.claims || []).filter((c) => !c.verified)
+      if (unverifiedClaims.length > 0) {
+        return {
+          valid: false,
+          reason: `Tüm iddialar (claims) kullanıcı tarafından onaylanmalıdır. Onay bekleyen iddia sayısı: ${unverifiedClaims.length}.`,
+        }
       }
       if (!state.script.isApproved) {
         return { valid: false, reason: 'Senaryo devam edilmeden önce kullanıcı tarafından onaylanmalıdır.' }
@@ -392,20 +412,134 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   },
 
   setScript: (scriptUpdate: Partial<ScriptData>) => {
-    set((state) => ({
-      script: state.script ? { ...state.script, ...scriptUpdate } : (scriptUpdate as ScriptData),
-      errorMessage: null,
-    }))
-  },
-
-  approveScript: () => {
     set((state) => {
-      if (!state.script) return state
+      if (!state.script) {
+        return {
+          script: {
+            id: scriptUpdate.id ?? `scr_${Date.now()}`,
+            title: scriptUpdate.title ?? '',
+            hook: scriptUpdate.hook ?? '',
+            fullText: scriptUpdate.fullText ?? '',
+            scenes: scriptUpdate.scenes ?? [],
+            claims: scriptUpdate.claims ?? [],
+            isApproved: scriptUpdate.isApproved ?? false,
+          },
+          errorMessage: null,
+        }
+      }
+      const textOrTitleChanged =
+        (scriptUpdate.title !== undefined && scriptUpdate.title !== state.script.title) ||
+        (scriptUpdate.fullText !== undefined && scriptUpdate.fullText !== state.script.fullText)
+
       return {
-        script: { ...state.script, isApproved: true },
+        script: {
+          ...state.script,
+          ...scriptUpdate,
+          isApproved: textOrTitleChanged ? false : (scriptUpdate.isApproved ?? state.script.isApproved),
+        },
         errorMessage: null,
       }
     })
+  },
+
+  toggleClaim: (claimId: string) => {
+    set((state) => {
+      if (!state.script) return state
+      const updatedClaims = (state.script.claims || []).map((c) =>
+        c.id === claimId ? { ...c, verified: !c.verified } : c
+      )
+      return {
+        script: {
+          ...state.script,
+          claims: updatedClaims,
+          isApproved: false, // İddia durumu değiştiğinde yeniden onay gerekir
+        },
+        errorMessage: null,
+      }
+    })
+  },
+
+  setClaimVerified: (claimId: string, verified: boolean) => {
+    set((state) => {
+      if (!state.script) return state
+      const updatedClaims = (state.script.claims || []).map((c) =>
+        c.id === claimId ? { ...c, verified } : c
+      )
+      return {
+        script: {
+          ...state.script,
+          claims: updatedClaims,
+          isApproved: false,
+        },
+        errorMessage: null,
+      }
+    })
+  },
+
+  saveScriptContent: async (titleOverride?: string, fullTextOverride?: string) => {
+    const { script } = get()
+    if (!script) return null
+
+    const title = titleOverride ?? script.title
+    const fullText = fullTextOverride ?? script.fullText
+
+    set((s) => ({
+      script: s.script ? { ...s.script, isSaving: true, saveStatus: 'SAVING' } : null,
+    }))
+
+    try {
+      const client = getIpcClient()
+      const resp = await client.saveScript(
+        script.id,
+        title,
+        fullText,
+        script.scenes,
+        script.claims,
+        script.isApproved
+      )
+
+      const status = resp.body?.status === 'UNCHANGED' ? 'UNCHANGED' : 'SAVED'
+      set((s) => ({
+        script: s.script
+          ? {
+              ...s.script,
+              isSaving: false,
+              saveStatus: status,
+              lastSavedAt: Date.now(),
+            }
+          : null,
+      }))
+      return resp
+    } catch (err: any) {
+      set((s) => ({
+        script: s.script ? { ...s.script, isSaving: false, saveStatus: 'ERROR' } : null,
+      }))
+      throw err
+    }
+  },
+
+  approveScript: () => {
+    const state = get()
+    if (!state.script) {
+      const err = new InvalidStateTransitionError('SCRIPT', 'AUDIO', 'Onaylanacak senaryo bulunamadı.')
+      set({ errorMessage: err.message })
+      throw err
+    }
+    const unverified = (state.script.claims || []).filter((c) => !c.verified)
+    if (unverified.length > 0) {
+      const err = new InvalidStateTransitionError(
+        'SCRIPT',
+        'AUDIO',
+        `Tüm iddialar (claims) kullanıcı tarafından onaylanmadan senaryo onaylanamaz. Onay bekleyen iddia sayısı: ${unverified.length}`
+      )
+      set({ errorMessage: err.message })
+      throw err
+    }
+
+    set((s) => ({
+      script: s.script ? { ...s.script, isApproved: true } : null,
+      errorMessage: null,
+    }))
   },
 
   setAudio: (audioUpdate: Partial<AudioData>) => {
@@ -666,6 +800,20 @@ export const useFlowStore = create<FlowState>((set, get) => ({
       }
 
       const data = resp.body
+      const rawClaims = Array.isArray(data.claims) ? data.claims : []
+      const claims: ScriptClaim[] =
+        rawClaims.length > 0
+          ? rawClaims.map((c: any, idx: number) => ({
+              id: c.id ?? `claim_${idx + 1}`,
+              text: typeof c === 'string' ? c : c.text ?? `İddia #${idx + 1}`,
+              verified: Boolean(c.verified),
+            }))
+          : [
+              { id: 'claim_1', text: `${topic} konusundaki veriler resmi kaynaklarla doğrulanmıştır.`, verified: false },
+              { id: 'claim_2', text: 'Sunulan rakamlar ve test sonuçları güncel araştırmalara dayanmaktadır.', verified: false },
+              { id: 'claim_3', text: 'Metin yanıltıcı veya asılsız sağlık/finansal vaatler içermemektedir.', verified: false },
+            ]
+
       const script: ScriptData = {
         id: data.script_id ?? `scr_${Date.now()}`,
         title: data.title ?? selectedIdea.title,
@@ -674,6 +822,7 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         scenes: data.scenes ?? [
           { order: 1, narration: selectedIdea.hook, visualPrompt: 'Cinematic visual' },
         ],
+        claims,
         isApproved: false,
       }
 

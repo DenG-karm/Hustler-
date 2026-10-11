@@ -19,6 +19,14 @@ export interface ProxyResponse<T = any> {
 export interface FlowIpcClient {
   runDiscovery(topic: string): Promise<ProxyResponse>
   generateScript(ideaId: string, topic: string, title: string): Promise<ProxyResponse>
+  saveScript(
+    scriptId: string,
+    title: string,
+    fullText: string,
+    scenes?: any[],
+    claims?: any[],
+    isApproved?: boolean
+  ): Promise<ProxyResponse>
   generateAudio(scriptId: string, voiceId: string, text: string): Promise<ProxyResponse>
   prepareAssets(scriptId: string, slots?: any[]): Promise<ProxyResponse>
   generatePreview(scriptId: string): Promise<ProxyResponse>
@@ -39,6 +47,24 @@ export const tauriIpcClient: FlowIpcClient = {
 
   async generateScript(ideaId: string, topic: string, title: string): Promise<ProxyResponse> {
     return invoke<ProxyResponse>('flow_generate_script', { ideaId, topic, title })
+  },
+
+  async saveScript(
+    scriptId: string,
+    title: string,
+    fullText: string,
+    scenes: any[] = [],
+    claims: any[] = [],
+    isApproved = false
+  ): Promise<ProxyResponse> {
+    return invoke<ProxyResponse>('flow_save_script', {
+      scriptId,
+      title,
+      fullText,
+      scenes,
+      claims,
+      isApproved,
+    })
   },
 
   async generateAudio(scriptId: string, voiceId: string, text: string): Promise<ProxyResponse> {

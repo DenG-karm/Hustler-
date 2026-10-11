@@ -306,6 +306,21 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
             output_path: 'renders/output.mp4',
           },
         }),
+        cancelJob: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            job_id: 'job_render_123',
+            status: 'CANCELLED',
+          },
+        }),
+        saveScript: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            status: 'SAVED',
+            script_id: 'scr_mock_1',
+            is_idempotent: true,
+          },
+        }),
         proxyRequest: vi.fn(),
       }
 
@@ -331,6 +346,16 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
 
       // 3. SCRIPT
       expect(useFlowStore.getState().script?.title).toBe('Mock Senaryo')
+      // İddialar doğrulanmadan approveScript() bloke edilmelidir
+      expect(() => {
+        store.approveScript()
+      }).toThrowError(InvalidStateTransitionError)
+
+      // Tüm iddiaları doğrula
+      const currentClaims = useFlowStore.getState().script?.claims || []
+      for (const c of currentClaims) {
+        store.setClaimVerified(c.id, true)
+      }
       store.approveScript()
       await store.generateAudioForScript()
       expect(mockIpc.generateAudio).toHaveBeenCalled()
@@ -365,6 +390,161 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
       expect(mockIpc.getJobStatus).toHaveBeenCalledWith('job_render_123')
       expect(useFlowStore.getState().render.status).toBe('COMPLETED')
       expect(useFlowStore.getState().render.progress).toBe(100)
+    })
+  })
+
+  describe('K-704: Katı Durum Kilidi (Strict State Lock) ve İddia Onay Mekanizması', () => {
+    beforeEach(() => {
+      const store = useFlowStore.getState()
+      store.setTopic('Kuantum Hesaplama')
+      store.nextStep()
+      store.selectIdea({ id: 'q_1', title: 'Kuantum Devrimi', hook: 'Şok Gerçek', score: 98 })
+      store.nextStep()
+      store.setScript({
+        id: 'scr_k704',
+        title: 'Kuantum Devrimi',
+        hook: 'Şok Gerçek',
+        fullText: 'Kuantum bilgisayarlar geleceğin şifreleme sistemlerini tamamen değiştirecek güçtedir.',
+        scenes: [{ order: 1, narration: 'Giriş', visualPrompt: 'Quantum scene' }],
+        claims: [
+          { id: 'c1', text: 'Kuantum üstünlüğü 2019 yılında kanıtlanmıştır.', verified: false },
+          { id: 'c2', text: 'RSA şifreleme kuantum işlemcilerle kırılabilir.', verified: false },
+          { id: 'c3', text: 'Qubitler süperpozisyon durumunda çalışır.', verified: false },
+        ],
+        isApproved: false,
+      })
+    })
+
+    it('onaylanmamış iddialar varken approveScript() InvalidStateTransitionError fırlatmalı ve onaylamamalıdır', () => {
+      const store = useFlowStore.getState()
+
+      expect(() => {
+        store.approveScript()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().script?.isApproved).toBe(false)
+      expect(useFlowStore.getState().canProceed()).toBe(false)
+    })
+
+    it('onaylanmamış iddialar varken nextStep() geçişi engellemeli ve InvalidStateTransitionError fırlatmalıdır', () => {
+      const store = useFlowStore.getState()
+
+      expect(() => {
+        store.nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
+    })
+
+    it('onaylanmamış iddialar varken goToStep(AUDIO) bypass denemesi reddedilmelidir', () => {
+      const store = useFlowStore.getState()
+
+      expect(() => {
+        store.goToStep('AUDIO')
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
+    })
+
+    it('kısmi onayda (3 iddiadan 2si onaylı) kilit kalkmamalı ve hata fırlatmalıdır', () => {
+      const store = useFlowStore.getState()
+      store.toggleClaim('c1')
+      store.setClaimVerified('c2', true)
+
+      // c3 hala verified: false
+      expect(useFlowStore.getState().canProceed()).toBe(false)
+
+      expect(() => {
+        store.approveScript()
+      }).toThrowError(InvalidStateTransitionError)
+
+      expect(() => {
+        store.nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+    })
+
+    it('tüm iddialar onaylandığında approveScript() başarılı olmalı ve AUDIO adımına geçilebilmelidir', () => {
+      const store = useFlowStore.getState()
+      store.toggleClaim('c1')
+      store.toggleClaim('c2')
+      store.toggleClaim('c3')
+
+      // 3 iddia da onaylandı
+      expect(useFlowStore.getState().script?.claims.every((c) => c.verified)).toBe(true)
+
+      // approveScript çağrılabilir
+      store.approveScript()
+      expect(useFlowStore.getState().script?.isApproved).toBe(true)
+      expect(store.canProceed()).toBe(true)
+
+      // AUDIO adımına geç
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('AUDIO')
+    })
+
+    it('senaryo metni veya başlığı düzenlendiğinde onay durumu otomatik olarak sıfırlanmalıdır (isApproved = false)', () => {
+      const store = useFlowStore.getState()
+      store.setClaimVerified('c1', true)
+      store.setClaimVerified('c2', true)
+      store.setClaimVerified('c3', true)
+      store.approveScript()
+      expect(useFlowStore.getState().script?.isApproved).toBe(true)
+
+      // Metin düzenleniyor
+      store.setScript({ fullText: 'Yeni düzenlenmiş senaryo metni yeterince uzundur ve revize edilmiştir.' })
+
+      // isApproved derhal false olmalıdır
+      expect(useFlowStore.getState().script?.isApproved).toBe(false)
+      expect(useFlowStore.getState().canProceed()).toBe(false)
+
+      // Yeniden onaylama yapılmadan ilerlenemez
+      expect(() => {
+        store.nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+    })
+
+    it('onaylı durumdayken herhangi bir iddianın tiki kaldırıldığında onay durumu sıfırlanmalıdır', () => {
+      const store = useFlowStore.getState()
+      store.setClaimVerified('c1', true)
+      store.setClaimVerified('c2', true)
+      store.setClaimVerified('c3', true)
+      store.approveScript()
+      expect(useFlowStore.getState().script?.isApproved).toBe(true)
+
+      // c1 onayını geri al
+      store.toggleClaim('c1')
+
+      expect(useFlowStore.getState().script?.isApproved).toBe(false)
+      expect(useFlowStore.getState().canProceed()).toBe(false)
+
+      expect(() => {
+        store.nextStep()
+      }).toThrowError(InvalidStateTransitionError)
+    })
+
+    it('saveScriptContent() IPC saveScript metodunu doğru parametrelerle çağırmalıdır', async () => {
+      const mockSave = vi.fn().mockResolvedValue({
+        status: 200,
+        body: { status: 'SAVED', script_id: 'scr_k704', is_idempotent: true },
+      })
+      const mockIpc: FlowIpcClient = {
+        saveScript: mockSave,
+      } as any
+      setIpcClient(mockIpc)
+
+      const store = useFlowStore.getState()
+      await store.saveScriptContent('Yeni Başlık', 'Yeni İçerik Metni en az yirmi karakter uzunluğunda olmalıdır.')
+
+      expect(mockSave).toHaveBeenCalledWith(
+        'scr_k704',
+        'Yeni Başlık',
+        'Yeni İçerik Metni en az yirmi karakter uzunluğunda olmalıdır.',
+        expect.any(Array),
+        expect.any(Array),
+        false
+      )
+      expect(useFlowStore.getState().script?.saveStatus).toBe('SAVED')
+      expect(useFlowStore.getState().script?.lastSavedAt).toBeDefined()
     })
   })
 })

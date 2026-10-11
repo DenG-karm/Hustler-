@@ -40,6 +40,7 @@ fn is_route_allowed(route: &str) -> bool {
         "/api/v1/discovery/run",
         "/api/v1/jobs",
         "/api/v1/pipeline/script",
+        "/api/v1/pipeline/script/save",
         "/api/v1/pipeline/audio",
         "/api/v1/pipeline/assets",
         "/api/v1/pipeline/preview",
@@ -149,6 +150,27 @@ pub mod ipc {
             "title": title
         });
         execute_sidecar_call(&state, "POST", "/api/v1/pipeline/script", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_save_script(
+        script_id: String,
+        title: String,
+        full_text: String,
+        scenes: Vec<serde_json::Value>,
+        claims: Vec<serde_json::Value>,
+        is_approved: bool,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let payload = serde_json::json!({
+            "script_id": script_id,
+            "title": title,
+            "full_text": full_text,
+            "scenes": scenes,
+            "claims": claims,
+            "is_approved": is_approved
+        });
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/script/save", Some(payload)).await
     }
 
     #[tauri::command]
@@ -469,6 +491,7 @@ pub fn run() {
             ipc::proxy_request,
             ipc::flow_discovery_run,
             ipc::flow_generate_script,
+            ipc::flow_save_script,
             ipc::flow_generate_audio,
             ipc::flow_prepare_assets,
             ipc::flow_generate_preview,
