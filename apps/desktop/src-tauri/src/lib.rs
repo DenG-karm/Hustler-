@@ -321,26 +321,83 @@ fn health_ok(port: u16) -> bool {
     matches!(stream.read(&mut buf), Ok(n) if n > 0 && buf[..n].starts_with(b"HTTP/1.1 200"))
 }
 
-fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
-    let mut repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-    repo_root.pop(); // src-tauri -> desktop
-    repo_root.pop(); // desktop -> apps
-    repo_root.pop(); // apps -> Hustler
+fn resolve_sidecar_binary() -> Option<std::path::PathBuf> {
+    // 1. Üretim paketi: Mevcut uygulamanın yanında veya binaries klasöründe
+    if let Ok(current_exe) = std::env::current_exe() {
+        if let Some(parent) = current_exe.parent() {
+            let candidates = [
+                parent.join("hustler-sidecar.exe"),
+                parent.join("hustler-sidecar-x86_64-pc-windows-msvc.exe"),
+                parent.join("binaries").join("hustler-sidecar-x86_64-pc-windows-msvc.exe"),
+                parent.join("binaries").join("hustler-sidecar.exe"),
+            ];
+            for candidate in candidates {
+                if candidate.exists() {
+                    return Some(candidate);
+                }
+            }
+        }
+    }
 
+    // 2. Geliştirme modu: src-tauri/binaries dizini
+    let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    let dev_candidates = [
+        manifest_dir.join("binaries").join("hustler-sidecar-x86_64-pc-windows-msvc.exe"),
+        manifest_dir.join("binaries").join("hustler-sidecar.exe"),
+    ];
+    for candidate in dev_candidates {
+        if candidate.exists() {
+            return Some(candidate);
+        }
+    }
+
+    None
+}
+
+fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {
     let port = reserve_free_port()?;
     let token = generate_token()?;
 
-    // Modül yolu `services.core.hustler...` olduğundan çalışma dizini repo kökü olmalı.
-    let mut child = Command::new("uv")
-        .args(["run", "python", "-m", "services.core.hustler.main"])
-        .current_dir(&repo_root)
-        .env(TOKEN_ENV_VAR, &token)
-        .env(PORT_ENV_VAR, port.to_string())
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .context("Python sidecar başlatılamadı")?;
+    let mut child = if let Some(binary_path) = resolve_sidecar_binary() {
+        log::info!("Sidecar yürütülebilir dosyadan başlatılıyor: {:?}", binary_path);
+        let mut cmd = Command::new(binary_path);
+        cmd.env(TOKEN_ENV_VAR, &token)
+            .env(PORT_ENV_VAR, port.to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
+        cmd.spawn().context("Derlenmiş Python sidecar binary'si başlatılamadı")?
+    } else {
+        log::info!("Sidecar geliştirme modunda 'uv' üzerinden başlatılıyor");
+        let mut repo_root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+        repo_root.pop(); // src-tauri -> desktop
+        repo_root.pop(); // desktop -> apps
+        repo_root.pop(); // apps -> Hustler
+
+        let mut cmd = Command::new("uv");
+        cmd.args(["run", "python", "-m", "services.core.hustler.main"])
+            .current_dir(&repo_root)
+            .env(TOKEN_ENV_VAR, &token)
+            .env(PORT_ENV_VAR, port.to_string())
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+        }
+
+        cmd.spawn().context("Python sidecar başlatılamadı")?
+    };
 
     // Windows Job Object — yetim süreç koruması
     #[cfg(windows)]

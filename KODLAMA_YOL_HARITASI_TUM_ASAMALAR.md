@@ -155,11 +155,11 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-702 | Akış ekranları: Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render | Ana akış e2e testi; arayüz kodunda doğrudan ağ çağrısı yok |
 | [x] K-703 | Olay istemcisi (Tauri Channel üzerinden), ilerleme çubuğu, iptal, Problem Details hata gösterimi | Hata türleri arayüzde eşlenir; bağlantı kopmasında yeniden abone olur |
 | [x] K-704 | Senaryo editörü ve iddia onay paneli | Onaysız render düğmesi kapalı |
-| [ ] K-705 | Tek tık toplu prompt kopyalama ekranı | Kopya içeriği snapshot testli |
-| [ ] K-706 | Şablon yöneticisi: kategori, klonla, içe/dışa aktar | Şema doğrulamalı |
-| [ ] K-707 | Süre paneli: 15 dk hedefine göre durum | Timer olaylarından beslenir |
-| [ ] K-708 | Supervisor tamamlama: yeniden başlatma politikası, kapanış, yetim temizliği | Zorla kapatma senaryoları |
-| [ ] K-709 | Arayüz güvenlik e2e testi: doğrudan ağ çağrısı CSP ile engellenir, izin listesi dışı komut reddedilir | Test yeşil; ihlal denemesi günlüğe düşer |
+| [x] K-705 | Tek tık toplu prompt kopyalama ekranı | Kopya içeriği snapshot testli |
+| [x] K-706 | Şablon yöneticisi: kategori, klonla, içe/dışa aktar | Şema doğrulamalı |
+| [x] K-707 | Süre paneli: 15 dk hedefine göre durum | Timer olaylarından beslenir |
+| [x] K-708 | Supervisor tamamlama: yeniden başlatma politikası, kapanış, yetim temizliği | Zorla kapatma senaryoları |
+| [x] K-709 | Arayüz güvenlik e2e testi: doğrudan ağ çağrısı CSP ile engellenir, izin listesi dışı komut reddedilir | Test yeşil; ihlal denemesi günlüğe düşer |
 
 **Çıkış kriteri:** Yeni konu akışı yönergesiz tamamlanır; render sırasında arayüz donmaz; yetim süreç 0; arayüz hiçbir ağ çağrısı yapmaz.
 
@@ -170,7 +170,7 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
-| [ ] K-801 | Kurulum paketi (Tauri bundler), WebView2 bootstrapper, temiz makine testi | Temiz VM'de kurulum ve çalıştırma |
+| [x] K-801 | Kurulum paketi (Tauri bundler), WebView2 bootstrapper, temiz makine testi | Temiz VM'de kurulum ve çalıştırma |
 | [ ] K-802 | Yedekleme/geri yükleme (SQLite backup API; önbellek tabloları hariç), proje kurtarma | Çökme sonrası devam testi |
 | [ ] K-803 | Tanılama paketi: günlükler, doctor raporu, sürümler (zip) | Tek komutla üretilir |
 | [ ] K-804 | Performans bütçesi CI kapısı (tools/bench) | Regresyon derlemeyi kırar |

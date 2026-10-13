@@ -1,7 +1,13 @@
-import React, { useMemo, useEffect } from 'react'
+import React, { useMemo, useEffect, useState } from 'react'
 import { useFlowStore } from '../../store/flowStore'
 import { Button } from '../ui/Button/Button'
 import { createDebouncedScriptSaver } from '../../lib/debounce'
+import {
+  type FlowSnapshot,
+  buildClipboardPrompt,
+  clipboardWrite,
+  extractFlowSnapshot,
+} from '../../lib/clipboard'
 
 export const ScriptScreen: React.FC = () => {
   const script = useFlowStore((s) => s.script)
@@ -14,6 +20,43 @@ export const ScriptScreen: React.FC = () => {
   const prevStep = useFlowStore((s) => s.prevStep)
   const isLoading = useFlowStore((s) => s.isLoading)
   const errorMessage = useFlowStore((s) => s.errorMessage)
+  const addToast = useFlowStore((s) => s.addToast)
+
+  const [isCopying, setIsCopying] = useState(false)
+  const [copySuccess, setCopySuccess] = useState(false)
+  const [copyError, setCopyError] = useState<string | null>(null)
+
+  // K-705: Tek Tık Toplu Prompt Kopyalama (Tauri Native IPC)
+  const handleCopyPrompt = async () => {
+    setIsCopying(true)
+    setCopyError(null)
+    try {
+      const currentState = useFlowStore.getState()
+      const snapshot: FlowSnapshot = extractFlowSnapshot(currentState)
+      const promptText = buildClipboardPrompt(snapshot)
+      await clipboardWrite(promptText)
+
+      setCopySuccess(true)
+      addToast({
+        title: 'Prompt Kopyalandı',
+        message: 'Toplu prompt panoya başarıyla kopyalandı.',
+        code: 'PROMPT_COPIED',
+        status: 200,
+      })
+      setTimeout(() => setCopySuccess(false), 2500)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err || 'Pano kopyalama hatası')
+      setCopyError(msg)
+      addToast({
+        title: 'Pano Hatası',
+        message: msg,
+        code: 'CLIPBOARD_ERROR',
+        status: 500,
+      })
+    } finally {
+      setIsCopying(false)
+    }
+  }
 
   // K-704: Minimum 400ms Debounce ile IPC Trafik Yönetimi
   const debouncedSaver = useMemo(() => {
@@ -109,8 +152,32 @@ export const ScriptScreen: React.FC = () => {
           >
             {script.isApproved ? 'Onaylandı ✓' : 'Onay Bekliyor'}
           </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleCopyPrompt}
+            isLoading={isCopying}
+            data-testid="copy-prompt-btn"
+          >
+            {copySuccess ? '✓ Kopyalandı' : 'Promptu Kopyala'}
+          </Button>
         </div>
       </div>
+
+      {copyError && (
+        <div
+          className="p-sm rounded-lg bg-destructive/10 border border-destructive/20 text-destructive text-sm flex items-center justify-between"
+          data-testid="clipboard-error-banner"
+        >
+          <span>Pano Hatası: {copyError}</span>
+          <button
+            onClick={() => setCopyError(null)}
+            className="text-xs text-destructive hover:underline ml-2"
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {errorMessage && (
         <div

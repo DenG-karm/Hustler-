@@ -1,0 +1,23 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`K-705: buildClipboardPrompt — Compact Key-Value Format Snapshot > tam veri setiyle beklenen Compact Key-Value formatını üretmeli (snapshot sabitler) 1`] = `
+"TOPIC:Kuantum Hesaplama ve Kriptografi
+IDEA_ID:vid_quantum_001
+IDEA_TITLE:RSA Şifreleme Çöküyor mu?
+IDEA_HOOK:Kuantum bilgisayarlar RSA'yı 8 saatte kırdı!
+IDEA_SCORE:97
+SCRIPT_ID:scr_quantum_k705
+SCRIPT_TITLE:RSA Şifreleme Çöküyor mu?
+SCRIPT_HOOK:Kuantum bilgisayarlar RSA'yı 8 saatte kırdı!
+SCRIPT_TEXT:Kuantum hesaplama dünyası yeni bir dönüm noktasına ulaştı. IBM'nin 1000 qubitlik işlemcisi, 2048-bit RSA şifrelemesini teorik olarak kırabilecek kapasiteye erişti. Bu gelişme internet güvenliğinin temelini sarsmaktadır. Kriptografi uzmanları post-kuantum algoritmalarına geçişi hızlandırıyor.
+SCENES:
+[1] Kuantum bilgisayarlar artık gerçek tehdittir! | visual:Dramatic quantum computer render, neon blue, 9:16 vertical, cinematic
+[2] IBM'nin 1000 qubit işlemcisi RSA şifrelemesini aşıyor. | visual:Infographic: qubit vs classical bit, dark background, vertical
+[3] Post-kuantum kriptografi çağı başlıyor. Hazır mısınız? | visual:Call to action animation, subscribe button, youtube shorts style
+CLAIMS:
+[OK] IBM'nin 1000 qubit işlemcisi 2023'te tanıtılmıştır.
+[OK] RSA-2048 kırılması için henüz pratik bir kuantum bilgisayar mevcut değildir.
+[PENDING] NIST 2024'te post-kuantum şifreleme standartlarını onayladı.
+VOICE:tr-TR-Standard-A
+RENDER:DRAFT"
+`;

@@ -3,18 +3,21 @@ import { Sidebar, type SidebarItem } from './components/ui/Sidebar/Sidebar'
 import { Button } from './components/ui/Button/Button'
 import { useTheme } from './theme/ThemeContext'
 import { FlowContainer } from './components/flow/FlowContainer'
+import { TemplateManager } from './components/templates/TemplateManager'
 import { ErrorModal } from './components/ui/ErrorModal'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { useFlowStore } from './store/flowStore'
+import { useSupervisorStore } from './store/supervisorStore'
 
 export function App() {
   const { theme, resolvedTheme, setTheme } = useTheme()
-  const [activeTab, setActiveTab] = useState<'pipeline' | 'gallery' | 'channels' | 'library' | 'settings'>('pipeline')
+  const [activeTab, setActiveTab] = useState<'pipeline' | 'gallery' | 'channels' | 'library' | 'settings' | 'templates'>('pipeline')
   const [isRenderLoading, setIsRenderLoading] = useState(false)
 
   const connectionState = useFlowStore((s) => s.connectionState)
   const reconnectAttempt = useFlowStore((s) => s.reconnectAttempt)
   const subscribeEvents = useFlowStore((s) => s.subscribeEvents)
+  const initSupervisorLifecycle = useSupervisorStore((s) => s.initSupervisorLifecycle)
 
   useEffect(() => {
     let unlisten: (() => void) | undefined
@@ -27,6 +30,18 @@ export function App() {
     }
   }, [subscribeEvents])
 
+  // K-708: Supervisor pencere kapanışı ve alt süreç sonlandırma yaşam döngüsü
+  useEffect(() => {
+    let unlisten: (() => void) | undefined
+    initSupervisorLifecycle().then((fn) => {
+      unlisten = fn
+    })
+
+    return () => {
+      if (unlisten) unlisten()
+    }
+  }, [initSupervisorLifecycle])
+
   const sidebarItems: SidebarItem[] = [
     {
       id: 'pipeline',
@@ -34,6 +49,13 @@ export function App() {
       badge: 7,
       active: activeTab === 'pipeline',
       onClick: () => setActiveTab('pipeline'),
+    },
+    {
+      id: 'templates',
+      label: 'Şablon Yöneticisi (K-706)',
+      badge: 3,
+      active: activeTab === 'templates',
+      onClick: () => setActiveTab('templates'),
     },
     {
       id: 'gallery',
@@ -85,11 +107,15 @@ export function App() {
             <h1 className="text-xl font-bold text-text-primary tracking-tight">
               {activeTab === 'pipeline'
                 ? 'Akış Ekranları & Durum Makinesi (K-702 & K-703)'
+                : activeTab === 'templates'
+                ? 'Şablon Yöneticisi (K-706)'
                 : 'Tasarım Sistemi & Bileşen Galerisi (K-701)'}
             </h1>
             <p className="text-sm text-text-secondary">
               {activeTab === 'pipeline'
                 ? 'Tauri Event Bridge, RFC 7807 Problem Details & Hard-Cancel'
+                : activeTab === 'templates'
+                ? 'Kategori, Idempotent Klonlama ve Native Tauri I/O Entegrasyonu'
                 : 'Tauri, Vite, React, Tailwind CSS ve Vitest token mimarisi'}
             </p>
           </div>
@@ -158,6 +184,10 @@ export function App() {
         {activeTab === 'pipeline' ? (
           <div className="flex-1 overflow-hidden">
             <FlowContainer />
+          </div>
+        ) : activeTab === 'templates' ? (
+          <div className="flex-1 overflow-y-auto">
+            <TemplateManager />
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-lg space-y-xl max-w-5xl">

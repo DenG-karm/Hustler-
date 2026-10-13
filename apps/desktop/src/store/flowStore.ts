@@ -167,6 +167,7 @@ export interface FlowState {
   setRenderProgress: (progress: number, status?: RenderData['status'], outputPath?: string, error?: string) => void
 
   // Hata & Bildirim Yönetimi
+  addToast: (toast: Partial<UIError> & { title: string; message: string }) => void
   dismissToast: (id: string) => void
   dismissModalError: () => void
   setConnectionState: (state: ConnectionStatePayload['state'], attempt?: number) => void
@@ -585,6 +586,24 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         error: error ?? state.render.error,
       },
     }))
+  },
+
+  addToast: (toast: Partial<UIError> & { title: string; message: string }) => {
+    const timestamp = Date.now()
+    const errorId = toast.id || `toast_${timestamp}_${Math.random().toString(36).substring(2, 7)}`
+    const newToast: UIError = {
+      id: errorId,
+      mode: toast.mode || 'toast',
+      title: toast.title,
+      message: toast.message,
+      code: toast.code || 'NOTIFICATION',
+      status: toast.status ?? 200,
+      instance: toast.instance,
+      timestamp,
+      actionLabel: toast.actionLabel,
+      onAction: toast.onAction,
+    }
+    set((state) => ({ toasts: [...state.toasts, newToast] }))
   },
 
   dismissToast: (id: string) => {

@@ -42,3 +42,5 @@ mock_*.py
 
 *.egg-info/
 e2e_out/
+build/
+apps/desktop/src-tauri/binaries/
