@@ -29,6 +29,8 @@ async def test_env(tmp_path: Path) -> AsyncGenerator[tuple[JobRepository, EventB
     yield repo, broker
 
     await db.close()
+    app.state.event_broker = None
+    app.state.running_jobs = {}
 
 
 @pytest.fixture

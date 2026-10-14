@@ -45,11 +45,14 @@ fn is_route_allowed(route: &str) -> bool {
         "/api/v1/pipeline/assets",
         "/api/v1/pipeline/preview",
         "/api/v1/pipeline/render",
+        "/api/v1/pipeline/session/active",
+        "/api/v1/pipeline/session/save",
+        "/api/v1/diagnostics/export",
     ];
     if exact_matches.iter().any(|&r| r == route) {
         return true;
     }
-    if route.starts_with("/api/v1/jobs/") {
+    if route.starts_with("/api/v1/jobs/") || route.starts_with("/api/v1/diagnostics/export") {
         return true;
     }
     false
@@ -240,6 +243,31 @@ pub mod ipc {
         state: State<'_, SidecarState>,
     ) -> Result<ProxyResponse, String> {
         let route = format!("/api/v1/jobs/{}/cancel", job_id);
+        execute_sidecar_call(&state, "POST", &route, None).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_get_active_session(
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        execute_sidecar_call(&state, "GET", "/api/v1/pipeline/session/active", None).await
+    }
+
+    #[tauri::command]
+    pub async fn flow_save_active_session(
+        payload: serde_json::Value,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        execute_sidecar_call(&state, "POST", "/api/v1/pipeline/session/save", Some(payload)).await
+    }
+
+    #[tauri::command]
+    pub async fn diagnostics_export_bundle(
+        format: Option<String>,
+        state: State<'_, SidecarState>,
+    ) -> Result<ProxyResponse, String> {
+        let fmt = format.unwrap_or_else(|| "json".to_string());
+        let route = format!("/api/v1/diagnostics/export?format={}", fmt);
         execute_sidecar_call(&state, "POST", &route, None).await
     }
 }
@@ -554,7 +582,10 @@ pub fn run() {
             ipc::flow_generate_preview,
             ipc::flow_trigger_render,
             ipc::flow_get_job_status,
-            ipc::flow_cancel_job
+            ipc::flow_cancel_job,
+            ipc::flow_get_active_session,
+            ipc::flow_save_active_session,
+            ipc::diagnostics_export_bundle
         ])
         .run(tauri::generate_context!())
         .expect("Tauri başlatılamadı");

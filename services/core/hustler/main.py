@@ -27,9 +27,11 @@ from services.core.hustler.db import Database
 from services.core.hustler.api.routes.discovery import router as discovery_router
 from services.core.hustler.api.routes.jobs import router as jobs_router
 from services.core.hustler.api.routes.pipeline import router as pipeline_router
+from services.core.hustler.api.routes.diagnostics import router as diagnostics_router
 from services.core.hustler.storage.cache import YouTubeCache
 from services.core.hustler.storage.jobs import JobRepository
 from services.core.hustler.storage.scripts import ScriptRepository
+from services.core.hustler.storage.sessions import ProjectSessionRepository
 from services.core.hustler.infrastructure.event_broker import EventBroker
 
 log = structlog.get_logger()
@@ -92,17 +94,26 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     script_repo = ScriptRepository(db)
     await script_repo.init_table()
     
+    session_repo = ProjectSessionRepository(db)
+    await session_repo.init_table()
+    recovered_count = await session_repo.recover_interrupted_sessions()
+    if recovered_count > 0:
+        log.warn("sessions_recovered_on_startup", count=recovered_count)
+
     app.state.db = db
     app.state.cache = cache
     app.state.job_repo = job_repo
     app.state.script_repo = script_repo
-    
+    app.state.session_repo = session_repo
+
     log.info("sidecar_started")  # token ve port burada bilinçli olarak yok
     yield
     # Kapanışta çalışan işleri iptal et
-    for t in app.state.running_jobs.values():
-        if not t.done():
-            t.cancel()
+    running_jobs = getattr(app.state, "running_jobs", {})
+    if isinstance(running_jobs, dict):
+        for t in running_jobs.values():
+            if hasattr(t, "done") and not t.done() and hasattr(t, "cancel"):
+                t.cancel()
     await db.close()
     log.info("sidecar_stopped")
 
@@ -116,6 +127,7 @@ app.state.session_token = SESSION_TOKEN
 app.include_router(discovery_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
+app.include_router(diagnostics_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # RFC 7807 / RFC 9457 Problem Details hata işleyicileri

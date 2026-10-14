@@ -321,6 +321,8 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
             is_idempotent: true,
           },
         }),
+        getActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { session: null } }),
+        saveActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { status: 'SAVED' } }),
         proxyRequest: vi.fn(),
       }
 

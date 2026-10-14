@@ -152,6 +152,7 @@ describe('K-709: Arayüz Güvenlik ve CSP Doğrulama Testleri', () => {
         'plugin:dialog|open',
         'flow_trigger_render',
         'flow_get_job_status',
+        'diagnostics_export_bundle',
       ]
 
       for (const cmd of allowedCommands) {

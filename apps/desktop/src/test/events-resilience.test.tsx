@@ -46,6 +46,8 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
         status: 200,
         body: { status: 'SAVED', is_idempotent: true },
       }),
+      getActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { session: null } }),
+      saveActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { status: 'SAVED' } }),
       proxyRequest: vi.fn(),
     }
 

@@ -171,9 +171,9 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
 | [x] K-801 | Kurulum paketi (Tauri bundler), WebView2 bootstrapper, temiz makine testi | Temiz VM'de kurulum ve çalıştırma |
-| [ ] K-802 | Yedekleme/geri yükleme (SQLite backup API; önbellek tabloları hariç), proje kurtarma | Çökme sonrası devam testi |
-| [ ] K-803 | Tanılama paketi: günlükler, doctor raporu, sürümler (zip) | Tek komutla üretilir |
-| [ ] K-804 | Performans bütçesi CI kapısı (tools/bench) | Regresyon derlemeyi kırar |
+| [x] K-802 | Yedekleme/geri yükleme (SQLite backup API; önbellek tabloları hariç), proje kurtarma | Çökme sonrası devam testi |
+| [x] K-803 | Tanılama paketi: günlükler, doctor raporu, sürümler (zip) | Tek komutla üretilir |
+| [x] K-804 | Performans bütçesi CI kapısı (tools/bench) | Regresyon derlemeyi kırar |
 | [ ] K-805 | Güvenlik gözden geçirme: Tauri izinleri, CSP, IPC izin listesi, bağımlılık ve lisans taraması | Rapor ve açık madde 0 |
 | [ ] K-806 | yt-dlp güncelleme politikası ve bozulma tespiti (kanarya testi) | Bozulmada net uyarı, hat durmaz |
 | [ ] K-807 | 5 kronometreli üretim, CHANGELOG, v1.0 etiketi | Medyan ≤ 15 dk |

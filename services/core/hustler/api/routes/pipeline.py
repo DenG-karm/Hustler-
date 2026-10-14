@@ -10,9 +10,11 @@ from dataclasses import asdict, dataclass, field
 from fastapi import APIRouter, Depends, HTTPException, Request
 import structlog
 
+from typing import Optional
 from services.core.hustler.api.auth import verify_token
 from services.core.hustler.storage.jobs import JobRepository, JobStatus
 from services.core.hustler.storage.scripts import ScriptRepository
+from services.core.hustler.storage.sessions import ProjectSessionRepository
 
 logger = structlog.get_logger()
 router = APIRouter(dependencies=[Depends(verify_token)], prefix="/pipeline")
@@ -275,3 +277,62 @@ async def trigger_render(payload: RenderRequest, request: Request) -> dict[str, 
         "progress": 5,
         "output_path": out_path,
     }
+
+
+@dataclass
+class SaveSessionRequest:
+    topic: str
+    current_step: str
+    checkpoint_step: str
+    status: str
+    session_id: Optional[str] = None
+    selected_idea: Optional[dict[str, object]] = None
+    ideas: list[dict[str, object]] = field(default_factory=list)
+    script: Optional[dict[str, object]] = None
+    audio: Optional[dict[str, object]] = None
+    assets: Optional[dict[str, object]] = None
+    preview: Optional[dict[str, object]] = None
+    render: Optional[dict[str, object]] = None
+    last_error: Optional[str] = None
+
+
+def _session_repo(request: Request) -> ProjectSessionRepository:
+    repo = getattr(request.app.state, "session_repo", None)
+    if isinstance(repo, ProjectSessionRepository):
+        return repo
+    db = getattr(request.app.state, "db", None)
+    if not db:
+        raise HTTPException(status_code=500, detail="DB not initialized in app.state")
+    return ProjectSessionRepository(db)
+
+
+@router.get("/session/active")
+async def get_active_session(request: Request) -> dict[str, object]:
+    """Aktif veya kurtarılmış en son oturumu döner (State Rehydration)."""
+    repo = _session_repo(request)
+    session = await repo.get_active_session()
+    if not session:
+        return {"session": None}
+    return {"session": session.to_dict()}
+
+
+@router.post("/session/save")
+async def save_session(payload: SaveSessionRequest, request: Request) -> dict[str, object]:
+    """Mevcut oturumu ve kararlı kontrol noktasını (checkpoint) kaydeder."""
+    repo = _session_repo(request)
+    saved = await repo.save_session(
+        topic=payload.topic,
+        current_step=payload.current_step,
+        checkpoint_step=payload.checkpoint_step,
+        status=payload.status,
+        session_id=payload.session_id,
+        selected_idea=payload.selected_idea,
+        ideas=payload.ideas,
+        script=payload.script,
+        audio=payload.audio,
+        assets=payload.assets,
+        preview=payload.preview,
+        render=payload.render,
+        last_error=payload.last_error,
+    )
+    return {"session": saved.to_dict()}

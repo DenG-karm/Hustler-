@@ -184,6 +184,8 @@ export interface FlowState {
   buildPreviewForScript: () => Promise<void>
   dispatchRenderJob: (profile?: 'DRAFT' | 'FINAL') => Promise<void>
   pollJobStatus: () => Promise<void>
+  rehydrateFromBackend: () => Promise<boolean>
+  persistSessionToBackend: () => Promise<void>
 }
 
 export function createInitialAssetsData(): AssetsData {
@@ -1035,6 +1037,95 @@ export const useFlowStore = create<FlowState>((set, get) => ({
     } catch (err: any) {
       const uiError = parseProblemDetails(err)
       set({ errorMessage: uiError.message })
+    }
+  },
+
+  rehydrateFromBackend: async () => {
+    set({ isLoading: true, errorMessage: null })
+    try {
+      const client = getIpcClient()
+      const resp = await client.getActiveSession()
+      if (resp.status >= 400 || !resp.body) {
+        set({ isLoading: false })
+        return false
+      }
+
+      const session = resp.body.session
+      if (!session) {
+        set({ isLoading: false })
+        return false
+      }
+
+      const payload = (session.state_payload || {}) as Record<string, any>
+      const candidateStep = (session.checkpoint_step || session.current_step || 'TOPIC') as FlowStep
+      const targetStep = (FLOW_STEPS as readonly string[]).includes(candidateStep)
+        ? candidateStep
+        : 'TOPIC'
+
+      const wasRecovered = session.status === 'RECOVERED' || session.status === 'RUNNING' || session.status === 'RENDERING'
+
+      let renderState = payload.render ?? createInitialRenderData()
+      if (wasRecovered && (renderState.status === 'RENDERING' || renderState.status === 'PENDING')) {
+        renderState = {
+          ...renderState,
+          status: 'CANCELLED',
+          error: 'Önceki oturum kesintiye uğradı, son kararlı adıma dönüldü.',
+        }
+      }
+
+      set({
+        topic: session.topic || payload.topic || '',
+        ideas: payload.ideas ?? [],
+        selectedIdea: payload.selectedIdea ?? null,
+        script: payload.script ?? null,
+        audio: payload.audio ?? null,
+        assets: payload.assets ?? createInitialAssetsData(),
+        preview: payload.preview ?? createInitialPreviewData(),
+        render: renderState,
+        currentStep: targetStep,
+        isLoading: false,
+        errorMessage: null,
+      })
+
+      if (wasRecovered) {
+        get().addToast({
+          title: 'Kurtarıldı (Rehydrated)',
+          message: `Kesintiye uğrayan oturum son kararlı adım olan '${targetStep}' aşamasına başarıyla geri yüklendi.`,
+          mode: 'toast',
+        })
+      }
+
+      return true
+    } catch (err: any) {
+      const uiError = parseProblemDetails(err)
+      set({ isLoading: false, errorMessage: uiError.message })
+      return false
+    }
+  },
+
+  persistSessionToBackend: async () => {
+    const s = get()
+    try {
+      const client = getIpcClient()
+      await client.saveActiveSession({
+        id: s.script?.id ? `session_${s.script.id}` : 'session_active',
+        topic: s.topic,
+        current_step: s.currentStep,
+        checkpoint_step: s.currentStep,
+        status: 'IDLE',
+        state_payload: {
+          topic: s.topic,
+          ideas: s.ideas,
+          selectedIdea: s.selectedIdea,
+          script: s.script,
+          audio: s.audio,
+          assets: s.assets,
+          preview: s.preview,
+          render: s.render,
+        },
+      })
+    } catch {
+      // ignore
     }
   },
 }))

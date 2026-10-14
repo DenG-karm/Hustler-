@@ -1,0 +1,47 @@
+{
+  "version": "1.0.0",
+  "description": "Hustler Performance & Size Budgets (K-804 CI Gate)",
+  "backend": {
+    "filtergraph_ast_p95_ms": {
+      "name": "Filtergraph AST Derleme Süresi",
+      "budget_ms": 15.0,
+      "metric_type": "p95",
+      "unit": "ms"
+    },
+    "sqlite_queue_write_avg_ms": {
+      "name": "SQLite Tek-Yazıcı Kuyruğu (Yazma)",
+      "budget_ms": 5.0,
+      "metric_type": "avg",
+      "unit": "ms"
+    },
+    "sqlite_read_latency_avg_ms": {
+      "name": "SQLite Okuma Gecikmesi (Okuma)",
+      "budget_ms": 2.0,
+      "metric_type": "avg",
+      "unit": "ms"
+    },
+    "pydantic_validation_avg_ms": {
+      "name": "Pydantic Kontrat Doğrulama Hızı",
+      "budget_ms": 5.0,
+      "metric_type": "avg",
+      "unit": "ms"
+    },
+    "doctor_redactor_avg_ms": {
+      "name": "Doctor & Redactor Hızı (1 MB)",
+      "budget_ms": 50.0,
+      "metric_type": "avg",
+      "unit": "ms"
+    }
+  },
+  "frontend": {
+    "production_bundle_js": {
+      "name": "Frontend Production Bundle (JS)",
+      "path_pattern": "apps/desktop/dist/assets/*.js",
+      "max_raw_size_kb": 500.0,
+      "max_raw_size_bytes": 512000,
+      "max_gzip_size_kb": 150.0,
+      "max_gzip_size_bytes": 153600,
+      "unit": "KB"
+    }
+  }
+}

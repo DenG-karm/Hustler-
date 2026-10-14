@@ -14,9 +14,11 @@ from services.core.hustler.main import SESSION_TOKEN, app
 
 @pytest.fixture
 async def client() -> AsyncIterator[httpx.AsyncClient]:
+    app.state.event_broker = None
     transport = httpx.ASGITransport(app=app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
         yield c
+    app.state.event_broker = None
 
 
 async def test_events_without_token_returns_401_problem_details(

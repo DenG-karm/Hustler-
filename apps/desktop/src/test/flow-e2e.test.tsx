@@ -106,6 +106,8 @@ describe('K-702: Akış Ekranları Uçtan Uca (E2E) Testi', () => {
           is_idempotent: true,
         },
       }),
+      getActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { session: null } }),
+      saveActiveSession: vi.fn().mockResolvedValue({ status: 200, body: { status: 'SAVED' } }),
       proxyRequest: vi.fn(),
     }
 

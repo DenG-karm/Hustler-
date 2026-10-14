@@ -1,7 +1,7 @@
 set windows-shell := ["powershell.exe", "-NoLogo", "-Command"]
 
 default:
-    Write-Host "Available commands: gen, gen-check, lint, typecheck, test, test-gate, check"
+    Write-Host "Available commands: gen, gen-check, lint, typecheck, test, test-gate, bench, check"
 
 gen:
     uv run python tools/generate_contracts.py
@@ -20,6 +20,9 @@ test:
 
 test-gate:
     uv run python tools/ci/check_tests.py --gate
+
+bench:
+    uv run python tools/bench/run_bench.py
 
 lint-web:
     pnpm --filter @hustler/desktop run lint

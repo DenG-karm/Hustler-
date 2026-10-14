@@ -33,6 +33,9 @@ export interface FlowIpcClient {
   triggerRender(profile: 'DRAFT' | 'FINAL', scriptId: string): Promise<ProxyResponse>
   getJobStatus(jobId: string): Promise<ProxyResponse>
   cancelJob(jobId: string): Promise<ProxyResponse>
+  getActiveSession(): Promise<ProxyResponse>
+  saveActiveSession(payload: any): Promise<ProxyResponse>
+  exportDiagnostics?(format?: 'zip' | 'json'): Promise<ProxyResponse>
   proxyRequest(method: string, route: string, body?: any): Promise<ProxyResponse>
 }
 
@@ -89,6 +92,18 @@ export const tauriIpcClient: FlowIpcClient = {
 
   async cancelJob(jobId: string): Promise<ProxyResponse> {
     return invoke<ProxyResponse>('flow_cancel_job', { jobId })
+  },
+
+  async getActiveSession(): Promise<ProxyResponse> {
+    return invoke<ProxyResponse>('flow_get_active_session')
+  },
+
+  async saveActiveSession(payload: any): Promise<ProxyResponse> {
+    return invoke<ProxyResponse>('flow_save_active_session', { payload })
+  },
+
+  async exportDiagnostics(format: 'zip' | 'json' = 'json'): Promise<ProxyResponse> {
+    return invoke<ProxyResponse>('diagnostics_export_bundle', { format })
   },
 
   async proxyRequest(method: string, route: string, body?: any): Promise<ProxyResponse> {
