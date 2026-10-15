@@ -467,23 +467,27 @@ def bench_frontend_bundle(
 ) -> tuple[MetricResult, MetricResult]:
     """
     Frontend üretim (production) bundle JS dosya boyutlarını (ham ve gzip) denetler.
-    Bütçe: <= 500 KB uncompressed / <= 150 KB gzip.
+    apps/desktop/dist/assets/*.js desenine uyan TÜM .js dosyalarının toplamını (sum) hesaplar.
+    Bütçe: Toplam ham <= 500 KB / Toplam gzip <= 150 KB.
+    Aşılması durumunda kapı kırılır (sys.exit(1)).
     """
-    candidates: list[Path] = []
+    raw_candidates: list[Path] = []
 
     # 1. repo_root / pattern ile doğrudan ara
-    candidates.extend(repo_root.glob(pattern))
+    raw_candidates.extend(repo_root.glob(pattern))
 
     # 2. Alternatif yollar (desktop veya root dist)
-    if not candidates:
+    if not raw_candidates:
         desktop_dist = repo_root / "apps" / "desktop" / "dist" / "assets"
         if desktop_dist.exists():
-            candidates.extend(desktop_dist.glob("*.js"))
+            raw_candidates.extend(desktop_dist.glob("*.js"))
 
-    if not candidates:
+    if not raw_candidates:
         root_dist = repo_root / "dist" / "assets"
         if root_dist.exists():
-            candidates.extend(root_dist.glob("*.js"))
+            raw_candidates.extend(root_dist.glob("*.js"))
+
+    candidates = sorted({p.resolve() for p in raw_candidates if p.is_file()})
 
     if not candidates:
         res_raw = MetricResult(
@@ -506,13 +510,19 @@ def bench_frontend_bundle(
         )
         return res_raw, res_gz
 
-    # En büyük JS dosyasını (ana bundle index-*.js) hedef al
-    main_bundle = max(candidates, key=lambda p: p.stat().st_size)
-    raw_bytes = main_bundle.read_bytes()
-    raw_kb = len(raw_bytes) / 1024.0
+    # Tüm üretim JS dosyalarının toplamını (sum) hesapla
+    total_raw_bytes = 0
+    total_gz_bytes = 0
 
-    gz_bytes = gzip.compress(raw_bytes, compresslevel=9)
-    gz_kb = len(gz_bytes) / 1024.0
+    for js_file in candidates:
+        content = js_file.read_bytes()
+        raw_b = len(content)
+        gz_b = len(gzip.compress(content, compresslevel=9))
+        total_raw_bytes += raw_b
+        total_gz_bytes += gz_b
+
+    raw_kb = total_raw_bytes / 1024.0
+    gz_kb = total_gz_bytes / 1024.0
 
     raw_passed = raw_kb <= max_raw_kb
     gz_passed = gz_kb <= max_gzip_kb
@@ -524,7 +534,10 @@ def bench_frontend_bundle(
         budget_ms=max_raw_kb,
         passed=raw_passed,
         unit="KB",
-        details={"bytes": float(len(raw_bytes))},
+        details={
+            "bytes": float(total_raw_bytes),
+            "file_count": float(len(candidates)),
+        },
     )
 
     res_gz = MetricResult(
@@ -534,7 +547,11 @@ def bench_frontend_bundle(
         budget_ms=max_gzip_kb,
         passed=gz_passed,
         unit="KB",
-        details={"bytes": float(len(gz_bytes)), "compression_ratio": round(raw_kb / max(0.1, gz_kb), 2)},
+        details={
+            "bytes": float(total_gz_bytes),
+            "compression_ratio": round(raw_kb / max(0.1, gz_kb), 2),
+            "file_count": float(len(candidates)),
+        },
     )
 
     return res_raw, res_gz

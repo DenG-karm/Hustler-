@@ -1,0 +1,31 @@
+{
+  "timestamp": "2026-10-15T17:39:08.127320+00:00",
+  "gate_passed": true,
+  "open_issues": 0,
+  "license_violations": 0,
+  "static_audit": {
+    "passed": true,
+    "details": {
+      "Tauri CSP ve İzin Denetimi": {
+        "passed": true,
+        "errors": []
+      },
+      "Çapraz Dil IPC İzin Eşleşmesi": {
+        "passed": true,
+        "errors": []
+      },
+      "Sidecar Loopback İzolasyonu": {
+        "passed": true,
+        "errors": []
+      }
+    }
+  },
+  "supply_chain_audit": {
+    "passed": true,
+    "total_packages_scanned": 513,
+    "python_packages_count": 56,
+    "frontend_packages_count": 180,
+    "rust_packages_count": 277,
+    "license_violations": []
+  }
+}

@@ -548,5 +548,45 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
       expect(useFlowStore.getState().script?.saveStatus).toBe('SAVED')
       expect(useFlowStore.getState().script?.lastSavedAt).toBeDefined()
     })
+
+    it('K-806: runDiscovery backend degraded: true döndüğünde toast eklemeli ve akışı kesmemelidir', async () => {
+      const mockIpc: FlowIpcClient = {
+        runDiscovery: vi.fn().mockResolvedValue({
+          status: 200,
+          body: {
+            degraded: true,
+            warning: 'yt-dlp çıkarıcısı yanıt vermiyor; yerel kurtarma modu aktif.',
+            results: [
+              { video_id: 'fallback_1', title: 'Kurtarılan Fikir 1', hook: 'Kanca 1', score: 95 },
+            ],
+          },
+        }),
+      } as any
+      setIpcClient(mockIpc)
+
+      const store = useFlowStore.getState()
+      store.resetFlow()
+      store.setTopic('Yapay Zeka')
+
+      await store.runDiscovery()
+
+      // 1. Toast eklenmiş olmalı
+      const toasts = useFlowStore.getState().toasts
+      expect(toasts.length).toBeGreaterThan(0)
+      expect(toasts[0].message).toContain('yt-dlp çıkarıcısı yanıt vermiyor')
+      expect(toasts[0].code).toBe('DISCOVERY_DEGRADED')
+
+      // 2. Fikir listesi doldurulmuş olmalı
+      const ideas = useFlowStore.getState().ideas
+      expect(ideas.length).toBeGreaterThan(0)
+      expect(ideas[0].id).toBe('fallback_1')
+
+      // 3. Fikir seçilip SCRIPT adımına kesintisiz geçilebilmeli
+      store.selectIdea(ideas[0])
+      expect(useFlowStore.getState().canProceed()).toBe(true)
+      store.nextStep()
+      expect(useFlowStore.getState().currentStep).toBe('TOP20')
+    })
   })
 })
+

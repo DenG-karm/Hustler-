@@ -177,6 +177,7 @@ export interface FlowState {
   subscribeEvents: () => Promise<() => void>
 
   // IPC Tetikleyicileri (Zero-Network)
+  runDiscovery: (topicOverride?: string) => Promise<void>
   fetchIdeasForTopic: () => Promise<void>
   generateScriptForIdea: () => Promise<void>
   generateAudioForScript: (voiceId?: string) => Promise<void>
@@ -750,6 +751,13 @@ export const useFlowStore = create<FlowState>((set, get) => ({
   // -------------------------------------------------------------------------
   // IPC Çağrıları (Zero-Network & Problem Details Protected)
   // -------------------------------------------------------------------------
+  runDiscovery: async (topicOverride?: string) => {
+    if (topicOverride) {
+      set({ topic: topicOverride })
+    }
+    return get().fetchIdeasForTopic()
+  },
+
   fetchIdeasForTopic: async () => {
     const { topic } = get()
     if (!topic || topic.trim().length < 3) {
@@ -767,6 +775,20 @@ export const useFlowStore = create<FlowState>((set, get) => ({
         else set((s) => ({ toasts: [...s.toasts, err] }))
         set({ errorMessage: err.message, isLoading: false })
         return
+      }
+
+      // K-806: yt-dlp bozulduğunda degraded uyarısı ver ama akışı kesme
+      if (resp.body?.degraded || resp.body?.warning) {
+        const warningMsg =
+          typeof resp.body?.warning === 'string'
+            ? resp.body.warning
+            : 'yt-dlp çıkarıcısı yanıt vermiyor; yerel kurtarma modu aktif.'
+        get().addToast({
+          title: 'Çıkarıcı Uyarısı (Degraded Mod)',
+          message: warningMsg,
+          code: 'DISCOVERY_DEGRADED',
+          mode: 'toast',
+        })
       }
 
       const rawItems = Array.isArray(resp.body) ? resp.body : resp.body?.results ?? []

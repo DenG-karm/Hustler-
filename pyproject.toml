@@ -1,6 +1,6 @@
 [project]
 name = "hustler-workspace"
-version = "0.1.0"
+version = "1.0.0"
 description = "Hustler monorepo"
 requires-python = ">=3.12"
 dependencies = ["core"]
