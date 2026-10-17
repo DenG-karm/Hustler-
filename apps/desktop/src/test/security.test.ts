@@ -30,6 +30,8 @@ import {
   validateMediaSource,
   isSafeScriptSource,
   validateScriptSource,
+  isProxyRouteAllowed,
+  validateProxyRoute,
 } from '../lib/securityGuard'
 
 // ===========================================================================
@@ -326,4 +328,43 @@ describe('K-709: Arayüz Güvenlik ve CSP Doğrulama Testleri', () => {
       expect(csp).toMatch(/font-src\s+[^;]*data:/)
     })
   })
+
+  // -------------------------------------------------------------------------
+  // SUITE 5: API Proxy Rota Beyaz Liste Filtresi (Adım 3/3 Sıkılaştırma)
+  // -------------------------------------------------------------------------
+  describe('5. API Proxy Rota Beyaz Liste Filtresi Denetimi', () => {
+    it('yalnızca beyaz listedeki meşru API rotalarına izin verilmeli ve rota döndürülmelidir', () => {
+      const validRoutes = [
+        '/health',
+        '/api/v1/discovery/run',
+        '/api/v1/script/generate',
+        '/api/v1/audio/generate',
+        '/api/v1/render/trigger',
+        '/api/v1/pipeline/status',
+        '/api/v1/diagnostics/export',
+        '/api/v1/session/active',
+      ]
+
+      for (const route of validRoutes) {
+        expect(isProxyRouteAllowed(route)).toBe(true)
+        expect(validateProxyRoute(route)).toBe(route)
+      }
+    })
+
+    it('arka kapı, keyfi dosya okuma veya yetkisiz rotalar reddedilmeli ve SecurityViolationError fırlatmalıdır', () => {
+      const maliciousRoutes = [
+        '/admin/backdoor',
+        '/etc/passwd',
+        '/debug/exec',
+        '/api/v2/unauthorized',
+        '../../secret.json',
+      ]
+
+      for (const route of maliciousRoutes) {
+        expect(isProxyRouteAllowed(route)).toBe(false)
+        expect(() => validateProxyRoute(route)).toThrowError(SecurityViolationError)
+      }
+    })
+  })
 })
+

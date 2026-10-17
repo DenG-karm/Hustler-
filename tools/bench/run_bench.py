@@ -560,14 +560,7 @@ def bench_frontend_bundle(
 # -----------------------------------------------------------------------------
 # Benchmark Koşucusu ve Raporlama
 # -----------------------------------------------------------------------------
-def run_all_benchmarks(
-    iterations: int = 100,
-    output_json: Path | None = None,
-    quiet: bool = False,
-    budgets_path: Path | None = None,
-    raise_on_failure: bool = False,
-) -> tuple[bool, BenchmarkReport]:
-    """Tüm mikro-benchmarkları koşturur, bütçeleri denetler ve yapılandırılmış rapor döner."""
+def _ensure_utf8_stdout() -> None:
     try:
         reconfigure_fn = getattr(sys.stdout, "reconfigure", None)
         if callable(reconfigure_fn) and sys.stdout.encoding and sys.stdout.encoding.lower() not in ("utf-8", "utf8"):
@@ -575,7 +568,52 @@ def run_all_benchmarks(
     except Exception:
         pass
 
-    budgets = load_budgets(budgets_path)
+
+def _print_bench_header(budgets_path: Path | None) -> None:
+    print("=" * 80)
+    print(" HUSTLER BENCHMARK VE BUTCE DENETLEYICISI (K-804 CI GATE)")
+    print("=" * 80)
+    print(f"Platform       : {platform.system()} {platform.release()} ({platform.machine()})")
+    print(f"Python Runtime : {platform.python_version()} ({platform.python_implementation()})")
+    print(f"Zamanlayici    : time.perf_counter (Hassasiyet: {time.get_clock_info('perf_counter').resolution:.1e}s)")
+    print(f"Butce Kaynagi  : {budgets_path or (REPO_ROOT / 'tools' / 'bench' / 'budgets.json')}")
+    print("-" * 80)
+
+
+def _format_metric_values(r: MetricResult) -> tuple[str, str]:
+    if r.unit == "KB":
+        return f"{r.measured_ms:.1f} KB", f"<= {r.budget_ms:.1f} KB"
+    return f"{r.measured_ms:.3f} ms", f"<= {r.budget_ms:.1f} ms"
+
+
+def _print_bench_summary(results: list[MetricResult], all_passed: bool, quiet: bool) -> None:
+    if not quiet:
+        print("\n" + "=" * 80)
+        print(f"{'OLCULEN DARBOGAZ / VARLIK':<40} {'METRIK':<8} {'OLCULEN':<12} {'BUTCE':<10} {'DURUM':<8}")
+        print("-" * 80)
+        for r in results:
+            status_text = "[PASS]" if r.passed else "[FAIL]"
+            measured_str, budget_str = _format_metric_values(r)
+            print(f"{r.name:<40} {r.metric_type:<8} {measured_str:<12} {budget_str:<10} {status_text:<8}")
+        print("=" * 80)
+        if all_passed:
+            print("[PASS] TUM KRITIK PERFORMANS VE BOYUT BUTCELERI KARSILANDI (CI GATE GECTI)")
+        else:
+            print("[FAIL] PERFORMANS / BOYUT REGRESYONU TESPIT EDILDI! BUTCE ASILDI (CI GATE KIRILDI)")
+        print("=" * 80 + "\n")
+    elif not all_passed:
+        for r in results:
+            if not r.passed:
+                measured_str, budget_str = _format_metric_values(r)
+                print(f"[FAIL] {r.name}: {measured_str} ({budget_str}) ({r.metric_type})", file=sys.stderr)
+
+
+def _log_progress(quiet: bool, msg: str, newline: bool = True) -> None:
+    if not quiet:
+        print(msg, end="\n" if newline else "", flush=True)
+
+
+def _execute_benchmark_suite(budgets: dict[str, Any], iterations: int, quiet: bool) -> list[MetricResult]:
     b_ast = float(budgets.get("backend", {}).get("filtergraph_ast_p95_ms", {}).get("budget_ms", 15.0))
     b_write = float(budgets.get("backend", {}).get("sqlite_queue_write_avg_ms", {}).get("budget_ms", 5.0))
     b_read = float(budgets.get("backend", {}).get("sqlite_read_latency_avg_ms", {}).get("budget_ms", 2.0))
@@ -587,77 +625,56 @@ def run_all_benchmarks(
     b_fe_gzip = float(fe_cfg.get("max_gzip_size_kb", 150.0))
     fe_pattern = str(fe_cfg.get("path_pattern", "apps/desktop/dist/assets/*.js"))
 
-    if not quiet:
-        print("=" * 80)
-        print(" HUSTLER BENCHMARK VE BUTCE DENETLEYICISI (K-804 CI GATE)")
-        print("=" * 80)
-        print(f"Platform       : {platform.system()} {platform.release()} ({platform.machine()})")
-        print(f"Python Runtime : {platform.python_version()} ({platform.python_implementation()})")
-        print(f"Zamanlayici    : time.perf_counter (Hassasiyet: {time.get_clock_info('perf_counter').resolution:.1e}s)")
-        print(f"Butce Kaynagi  : {budgets_path or (REPO_ROOT / 'tools' / 'bench' / 'budgets.json')}")
-        print("-" * 80)
-
     results: list[MetricResult] = []
-
-    # 1. AST Derleme
-    if not quiet:
-        print("[1/5] Filtergraph AST Derleme Suresi olculuyor...", end="", flush=True)
+    _log_progress(quiet, "[1/5] Filtergraph AST Derleme Suresi olculuyor...", newline=False)
     res_ast = bench_filtergraph_ast(iterations=iterations, budget_ms=b_ast)
     results.append(res_ast)
-    if not quiet:
-        print(f" Tamamlandi ({res_ast.measured_ms:.2f} ms / {res_ast.budget_ms:.1f} ms)")
+    _log_progress(quiet, f" Tamamlandi ({res_ast.measured_ms:.2f} ms / {res_ast.budget_ms:.1f} ms)")
 
-    # 2. SQLite Kuyruk & Okuma
-    if not quiet:
-        print("[2/5] SQLite Tek-Yazici Kuyrugu & Okuma Gecikmesi olculuyor...", end="", flush=True)
+    _log_progress(quiet, "[2/5] SQLite Tek-Yazici Kuyrugu & Okuma Gecikmesi olculuyor...", newline=False)
     res_write, res_read = asyncio.run(
-        bench_sqlite_queue_and_reads(
-            operations=iterations,
-            write_budget_ms=b_write,
-            read_budget_ms=b_read,
-        )
+        bench_sqlite_queue_and_reads(operations=iterations, write_budget_ms=b_write, read_budget_ms=b_read)
     )
-    results.append(res_write)
-    results.append(res_read)
-    if not quiet:
-        print(f" Tamamlandi (Yazma: {res_write.measured_ms:.2f} ms, Okuma: {res_read.measured_ms:.2f} ms)")
+    results.extend([res_write, res_read])
+    _log_progress(quiet, f" Tamamlandi (Yazma: {res_write.measured_ms:.2f} ms, Okuma: {res_read.measured_ms:.2f} ms)")
 
-    # 3. Pydantic Kontrat Doğrulama
-    if not quiet:
-        print("[3/5] Pydantic Kontrat Dogrulama Hizi olculuyor...", end="", flush=True)
+    _log_progress(quiet, "[3/5] Pydantic Kontrat Dogrulama Hizi olculuyor...", newline=False)
     res_pydantic = bench_pydantic_contract_validation(iterations=iterations, budget_ms=b_pydantic)
     results.append(res_pydantic)
-    if not quiet:
-        print(f" Tamamlandi ({res_pydantic.measured_ms:.2f} ms / {res_pydantic.budget_ms:.1f} ms)")
+    _log_progress(quiet, f" Tamamlandi ({res_pydantic.measured_ms:.2f} ms / {res_pydantic.budget_ms:.1f} ms)")
 
-    # 4. Doctor & Redactor Hızı
-    if not quiet:
-        print("[4/5] Doctor & Redactor Hizi (1 MB) olculuyor...", end="", flush=True)
-    res_redactor = bench_doctor_and_redactor(
-        iterations=max(3, min(5, iterations // 20)),
-        budget_ms=b_redactor,
-    )
+    _log_progress(quiet, "[4/5] Doctor & Redactor Hizi (1 MB) olculuyor...", newline=False)
+    res_redactor = bench_doctor_and_redactor(iterations=max(3, min(5, iterations // 20)), budget_ms=b_redactor)
     results.append(res_redactor)
-    if not quiet:
-        print(f" Tamamlandi ({res_redactor.measured_ms:.2f} ms / {res_redactor.budget_ms:.1f} ms)")
+    _log_progress(quiet, f" Tamamlandi ({res_redactor.measured_ms:.2f} ms / {res_redactor.budget_ms:.1f} ms)")
 
-    # 5. Frontend Production Bundle Boyutu
-    if not quiet:
-        print("[5/5] Frontend Production Bundle Boyutu denetleniyor...", end="", flush=True)
+    _log_progress(quiet, "[5/5] Frontend Production Bundle Boyutu denetleniyor...", newline=False)
     res_fe_raw, res_fe_gz = bench_frontend_bundle(
-        repo_root=REPO_ROOT,
-        max_raw_kb=b_fe_raw,
-        max_gzip_kb=b_fe_gzip,
-        pattern=fe_pattern,
+        repo_root=REPO_ROOT, max_raw_kb=b_fe_raw, max_gzip_kb=b_fe_gzip, pattern=fe_pattern
     )
-    results.append(res_fe_raw)
-    results.append(res_fe_gz)
-    if not quiet:
-        print(
-            f" Tamamlandi (Ham: {res_fe_raw.measured_ms:.1f} KB / {res_fe_raw.budget_ms:.1f} KB, "
-            f"Gzip: {res_fe_gz.measured_ms:.1f} KB / {res_fe_gz.budget_ms:.1f} KB)"
-        )
+    results.extend([res_fe_raw, res_fe_gz])
+    _log_progress(
+        quiet,
+        f" Tamamlandi (Ham: {res_fe_raw.measured_ms:.1f} KB / {res_fe_raw.budget_ms:.1f} KB, "
+        f"Gzip: {res_fe_gz.measured_ms:.1f} KB / {res_fe_gz.budget_ms:.1f} KB)",
+    )
+    return results
 
+
+def run_all_benchmarks(
+    iterations: int = 100,
+    output_json: Path | None = None,
+    quiet: bool = False,
+    budgets_path: Path | None = None,
+    raise_on_failure: bool = False,
+) -> tuple[bool, BenchmarkReport]:
+    """Tüm mikro-benchmarkları koşturur, bütçeleri denetler ve yapılandırılmış rapor döner."""
+    _ensure_utf8_stdout()
+    budgets = load_budgets(budgets_path)
+    if not quiet:
+        _print_bench_header(budgets_path)
+
+    results = _execute_benchmark_suite(budgets, iterations, quiet)
     all_passed = all(r.passed for r in results)
 
     report = BenchmarkReport(
@@ -668,43 +685,11 @@ def run_all_benchmarks(
         results=results,
     )
 
-    if not quiet:
-        print("\n" + "=" * 80)
-        print(f"{'OLCULEN DARBOGAZ / VARLIK':<40} {'METRIK':<8} {'OLCULEN':<12} {'BUTCE':<10} {'DURUM':<8}")
-        print("-" * 80)
-        for r in results:
-            status_text = "[PASS]" if r.passed else "[FAIL]"
-            if r.unit == "KB":
-                measured_str = f"{r.measured_ms:.1f} KB"
-                budget_str = f"<= {r.budget_ms:.1f} KB"
-            else:
-                measured_str = f"{r.measured_ms:.3f} ms"
-                budget_str = f"<= {r.budget_ms:.1f} ms"
-            print(f"{r.name:<40} {r.metric_type:<8} {measured_str:<12} {budget_str:<10} {status_text:<8}")
-        print("=" * 80)
-        if all_passed:
-            print("[PASS] TUM KRITIK PERFORMANS VE BOYUT BUTCELERI KARSILANDI (CI GATE GECTI)")
-        else:
-            print("[FAIL] PERFORMANS / BOYUT REGRESYONU TESPIT EDILDI! BUTCE ASILDI (CI GATE KIRILDI)")
-        print("=" * 80 + "\n")
-    elif not all_passed:
-        for r in results:
-            if not r.passed:
-                if r.unit == "KB":
-                    print(
-                        f"[FAIL] {r.name}: {r.measured_ms:.1f} KB > {r.budget_ms:.1f} KB ({r.metric_type})",
-                        file=sys.stderr,
-                    )
-                else:
-                    print(
-                        f"[FAIL] {r.name}: {r.measured_ms:.3f} ms > {r.budget_ms:.1f} ms ({r.metric_type})",
-                        file=sys.stderr,
-                    )
+    _print_bench_summary(results, all_passed, quiet)
 
     if output_json:
         output_json.parent.mkdir(parents=True, exist_ok=True)
-        report_dict = asdict(report)
-        output_json.write_text(json.dumps(report_dict, indent=2, ensure_ascii=False), encoding="utf-8")
+        output_json.write_text(json.dumps(asdict(report), indent=2, ensure_ascii=False), encoding="utf-8")
         if not quiet:
             print(f"Rapor dosyası kaydedildi: {output_json}")
 

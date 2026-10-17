@@ -142,38 +142,33 @@ def need_key(stage: Stage, var: str) -> str | None:
 
 
 # --------------------------------------------------------------------------- 1
-async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
-    s1a = Stage("1a Discovery (YouTube API, 20 video)")
-    s1b = Stage("1b Download (AssetManager, gerçek dosya)")
-
-    key = need_key(s1a, "YOUTUBE_API_KEY")
-    if key:
-        t0 = time.perf_counter()
-        try:
-            ids: list[str] = []
-            async with YouTubeClient(api_key=key) as yt:
-                topic = os.environ.get("E2E_TOPIC", "sleep tips")
-                async for item in yt.search_shorts(topic, max_results=20):
-                    raw_id = item.get("id")
-                    vid = raw_id.get("videoId") if isinstance(raw_id, dict) else raw_id
-                    if vid:
-                        ids.append(str(vid))
-                s1a.metrics["search_seconds"] = round(time.perf_counter() - t0, 3)
-                s1a.metrics["results"] = len(ids)
-                t1 = time.perf_counter()
-                details = await yt.get_videos_details(ids[:20]) if ids else []
-                s1a.metrics["details_seconds"] = round(time.perf_counter() - t1, 3)
-                s1a.metrics["details"] = len(details)
-            s1a.status = "PASS" if len(ids) >= 20 else "FAIL"
-            if len(ids) < 20:
-                s1a.notes.append(f"20 sonuç istendi, {len(ids)} geldi.")
-            state["video_ids"] = ids
-        except Exception as exc:  # noqa: BLE001 - rapor için yakalanır, gizlenmez
-            s1a.notes.append(f"{type(exc).__name__}: {exc}")
-        s1a.seconds = round(time.perf_counter() - t0, 3)
-
+async def _run_stage1a_youtube_search(s1a: Stage, key: str, state: dict[str, Any]) -> None:
     t0 = time.perf_counter()
-    # Do?rudan URL indirme (AssetManager) a? h?z? referans? olarak ?l??l?r
+    try:
+        ids: list[str] = []
+        async with YouTubeClient(api_key=key) as yt:
+            topic = os.environ.get("E2E_TOPIC", "sleep tips")
+            async for item in yt.search_shorts(topic, max_results=20):
+                raw_id = item.get("id")
+                vid = raw_id.get("videoId") if isinstance(raw_id, dict) else raw_id
+                if vid:
+                    ids.append(str(vid))
+            s1a.metrics["search_seconds"] = round(time.perf_counter() - t0, 3)
+            s1a.metrics["results"] = len(ids)
+            t1 = time.perf_counter()
+            details = await yt.get_videos_details(ids[:20]) if ids else []
+            s1a.metrics["details_seconds"] = round(time.perf_counter() - t1, 3)
+            s1a.metrics["details"] = len(details)
+        s1a.status = "PASS" if len(ids) >= 20 else "FAIL"
+        if len(ids) < 20:
+            s1a.notes.append(f"20 sonuç istendi, {len(ids)} geldi.")
+        state["video_ids"] = ids
+    except Exception as exc:  # noqa: BLE001 - rapor için yakalanır, gizlenmez
+        s1a.notes.append(f"{type(exc).__name__}: {exc}")
+    s1a.seconds = round(time.perf_counter() - t0, 3)
+
+
+async def _run_stage1b_direct_download(s1b: Stage, state: dict[str, Any]) -> None:
     urls = [os.environ["E2E_ASSET_URL"]] if os.environ.get("E2E_ASSET_URL") else DEFAULT_ASSET_URLS
     manager = AssetManager(download_dir=str(OUT / "downloads"))
     async with httpx.AsyncClient(follow_redirects=True, timeout=60.0) as client:
@@ -184,7 +179,9 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
                 dt = time.perf_counter() - t_dl
                 size = os.path.getsize(path)
                 s1b.metrics.update(
-                    direct_url=url, direct_bytes=size, direct_seconds=round(dt, 3),
+                    direct_url=url,
+                    direct_bytes=size,
+                    direct_seconds=round(dt, 3),
                     direct_mbit_per_s=round(size * 8 / 1e6 / max(dt, 1e-9), 2),
                 )
                 state.setdefault("video_path", path)
@@ -192,7 +189,8 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
             except Exception as exc:  # noqa: BLE001
                 s1b.notes.append(f"{url}: {type(exc).__name__}: {exc}")
 
-    # Ger?ek YouTube indirme (yt-dlp): aramadan gelen ilk >=10 sn'lik video
+
+async def _run_stage1b_youtube_download(s1b: Stage, state: dict[str, Any]) -> None:
     yt_dl = YouTubeDownloader(download_dir=str(OUT / "youtube"), timeout_sec=240.0)
     for vid in state.get("video_ids", [])[:5]:
         watch = f"https://www.youtube.com/watch?v={vid}"
@@ -202,7 +200,7 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
             video_dt = time.perf_counter() - t_v
             vsum = probe_summary(await ffprobe(vpath))
             if vsum["duration_sec"] < RENDER_SECONDS:
-                s1b.notes.append(f"{vid}: {vsum['duration_sec']:.1f} sn < {RENDER_SECONDS} sn, atland?.")
+                s1b.notes.append(f"{vid}: {vsum['duration_sec']:.1f} sn < {RENDER_SECONDS} sn, atlandı.")
                 continue
             t_a = time.perf_counter()
             apath = await yt_dl.download(watch, "audio")
@@ -210,13 +208,20 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
             asum = probe_summary(await ffprobe(apath))
             vbytes = os.path.getsize(vpath)
             s1b.metrics.update(
-                youtube_id=vid, youtube_video_seconds=round(video_dt, 3), youtube_video_bytes=vbytes,
+                youtube_id=vid,
+                youtube_video_seconds=round(video_dt, 3),
+                youtube_video_bytes=vbytes,
                 youtube_video_mbit_per_s=round(vbytes * 8 / 1e6 / max(video_dt, 1e-9), 2),
-                youtube_video_resolution=vsum["resolution"], youtube_video_codec=vsum["video_codec"],
-                youtube_video_fps=vsum["fps"], youtube_video_pix_fmt=vsum["pix_fmt"],
-                youtube_video_kbps=vsum["video_kbps"], youtube_video_total_kbps=vsum["total_kbps"],
-                youtube_video_audio_kbps=vsum["audio_kbps"], youtube_video_duration=vsum["duration_sec"],
-                youtube_audio_seconds=round(audio_dt, 3), youtube_audio_bytes=os.path.getsize(apath),
+                youtube_video_resolution=vsum["resolution"],
+                youtube_video_codec=vsum["video_codec"],
+                youtube_video_fps=vsum["fps"],
+                youtube_video_pix_fmt=vsum["pix_fmt"],
+                youtube_video_kbps=vsum["video_kbps"],
+                youtube_video_total_kbps=vsum["total_kbps"],
+                youtube_video_audio_kbps=vsum["audio_kbps"],
+                youtube_video_duration=vsum["duration_sec"],
+                youtube_audio_seconds=round(audio_dt, 3),
+                youtube_audio_bytes=os.path.getsize(apath),
                 youtube_audio_codec=asum["audio_codec"],
             )
             state["video_path"] = vpath
@@ -224,8 +229,21 @@ async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
             break
         except Exception as exc:  # noqa: BLE001
             s1b.notes.append(f"{vid}: {type(exc).__name__}: {str(exc)[:300]}")
+
+
+async def stage1_discovery_download(state: dict[str, Any]) -> list[Stage]:
+    s1a = Stage("1a Discovery (YouTube API, 20 video)")
+    s1b = Stage("1b Download (AssetManager, gerçek dosya)")
+
+    key = need_key(s1a, "YOUTUBE_API_KEY")
+    if key:
+        await _run_stage1a_youtube_search(s1a, key, state)
+
+    t0 = time.perf_counter()
+    await _run_stage1b_direct_download(s1b, state)
+    await _run_stage1b_youtube_download(s1b, state)
     if s1b.status != "PASS" and not state.get("video_ids"):
-        s1b.notes.append("YouTube indirme denenemedi: A?ama 1a sonu? vermedi.")
+        s1b.notes.append("YouTube indirme denenemedi: Aşama 1a sonuç vermedi.")
     s1b.seconds = round(time.perf_counter() - t0, 3)
     return [s1a, s1b]
 
@@ -342,25 +360,82 @@ async def _synthetic(kind: str, path: Path) -> str:
     return str(path)
 
 
+async def _prepare_stage4_inputs(state: dict[str, Any], st: Stage) -> tuple[str, str, Path]:
+    video = state.get("video_path")
+    if not video:
+        video = await _synthetic("video", OUT / "synthetic_video.mp4")
+        st.notes.append("SYNTHETIC_INPUT: video (Aşama 1b indirilemedi).")
+    audio = state.get("audio_path")
+    if not audio:
+        audio = await _synthetic("audio", OUT / "synthetic_audio.mp3")
+        st.notes.append("SYNTHETIC_INPUT: ses (Aşama 3 çalışmadı).")
+
+    words = state.get("word_timings")
+    if not words:
+        raise MissingTimestampsError("Kelime zamanlamaları bulunamadı! Sentetik altyazı reddedildi. İşlem iptal ediliyor.")
+    ass_path = OUT / "subs.ass"
+    ass_path.write_text(AssDocument.generate(words, SubtitleStyle()), encoding="utf-8")
+    return video, audio, ass_path
+
+
+async def _run_stage4_hw_and_draft_checks(
+    st: Stage,
+    video: str,
+    audio: str,
+    ass_path: Path,
+    encoder: str,
+    cuda: bool,
+    dt_final: float,
+) -> None:
+    hw_used = encoder != "libx264"
+    st.metrics["hardware_encoder_used"] = hw_used
+    if cuda and st.metrics["h264_nvenc_in_ffmpeg_build"] and not hw_used:
+        st.status = "FAIL"
+        st.notes.append("KRİTİK: GPU ve NVENC mevcut ama seçici libx264'e düştü.")
+    if not hw_used and not cuda:
+        st.notes.append("Donanım encoder'ı bulunamadı; yazılım yedeği (libx264) kullanıldı.")
+    if hw_used:
+        cpu_cmd = FFmpegCompiler.build_render_command(
+            make_template(), audio, str(ass_path), [video], str(OUT / "render_cpu.mp4"), encoder="libx264"
+        )
+        cpu_cmd[-1:-1] = ["-t", str(RENDER_SECONDS)]
+        t1 = time.perf_counter()
+        code, _, err = await run_cmd(*cpu_cmd)
+        st.metrics["libx264_comparison_seconds"] = round(time.perf_counter() - t1, 3) if code == 0 else None
+        if code != 0:
+            st.notes.append(f"libx264 karşılaştırma encode başarısız: {err[-150:]}")
+
+    draft_out = OUT / "render_draft.mp4"
+    draft_cmd = FFmpegCompiler.build_render_command(
+        make_template(),
+        audio,
+        str(ass_path),
+        [video],
+        str(draft_out),
+        profile=RenderProfile.DRAFT,
+        duration_sec=float(RENDER_SECONDS),
+    )
+    t_draft = time.perf_counter()
+    code_d, _, _ = await run_cmd(*draft_cmd)
+    dt_draft = time.perf_counter() - t_draft
+    draft_summary = probe_summary(await ffprobe(str(draft_out))) if code_d == 0 else {}
+    st.metrics["draft_render_seconds"] = round(dt_draft, 3) if code_d == 0 else None
+    st.metrics["draft_speed_x_realtime"] = round(RENDER_SECONDS / max(dt_draft, 1e-9), 2) if code_d == 0 else None
+    st.metrics["draft_resolution"] = draft_summary.get("resolution")
+
+    if dt_draft >= 10.0:
+        st.status = "FAIL"
+        st.notes.append(f"K-611 İhlali: DRAFT render süresi ({dt_draft:.2f}s) >= 10.0s!")
+    if dt_final >= 120.0:
+        st.status = "FAIL"
+        st.notes.append(f"K-611 İhlali: FINAL render süresi ({dt_final:.2f}s) >= 120.0s!")
+
+
 async def stage4_render(state: dict[str, Any]) -> Stage:
     st = Stage(f"4 FFmpeg render ({RENDER_SECONDS} sn, compiler+runner)")
     t_all = time.perf_counter()
     try:
-        video = state.get("video_path")
-        if not video:
-            video = await _synthetic("video", OUT / "synthetic_video.mp4")
-            st.notes.append("SYNTHETIC_INPUT: video (Aşama 1b indirilemedi).")
-        audio = state.get("audio_path")
-        if not audio:
-            audio = await _synthetic("audio", OUT / "synthetic_audio.mp3")
-            st.notes.append("SYNTHETIC_INPUT: ses (Aşama 3 çalışmadı).")
-
-        words = state.get("word_timings")
-        if not words:
-            raise MissingTimestampsError("Kelime zamanlamaları bulunamadı! Sentetik altyazı reddedildi. İşlem iptal ediliyor.")
-        ass_path = OUT / "subs.ass"
-        ass_path.write_text(AssDocument.generate(words, SubtitleStyle()), encoding="utf-8")
-
+        video, audio, ass_path = await _prepare_stage4_inputs(state, st)
         out_path = OUT / "render.mp4"
         encoder = await select_video_encoder()
         cmd = FFmpegCompiler.build_render_command(
@@ -391,7 +466,8 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
         st.metrics.update(
             render_seconds=round(dt, 3),
             speed_x_realtime=round(RENDER_SECONDS / max(dt, 1e-9), 2),
-            progress_events=events, **summary,
+            progress_events=events,
+            **summary,
         )
         ok_media = (
             summary["resolution"] == "1080x1920"
@@ -400,47 +476,7 @@ async def stage4_render(state: dict[str, Any]) -> Stage:
             and abs(summary["duration_sec"] - RENDER_SECONDS) < 1.0
         )
         st.status = "PASS" if completed and ok_media else "FAIL"
-        hw_used = encoder != "libx264"
-        st.metrics["hardware_encoder_used"] = hw_used
-        if cuda and st.metrics["h264_nvenc_in_ffmpeg_build"] and not hw_used:
-            st.status = "FAIL"
-            st.notes.append("KR?T?K: GPU ve NVENC mevcut ama se?ici libx264'e d??t?.")
-        if not hw_used and not cuda:
-            st.notes.append("Donan?m encoder'? bulunamad?; yaz?l?m yede?i (libx264) kullan?ld?.")
-        if hw_used:
-            cpu_cmd = FFmpegCompiler.build_render_command(
-                make_template(), audio, str(ass_path), [video], str(OUT / "render_cpu.mp4"),
-                encoder="libx264",
-            )
-            cpu_cmd[-1:-1] = ["-t", str(RENDER_SECONDS)]
-            t1 = time.perf_counter()
-            code, _, err = await run_cmd(*cpu_cmd)
-            st.metrics["libx264_comparison_seconds"] = round(time.perf_counter() - t1, 3) if code == 0 else None
-            if code != 0:
-                st.notes.append(f"libx264 kar??la?t?rma encode ba?ar?s?z: {err[-150:]}")
-
-        # K-611 DRAFT Profil Önizleme (< 10 sn)
-        draft_out = OUT / "render_draft.mp4"
-        draft_cmd = FFmpegCompiler.build_render_command(
-            make_template(), audio, str(ass_path), [video], str(draft_out),
-            profile=RenderProfile.DRAFT,
-            duration_sec=float(RENDER_SECONDS),
-        )
-        t_draft = time.perf_counter()
-        code_d, _, err_d = await run_cmd(*draft_cmd)
-        dt_draft = time.perf_counter() - t_draft
-        draft_summary = probe_summary(await ffprobe(str(draft_out))) if code_d == 0 else {}
-        st.metrics["draft_render_seconds"] = round(dt_draft, 3) if code_d == 0 else None
-        st.metrics["draft_speed_x_realtime"] = round(RENDER_SECONDS / max(dt_draft, 1e-9), 2) if code_d == 0 else None
-        st.metrics["draft_resolution"] = draft_summary.get("resolution")
-
-        # Katı Süre Kontrolleri
-        if dt_draft >= 10.0:
-            st.status = "FAIL"
-            st.notes.append(f"K-611 İhlali: DRAFT render süresi ({dt_draft:.2f}s) >= 10.0s!")
-        if dt >= 120.0:
-            st.status = "FAIL"
-            st.notes.append(f"K-611 İhlali: FINAL render süresi ({dt:.2f}s) >= 120.0s!")
+        await _run_stage4_hw_and_draft_checks(st, video, audio, ass_path, encoder, cuda, dt)
     except Exception as exc:  # noqa: BLE001
         st.notes.append(f"{type(exc).__name__}: {exc}")
         st.notes.append(traceback.format_exc(limit=4).splitlines()[-1])

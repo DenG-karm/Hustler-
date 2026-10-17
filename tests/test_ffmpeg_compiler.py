@@ -152,3 +152,25 @@ def test_unknown_encoder_is_rejected(template: TemplateSpec) -> None:
         FFmpegCompiler.build_render_command(
             template, "t.mp3", "s.ass", ["a.mp4"], "o.mp4", encoder="h264_bogus"
         )
+
+
+def test_compiler_integrates_transition_planner_xfade_and_audio_mixer_loudnorm(
+    template: TemplateSpec,
+) -> None:
+    cmd = FFmpegCompiler.build_render_command(
+        template,
+        "tts.mp3",
+        "s.ass",
+        ["a.mp4", "b.mp4"],
+        "out.mp4",
+        bg_music_path="bg.mp3",
+        clip_durations=[5.0, 5.0],
+        transition_sec=0.5,
+        use_loudnorm=True,
+    )
+    graph = _graph(cmd)
+    assert any("xfade=transition=fade:duration=0.5:offset=4.500" in line for line in graph)
+    assert any("loudnorm=I=-16:TP=-1.5:LRA=11" in line for line in graph)
+    maps = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-map"]
+    GraphValidator.validate_graph(graph, maps)
+

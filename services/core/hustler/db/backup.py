@@ -94,6 +94,28 @@ def _resolve_path(target: Path | str | object) -> Path:
     return Path(str(target))
 
 
+def _purge_cache_tables_and_vacuum(dst_conn: sqlite3.Connection) -> list[str]:
+    cursor = dst_conn.execute("SELECT name FROM sqlite_master WHERE type='table';")
+    tables = [row[0] for row in cursor.fetchall()]
+    cleaned_tables: list[str] = []
+    for tbl in tables:
+        if is_cache_table(tbl):
+            dst_conn.execute(f"DELETE FROM [{tbl}];")
+            cleaned_tables.append(tbl)
+    dst_conn.commit()
+    dst_conn.execute("VACUUM;")
+    dst_conn.commit()
+    return cleaned_tables
+
+
+def _unlink_on_error(dst_path: Path) -> None:
+    if dst_path.exists():
+        try:
+            dst_path.unlink()
+        except OSError:
+            pass
+
+
 def create_backup(
     source_db_path: Path | str | object,
     target_backup_path: Path | str | object,
@@ -128,22 +150,7 @@ def create_backup(
 
         # SQLite C-seviyesi yerel Online Backup API çağrısı
         src_conn.backup(dst_conn, pages=pages_per_step, progress=progress_callback)
-
-        # Önbellek tablolarının tespiti ve yedekten temizlenmesi (DELETE FROM)
-        cursor = dst_conn.execute("SELECT name FROM sqlite_master WHERE type='table';")
-        tables = [row[0] for row in cursor.fetchall()]
-
-        cleaned_tables: list[str] = []
-        for tbl in tables:
-            if is_cache_table(tbl):
-                dst_conn.execute(f"DELETE FROM [{tbl}];")
-                cleaned_tables.append(tbl)
-
-        dst_conn.commit()
-
-        # Önbellek kaldırıldıktan sonra ayrılmış sayfaları işletim sistemine iade et
-        dst_conn.execute("VACUUM;")
-        dst_conn.commit()
+        cleaned_tables = _purge_cache_tables_and_vacuum(dst_conn)
 
         logger.info(
             "sqlite_backup_completed",
@@ -152,14 +159,9 @@ def create_backup(
             excluded_tables=cleaned_tables,
             backup_size_bytes=dst_path.stat().st_size,
         )
-
     except Exception as e:
         logger.error("sqlite_backup_failed", error=str(e), source=str(src_path))
-        if dst_path.exists():
-            try:
-                dst_path.unlink()
-            except OSError:
-                pass
+        _unlink_on_error(dst_path)
         raise BackupError(f"Yedekleme işlemi başarısız oldu: {e}") from e
     finally:
         if dst_conn:

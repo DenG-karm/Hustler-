@@ -37,6 +37,7 @@ fn is_route_allowed(route: &str) -> bool {
     let exact_matches = [
         "/health",
         "/events",
+        "/api/v1/system/shutdown",
         "/api/v1/discovery/run",
         "/api/v1/jobs",
         "/api/v1/pipeline/script",
@@ -349,6 +350,52 @@ fn health_ok(port: u16) -> bool {
     matches!(stream.read(&mut buf), Ok(n) if n > 0 && buf[..n].starts_with(b"HTTP/1.1 200"))
 }
 
+static SHUTDOWN_TRIGGERED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn send_graceful_shutdown(port: u16, token: &str) {
+    if SHUTDOWN_TRIGGERED.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        return;
+    }
+    let addr = std::net::SocketAddr::from(([127, 0, 0, 1], port));
+    let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
+        log::warn!("[Shutdown] Sidecar TCP soketine bağlanılamadı (port: {port})");
+        return;
+    };
+    let _ = stream.set_read_timeout(Some(Duration::from_millis(1500)));
+    let _ = stream.set_write_timeout(Some(Duration::from_millis(1000)));
+
+    let request = format!(
+        "POST /api/v1/system/shutdown HTTP/1.1\r\n\
+         Host: 127.0.0.1\r\n\
+         Authorization: Bearer {token}\r\n\
+         Content-Length: 0\r\n\
+         Connection: close\r\n\r\n"
+    );
+
+    if let Err(e) = stream.write_all(request.as_bytes()) {
+        log::warn!("[Shutdown] Sidecar kapanış komutu gönderilemedi: {e}");
+        return;
+    }
+
+    let mut buf = [0u8; 128];
+    let _ = stream.read(&mut buf);
+    log::info!("[Shutdown] Sidecar zarifçe kapatıldı (/api/v1/system/shutdown tetiklendi).");
+
+    // HTTP yanıtı sonrası sürecin ve TCP dinleyicisinin kapanmasını bekle (maksimum 2 saniye)
+    let wait_start = std::time::Instant::now();
+    let max_wait = Duration::from_secs(2);
+    while wait_start.elapsed() < max_wait {
+        std::thread::sleep(Duration::from_millis(50));
+        if TcpStream::connect_timeout(&addr, Duration::from_millis(50)).is_err() {
+            log::info!(
+                "[Shutdown] Sidecar soketi kapandı ({:?} içinde temiz kapanış doğrulandı).",
+                wait_start.elapsed()
+            );
+            break;
+        }
+    }
+}
+
 fn resolve_sidecar_binary() -> Option<std::path::PathBuf> {
     // 1. Üretim paketi: Mevcut uygulamanın yanında veya binaries klasöründe
     if let Ok(current_exe) = std::env::current_exe() {
@@ -545,7 +592,7 @@ fn spawn_event_bridge(app_handle: tauri::AppHandle, port: u16, token: String) {
 // ---------------------------------------------------------------------------
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let app = tauri::Builder::default()
         .setup(|app| {
             if cfg!(debug_assertions) {
                 app.handle().plugin(
@@ -587,6 +634,18 @@ pub fn run() {
             ipc::flow_save_active_session,
             ipc::diagnostics_export_bundle
         ])
-        .run(tauri::generate_context!())
-        .expect("Tauri başlatılamadı");
+        .build(tauri::generate_context!())
+        .expect("Tauri oluşturulamadı");
+
+    app.run(|app_handle, event| {
+        if let tauri::RunEvent::Exit = event {
+            log::info!("[Tauri] RunEvent::Exit yakalandı, pencereler gizleniyor ve sidecar zarifçe kapatılıyor...");
+            for window in app_handle.webview_windows().values() {
+                let _ = window.hide();
+            }
+            if let Some(state) = app_handle.try_state::<SidecarState>() {
+                send_graceful_shutdown(state.port, &state.token);
+            }
+        }
+    });
 }

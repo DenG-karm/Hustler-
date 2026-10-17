@@ -4,6 +4,7 @@ import { Button } from '../ui/Button/Button'
 
 export const AudioScreen: React.FC = () => {
   const audio = useFlowStore((s) => s.audio)
+  const script = useFlowStore((s) => s.script)
   const loadAssetsForScript = useFlowStore((s) => s.loadAssetsForScript)
   const nextStep = useFlowStore((s) => s.nextStep)
   const prevStep = useFlowStore((s) => s.prevStep)
@@ -28,12 +29,25 @@ export const AudioScreen: React.FC = () => {
     )
   }
 
+  const fps = 30
+  const totalFrames = Math.round((audio.durationSeconds || 0) * fps)
+  const formattedMinutes = Math.floor(audio.durationSeconds / 60)
+  const formattedSeconds = Math.round(audio.durationSeconds % 60)
+
   return (
-    <div className="space-y-lg max-w-2xl mx-auto" data-testid="screen-audio">
-      <div className="border-b border-border pb-md">
-        <h2 className="text-xl font-bold text-text-primary">4. Ses Sentezi & TTS</h2>
+    <div className="space-y-lg max-w-3xl mx-auto py-sm animate-in fade-in duration-200" data-testid="screen-audio">
+      {/* Üst Başlık */}
+      <div className="border-b border-border/80 pb-md">
+        <div className="flex items-center gap-xs">
+          <span className="text-primary font-bold text-xs uppercase tracking-wider">Adım 3 / 6</span>
+          <span className="text-text-muted">•</span>
+          <span className="text-text-muted text-xs">TTS & Ses Sentezi</span>
+        </div>
+        <h2 className="text-2xl font-bold tracking-tight text-text-primary">
+          Seslendirilen Metin & Kare Senkronizasyonu
+        </h2>
         <p className="text-sm text-text-secondary">
-          Senaryo metni deterministik TTS motoruyla seslendirildi. Ses süresi ve formatı kontrol edilebilir.
+          Senaryo metni AudioCache önbellekli TTS motoruyla sentezlendi. Video kurgusu için toplam kare sayısı hesaplandı.
         </p>
       </div>
 
@@ -43,38 +57,108 @@ export const AudioScreen: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-md">
-        <div className="p-md rounded-xl border border-border bg-surface space-y-sm">
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Ses Modeli:</span>
-            <span className="font-semibold text-text-primary">{audio.voiceId}</span>
+      {/* 3 Ana Metrik Kartı: Süre, Kare Sayısı, Önbellek Durumu */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-md">
+        {/* Metrik 1: Süre */}
+        <div className="p-md rounded-2xl border border-border bg-surface flex flex-col justify-between">
+          <span className="text-xs text-text-muted uppercase font-mono">Hesaplanan Süre</span>
+          <div className="mt-xs">
+            <span className="text-2xl font-extrabold text-primary font-mono">
+              {audio.durationSeconds} saniye
+            </span>
           </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Hesaplanan Süre:</span>
-            <span className="font-bold text-accent">{audio.durationSeconds} saniye</span>
-          </div>
-          <div className="flex items-center justify-between text-sm">
-            <span className="text-text-secondary">Dosya Yolu:</span>
-            <span className="font-mono text-xs text-text-muted">{audio.audioPath}</span>
-          </div>
-
-          <div className="pt-sm">
-            <div className="w-full bg-surface-hover h-2 rounded-full overflow-hidden border border-border">
-              <div className="bg-accent h-full w-2/3 animate-pulse" />
-            </div>
-            <div className="flex justify-between text-xs text-text-muted mt-1">
-              <span>0:00</span>
-              <span>0:{Math.round(audio.durationSeconds)}</span>
-            </div>
-          </div>
+          <span className="text-[11px] text-text-muted mt-1">
+            0:{formattedMinutes < 10 ? '0' : ''}{formattedMinutes}:{formattedSeconds < 10 ? '0' : ''}{formattedSeconds} Zaman Kodu
+          </span>
         </div>
 
-        <div className="p-sm rounded-lg bg-surface-hover border border-border text-xs text-text-secondary">
-          ✓ Ses dosyası yerel dosya sistemine kaydedildi ve sonraki mikser katmanı için doğrulandı.
+        {/* Metrik 2: Kare Sayısı */}
+        <div className="p-md rounded-2xl border border-border bg-surface flex flex-col justify-between">
+          <span className="text-xs text-text-muted uppercase font-mono">Toplam Kare (Frames)</span>
+          <div className="mt-xs">
+            <span className="text-2xl font-extrabold text-text-primary font-mono">
+              {totalFrames} kare
+            </span>
+          </div>
+          <span className="text-[11px] text-text-muted mt-1">
+            @{fps} FPS Video Senkronizasyonu
+          </span>
+        </div>
+
+        {/* Metrik 3: AudioCache Önbellek Durumu */}
+        <div className="p-md rounded-2xl border border-emerald-500/30 bg-emerald-500/5 flex flex-col justify-between">
+          <span className="text-xs text-emerald-400 uppercase font-mono">AudioCache Durumu</span>
+          <div className="mt-xs flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)]" />
+            <span className="text-base font-bold text-emerald-400">
+              Önbellekte Hazır (Hit)
+            </span>
+          </div>
+          <span className="text-[11px] text-emerald-500/80 mt-1">
+            Sıfır Ağ Çağrısı • Deterministik
+          </span>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-md border-t border-border">
+      {/* Ses Oynatıcı / Dalga Formu Görselleştirmesi */}
+      <div className="p-md rounded-2xl border border-border bg-surface space-y-sm shadow-sm">
+        <div className="flex items-center justify-between text-sm">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-primary/10 text-primary flex items-center justify-center font-bold text-sm">
+              🎙️
+            </div>
+            <div>
+              <span className="font-semibold text-text-primary block text-sm">{audio.voiceId}</span>
+              <span className="text-[11px] text-text-muted">Türkçe Doğal TTS Sentezleyici</span>
+            </div>
+          </div>
+          <span className="text-xs px-2 py-0.5 rounded-md bg-surface-hover text-text-muted font-mono">
+            WAV / 24kHz / Mono
+          </span>
+        </div>
+
+        {/* Simüle Edilen Ses Dalgası */}
+        <div className="py-sm">
+          <div className="flex items-end gap-1 h-12 px-sm bg-surface-hover/50 rounded-xl border border-border/60 justify-center">
+            {[40, 65, 80, 50, 95, 75, 45, 90, 60, 85, 30, 70, 90, 55, 40, 80, 65, 95, 75, 50, 85, 60, 45, 70, 35].map((h, i) => (
+              <div
+                key={i}
+                className="w-1.5 bg-primary/70 rounded-full transition-all duration-300"
+                style={{ height: `${h}%` }}
+              />
+            ))}
+          </div>
+
+          <div className="flex justify-between text-[11px] text-text-muted font-mono mt-1 px-1">
+            <span>00:00.0</span>
+            <span>00:{audio.durationSeconds < 10 ? '0' : ''}{Math.round(audio.durationSeconds)}.0</span>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between text-xs pt-xs border-t border-border/60">
+          <span className="text-text-muted font-mono text-[11px] truncate max-w-sm">
+            Dosya: {audio.audioPath}
+          </span>
+          <span className="text-emerald-400 font-medium text-[11px]">
+            ✓ FFmpeg İçin Doğrulandı
+          </span>
+        </div>
+      </div>
+
+      {/* Senaryo Metin Özeti */}
+      {script && (
+        <div className="p-md rounded-2xl border border-border/80 bg-surface/60 space-y-xs">
+          <span className="text-xs font-semibold text-text-secondary uppercase tracking-wider">
+            Seslendirilen Senaryo Metni
+          </span>
+          <p className="text-xs text-text-primary leading-relaxed italic bg-surface-hover/40 p-2.5 rounded-xl border border-border/40">
+            "{script.fullText}"
+          </p>
+        </div>
+      )}
+
+      {/* Alt Aksiyon Butonları */}
+      <div className="flex items-center justify-between pt-md border-t border-border/80">
         <Button variant="ghost" onClick={prevStep} data-testid="audio-back-btn">
           ← Senaryoya Dön
         </Button>

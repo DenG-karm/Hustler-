@@ -353,3 +353,139 @@ async def test_valid_backup_restores_over_live_database_cleanly(
             assert rows[1][2] == "İkinci kritik kayıt"
     finally:
         await reader.close()
+
+
+@pytest.mark.asyncio
+async def test_reader_pool_reuses_connections_and_enforces_foreign_keys(
+    db: Database,
+) -> None:
+    """ReaderPool aynı aiosqlite bağlantısını yeniden kullanır (Zero-Thread-Churn) ve PRAGMA foreign_keys=ON zorlar."""
+    import aiosqlite
+
+    r1 = await db.get_reader()
+    raw_conn_1 = r1._conn
+    async with r1.execute("PRAGMA foreign_keys;") as cur:
+        fk_row = await cur.fetchone()
+        assert fk_row is not None and fk_row[0] == 1
+    await r1.close()
+
+    r2 = await db.get_reader()
+    raw_conn_2 = r2._conn
+    await r2.close()
+
+    # Aynı bağlantı havuzdan geri dönmeli
+    assert raw_conn_1 is raw_conn_2
+
+    # Writer üzerinde de PRAGMA foreign_keys=ON zorlanmalı
+    await db.execute_write("CREATE TABLE parent_tbl (id TEXT PRIMARY KEY)")
+    await db.execute_write(
+        "CREATE TABLE child_tbl (id TEXT PRIMARY KEY, parent_id TEXT NOT NULL REFERENCES parent_tbl(id) ON DELETE CASCADE)"
+    )
+    with pytest.raises(aiosqlite.IntegrityError):
+        await db.execute_write(
+            "INSERT INTO child_tbl (id, parent_id) VALUES (?, ?)",
+            ("c1", "non_existent_parent"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_executemany_write_commits_batch_in_single_transaction(
+    db: Database,
+) -> None:
+    """executemany_write çoklu satırları tek bir atomik transaction içinde yazar."""
+    await db.execute_write("CREATE TABLE batch_items (id INT PRIMARY KEY, label TEXT)")
+    batch = [(i, f"item_{i}") for i in range(50)]
+    await db.executemany_write("INSERT INTO batch_items (id, label) VALUES (?, ?)", batch)
+
+    async with await db.get_reader() as reader:
+        async with reader.execute("SELECT COUNT(*) FROM batch_items") as cur:
+            row = await cur.fetchone()
+            assert row is not None and row[0] == 50
+
+
+@pytest.mark.asyncio
+async def test_session_state_payload_envelope_roundtrip_preserves_all_fields(
+    db: Database,
+) -> None:
+    """Frontend persistSessionToBackend tarafından gönderilen state_payload zarfı veri kaybı olmadan kaydedilir ve okunur."""
+    from types import SimpleNamespace
+    from services.core.hustler.api.routes.pipeline import (
+        SaveSessionRequest,
+        get_active_session,
+        save_session,
+    )
+
+    repo = ProjectSessionRepository(db)
+    await repo.init_table()
+    fake_req = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(db=db, session_repo=repo)))
+
+    payload = SaveSessionRequest(
+        id="session_scr_123",
+        topic="Kuantum Hesaplama",
+        current_step="PREVIEW",
+        checkpoint_step="PREVIEW",
+        status="IDLE",
+        state_payload={
+            "topic": "Kuantum Hesaplama",
+            "ideas": [{"id": "idea_1", "title": "Kuantum Çipleri", "score": 94.2}],
+            "selectedIdea": {"id": "idea_1", "title": "Kuantum Çipleri", "score": 94.2},
+            "script": {"id": "scr_123", "title": "Kuantum Çipleri", "isApproved": True},
+            "audio": {"voiceId": "tr-TR-Standard-A", "audioPath": "cache/audio.wav", "isGenerated": True},
+            "assets": {"allSlotsFilled": True, "slots": [{"slotId": "s1", "assignedPath": "assets/video/hook.mp4"}]},
+            "preview": {"previewUrl": "assets/previews/scr_123_preview.mp4", "isVerified": True},
+            "render": {"jobId": "job_1", "profile": "DRAFT", "status": "IDLE", "progress": 0},
+        },
+    )
+
+    await save_session(payload, fake_req)  # type: ignore[arg-type]
+    active_resp = await get_active_session(fake_req)  # type: ignore[arg-type]
+    session_dict = active_resp["session"]
+    assert isinstance(session_dict, dict)
+    assert session_dict["id"] == "session_scr_123"
+    assert session_dict["selected_idea"] == {"id": "idea_1", "title": "Kuantum Çipleri", "score": 94.2}
+    sp = session_dict["state_payload"]
+    assert isinstance(sp, dict)
+    assert sp["selectedIdea"] == {"id": "idea_1", "title": "Kuantum Çipleri", "score": 94.2}
+    assert sp["script"] == {"id": "scr_123", "title": "Kuantum Çipleri", "isApproved": True}
+    assert sp["audio"] == {"voiceId": "tr-TR-Standard-A", "audioPath": "cache/audio.wav", "isGenerated": True}
+    assert sp["preview"] == {"previewUrl": "assets/previews/scr_123_preview.mp4", "isVerified": True}
+
+
+@pytest.mark.asyncio
+async def test_bounded_reader_pool_never_exceeds_pool_size_and_rejects_after_close(
+    tmp_path: Path,
+) -> None:
+    """12 eşzamanlı okuyucu aynı anda çalıştığında fiziksel bağlantı sayısı asla reader_pool_size (4) sınırını aşmaz ve close() sonrası RuntimeError fırlatır."""
+    import asyncio
+
+    bounded_db = Database(tmp_path / "bounded.db", reader_pool_size=4)
+    await bounded_db.init()
+    await bounded_db.execute_write("CREATE TABLE t (x INT)")
+    await bounded_db.execute_write("INSERT INTO t (x) VALUES (1)")
+
+    max_observed_conns = 0
+
+    async def reader_worker() -> int:
+        nonlocal max_observed_conns
+        async with await bounded_db.get_reader() as r:
+            max_observed_conns = max(max_observed_conns, len(bounded_db._all_reader_conns))
+            await asyncio.sleep(0.01)
+            async with r.execute("SELECT x FROM t") as cur:
+                row = await cur.fetchone()
+                return int(row[0]) if row else 0
+
+    results = await asyncio.gather(*(reader_worker() for _ in range(12)))
+    assert results == [1] * 12
+    assert max_observed_conns <= 4
+    assert len(bounded_db._all_reader_conns) <= 4
+
+    await bounded_db.close()
+    assert len(bounded_db._all_reader_conns) == 0
+
+    with pytest.raises(RuntimeError, match="Database is closed"):
+        await bounded_db.get_reader()
+
+    with pytest.raises(RuntimeError, match="Database is closed"):
+        await bounded_db.execute_write("INSERT INTO t (x) VALUES (2)")
+
+

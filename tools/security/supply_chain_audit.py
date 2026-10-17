@@ -208,6 +208,63 @@ def _parse_npm_pkg_json(pkg_path: Path) -> tuple[str | None, str, str]:
         return None, "0.0.0", "UNKNOWN"
 
 
+def _record_npm_pkg_file(p_file: Path, installed_map: dict[str, tuple[str, str]]) -> None:
+    if not p_file.exists():
+        return
+    name, ver, lic = _parse_npm_pkg_json(p_file)
+    if name and name not in installed_map:
+        installed_map[name] = (ver, lic)
+
+
+def _scan_node_modules_dir(nm_dir: Path, installed_map: dict[str, tuple[str, str]]) -> None:
+    if not nm_dir.exists():
+        return
+    for sub in nm_dir.iterdir():
+        if sub.name.startswith(".") or not sub.is_dir():
+            continue
+        if sub.name.startswith("@"):
+            for scoped_sub in sub.iterdir():
+                if scoped_sub.is_dir():
+                    _record_npm_pkg_file(scoped_sub / "package.json", installed_map)
+        else:
+            _record_npm_pkg_file(sub / "package.json", installed_map)
+
+
+def _scan_pnpm_store_dir(pnpm_dir: Path, installed_map: dict[str, tuple[str, str]]) -> None:
+    if not pnpm_dir.exists():
+        return
+    for pattern in ("*/node_modules/*/package.json", "*/node_modules/@*/*/package.json"):
+        for p_json in pnpm_dir.glob(pattern):
+            _record_npm_pkg_file(p_json, installed_map)
+
+
+def _build_package_record(
+    name: str,
+    ver: str,
+    lic: str,
+    ecosystem: str,
+    is_dev: bool,
+) -> tuple[dict[str, Any], bool]:
+    is_allowed = is_allowed_license(lic)
+    is_copyleft = is_strong_copyleft(lic)
+    record: dict[str, Any] = {
+        "name": name,
+        "version": ver,
+        "ecosystem": ecosystem,
+        "license": lic,
+        "is_dev": is_dev,
+        "is_allowed": is_allowed,
+        "violation": None,
+    }
+    if is_copyleft:
+        record["violation"] = "STRONG_COPYLEFT_GPL_OR_AGPL"
+        return record, True
+    if not is_allowed and not is_dev:
+        record["violation"] = "UNAPPROVED_OR_UNKNOWN_LICENSE"
+        return record, True
+    return record, False
+
+
 def audit_frontend_packages(repo_root: Path = REPO_ROOT) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     packages: list[dict[str, Any]] = []
     violations: list[dict[str, Any]] = []
@@ -224,86 +281,20 @@ def audit_frontend_packages(repo_root: Path = REPO_ROOT) -> tuple[list[dict[str,
         except Exception:
             pass
 
-    # 1. Doğrudan ve kapsamlı node_modules yolları
-    nm_dirs = [
-        repo_root / "apps" / "desktop" / "node_modules",
-        repo_root / "node_modules",
-    ]
-
     installed_map: dict[str, tuple[str, str]] = {}
+    for nm_dir in (repo_root / "apps" / "desktop" / "node_modules", repo_root / "node_modules"):
+        _scan_node_modules_dir(nm_dir, installed_map)
 
-    for nm_dir in nm_dirs:
-        if not nm_dir.exists():
-            continue
+    for pnpm_dir in (repo_root / "node_modules" / ".pnpm", repo_root / "apps" / "desktop" / "node_modules" / ".pnpm"):
+        _scan_pnpm_store_dir(pnpm_dir, installed_map)
 
-        for sub in nm_dir.iterdir():
-            if sub.name.startswith("."):
-                continue
-            if sub.name.startswith("@") and sub.is_dir():
-                for scoped_sub in sub.iterdir():
-                    if scoped_sub.is_dir():
-                        p_file = scoped_sub / "package.json"
-                        if p_file.exists():
-                            name, ver, lic = _parse_npm_pkg_json(p_file)
-                            if name and name not in installed_map:
-                                installed_map[name] = (ver, lic)
-            elif sub.is_dir():
-                p_file = sub / "package.json"
-                if p_file.exists():
-                    name, ver, lic = _parse_npm_pkg_json(p_file)
-                    if name and name not in installed_map:
-                        installed_map[name] = (ver, lic)
-
-    # 2. Gerçek pnpm Ağacı Taraması (.pnpm körlüğünün giderilmesi)
-    # node_modules/.pnpm altındaki tüm transitive (alt) paketleri tara
-    pnpm_dirs = [
-        repo_root / "node_modules" / ".pnpm",
-        repo_root / "apps" / "desktop" / "node_modules" / ".pnpm",
-    ]
-
-    for pnpm_dir in pnpm_dirs:
-        if not pnpm_dir.exists():
-            continue
-
-        for p_json in pnpm_dir.glob("*/node_modules/*/package.json"):
-            name, ver, lic = _parse_npm_pkg_json(p_json)
-            if name and name not in installed_map:
-                installed_map[name] = (ver, lic)
-
-        for p_json in pnpm_dir.glob("*/node_modules/@*/*/package.json"):
-            name, ver, lic = _parse_npm_pkg_json(p_json)
-            if name and name not in installed_map:
-                installed_map[name] = (ver, lic)
-
-    # Bildirilen ve kurulu tüm paketleri birleştir
     all_package_names = set(installed_map.keys()) | declared_prod | declared_dev
-
     for pkg_name in sorted(all_package_names):
         ver, lic = installed_map.get(pkg_name, ("0.0.0", "UNKNOWN"))
-        # Üretim ağacı haricindeki tüm paketler geliştirme/derleme alt ağacı (dev) kabul edilir
         is_dev = (pkg_name in declared_dev) or (pkg_name not in declared_prod)
-        is_allowed = is_allowed_license(lic)
-        is_copyleft = is_strong_copyleft(lic)
-
-        record: dict[str, Any] = {
-            "name": pkg_name,
-            "version": ver,
-            "ecosystem": "npm",
-            "license": lic,
-            "is_dev": is_dev,
-            "is_allowed": is_allowed,
-        }
-
-        if is_copyleft:
-            record["violation"] = "STRONG_COPYLEFT_GPL_OR_AGPL"
+        record, is_violated = _build_package_record(pkg_name, ver, lic, "npm", is_dev)
+        if is_violated:
             violations.append(record)
-        elif not is_allowed and not is_dev:
-            # Üretim ağacındaki onaysız veya bilinmeyen lisanslar ihlaldir
-            record["violation"] = "UNAPPROVED_OR_UNKNOWN_LICENSE"
-            violations.append(record)
-        else:
-            record["violation"] = None
-
         packages.append(record)
 
     return packages, violations
@@ -312,6 +303,49 @@ def audit_frontend_packages(repo_root: Path = REPO_ROOT) -> tuple[list[dict[str,
 # -----------------------------------------------------------------------------
 # 3. Rust (cargo metadata) Dinamik Paket Lisans Denetimi
 # -----------------------------------------------------------------------------
+def _load_cargo_metadata_json(src_tauri_dir: Path) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    cmd = ["cargo", "metadata", "--format-version", "1", "--filter-platform", "x86_64-pc-windows-msvc", "--offline"]
+    res = subprocess.run(cmd, cwd=str(src_tauri_dir), capture_output=True, encoding="utf-8", errors="replace")
+    if res.returncode != 0:
+        fallback_cmd = ["cargo", "metadata", "--format-version", "1", "--no-deps"]
+        res = subprocess.run(
+            fallback_cmd, cwd=str(src_tauri_dir), capture_output=True, encoding="utf-8", errors="replace"
+        )
+    if res.returncode != 0:
+        return None, {
+            "name": "cargo-metadata",
+            "version": "0.0.0",
+            "ecosystem": "cargo",
+            "license": "UNKNOWN",
+            "is_dev": False,
+            "is_allowed": False,
+            "violation": f"cargo metadata failed: {res.stderr[:200]}",
+        }
+    try:
+        return json.loads(res.stdout), None
+    except Exception as e:
+        return None, {
+            "name": "cargo-metadata-json",
+            "version": "0.0.0",
+            "ecosystem": "cargo",
+            "license": "UNKNOWN",
+            "is_dev": False,
+            "is_allowed": False,
+            "violation": f"cargo metadata JSON parse failed: {e}",
+        }
+
+
+def _load_cargo_build_deps(src_tauri_dir: Path) -> set[str]:
+    cargo_toml_path = src_tauri_dir / "Cargo.toml"
+    if not cargo_toml_path.exists():
+        return set()
+    try:
+        c_toml_data = tomllib.loads(cargo_toml_path.read_text(encoding="utf-8"))
+        return set(c_toml_data.get("build-dependencies", {}).keys())
+    except Exception:
+        return set()
+
+
 def audit_rust_packages(repo_root: Path = REPO_ROOT) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     packages: list[dict[str, Any]] = []
     violations: list[dict[str, Any]] = []
@@ -320,103 +354,25 @@ def audit_rust_packages(repo_root: Path = REPO_ROOT) -> tuple[list[dict[str, Any
     if not src_tauri_dir.exists():
         return packages, violations
 
-    # cargo metadata komutunu çalıştır
-    # Windows platform filtrelemesi ve offline bayrağı ile tam bağımlılık ağacını çek
-    cmd = ["cargo", "metadata", "--format-version", "1", "--filter-platform", "x86_64-pc-windows-msvc", "--offline"]
-    res = subprocess.run(
-        cmd,
-        cwd=str(src_tauri_dir),
-        capture_output=True,
-        encoding="utf-8",
-        errors="replace",
-    )
-    if res.returncode != 0:
-        # Fallback: doğrudan bağımlılıklar için --no-deps
-        fallback_cmd = ["cargo", "metadata", "--format-version", "1", "--no-deps"]
-        res = subprocess.run(
-            fallback_cmd,
-            cwd=str(src_tauri_dir),
-            capture_output=True,
-            encoding="utf-8",
-            errors="replace",
-        )
+    data, err_record = _load_cargo_metadata_json(src_tauri_dir)
+    if err_record is not None or data is None:
+        return packages, [err_record] if err_record else []
 
-    if res.returncode != 0:
-        return packages, [
-            {
-                "name": "cargo-metadata",
-                "version": "0.0.0",
-                "ecosystem": "cargo",
-                "license": "UNKNOWN",
-                "is_dev": False,
-                "is_allowed": False,
-                "violation": f"cargo metadata failed: {res.stderr[:200]}",
-            }
-        ]
-
-    try:
-        data = json.loads(res.stdout)
-    except Exception as e:
-        return packages, [
-            {
-                "name": "cargo-metadata-json",
-                "version": "0.0.0",
-                "ecosystem": "cargo",
-                "license": "UNKNOWN",
-                "is_dev": False,
-                "is_allowed": False,
-                "violation": f"cargo metadata JSON parse failed: {e}",
-            }
-        ]
-
-    # Cargo.toml içindeki build-dependencies listesini tespit et
-    cargo_toml_path = src_tauri_dir / "Cargo.toml"
-    build_deps: set[str] = set()
-    if cargo_toml_path.exists():
-        try:
-            c_toml_data = tomllib.loads(cargo_toml_path.read_text(encoding="utf-8"))
-            build_deps = set(c_toml_data.get("build-dependencies", {}).keys())
-        except Exception:
-            pass
-
-    raw_packages = data.get("packages", [])
+    build_deps = _load_cargo_build_deps(src_tauri_dir)
     internal_crates = {"app", "app_lib", "hustler-desktop", "desktop"}
 
-    for p in raw_packages:
+    for p in data.get("packages", []):
         name = p.get("name", "")
         ver = p.get("version", "0.0.0")
         raw_lic = (p.get("license") or "").strip()
-
-        # Kendi dahili monorepo paketimiz veya harici kaynağı olmayan kod için lisansı MIT kabul et
         if name in internal_crates or not p.get("source"):
             resolved_lic = "MIT"
-        elif not raw_lic:
-            resolved_lic = "UNKNOWN"
         else:
-            resolved_lic = raw_lic
+            resolved_lic = raw_lic or "UNKNOWN"
 
-        is_dev = name in build_deps
-        is_allowed = is_allowed_license(resolved_lic)
-        is_copyleft = is_strong_copyleft(resolved_lic)
-
-        record: dict[str, Any] = {
-            "name": name,
-            "version": ver,
-            "ecosystem": "cargo",
-            "license": resolved_lic,
-            "is_dev": is_dev,
-            "is_allowed": is_allowed,
-        }
-
-        if is_copyleft:
-            record["violation"] = "STRONG_COPYLEFT_GPL_OR_AGPL"
+        record, is_violated = _build_package_record(name, ver, resolved_lic, "cargo", name in build_deps)
+        if is_violated:
             violations.append(record)
-        elif not is_allowed and not is_dev:
-            record["violation"] = "UNAPPROVED_OR_UNKNOWN_LICENSE"
-            violations.append(record)
-        else:
-            record["violation"] = None
-
         packages.append(record)
 
     return packages, violations

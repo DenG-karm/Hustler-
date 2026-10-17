@@ -1,10 +1,10 @@
-﻿"""Discovery route: gerçek sidecar/ağ yok; YouTube ve orkestratör sahtelenir."""
+"""Discovery route: gerçek sidecar/ağ yok; YouTube ve orkestratör sahtelenir."""
 
 import time
 from collections.abc import AsyncIterator
 from types import TracebackType
 from typing import Optional
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import httpx
 import pytest
@@ -13,6 +13,7 @@ from pydantic import BaseModel
 
 from services.core.hustler.api.routes import discovery as discovery_route
 from services.core.hustler.api.routes.discovery import router
+from services.core.hustler.discovery.canary import CanaryReport, CanaryStatus
 
 TOKEN = "unit-test-token"
 URL = "/api/v1/discovery/run"
@@ -70,6 +71,11 @@ async def client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[httpx.AsyncCl
     with (
         patch.object(discovery_route, "YouTubeClient", FakeYouTubeClient),
         patch.object(discovery_route, "DiscoveryOrchestrator", FakeOrchestrator),
+        patch.object(
+            discovery_route,
+            "run_ytdlp_canary_async",
+            AsyncMock(return_value=CanaryReport(status=CanaryStatus.HEALTHY)),
+        ),
     ):
         async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
             yield c

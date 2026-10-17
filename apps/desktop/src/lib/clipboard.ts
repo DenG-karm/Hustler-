@@ -15,7 +15,7 @@
  * toMatchSnapshot() ile kilitlenmiştir.
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { secureInvoke } from './securityGuard'
 import type { FlowState } from '../store/flowStore'
 
 /**
@@ -87,7 +87,7 @@ export function buildClipboardPrompt(snapshot: FlowSnapshot): string {
  * navigator.clipboard KULLANILMAZ — Tauri Rust IPC üzerinden pano yazılır.
  */
 export async function clipboardWrite(text: string): Promise<void> {
-  await invoke('plugin:clipboard|write_text', { text })
+  await secureInvoke('plugin:clipboard|write_text', { text })
 }
 
 /**

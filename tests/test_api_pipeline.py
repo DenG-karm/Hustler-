@@ -123,3 +123,39 @@ async def test_pipeline_save_script_idempotent(db: Database) -> None:
         assert data3["content_hash"] != data1["content_hash"]
         assert data3["updated_at"] >= data1["updated_at"]
 
+
+@pytest.mark.asyncio
+async def test_pipeline_pydantic_validation_and_real_engine_outputs() -> None:
+    from pathlib import Path
+    import wave
+
+    transport = ASGITransport(app=app)
+    headers = {"Authorization": f"Bearer {SESSION_TOKEN}"}
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        # Boş alan gönderildiğinde Pydantic BaseModel doğrulaması 422 dönmeli
+        bad_resp = await client.post(
+            "/api/v1/pipeline/script",
+            headers=headers,
+            json={"idea_id": "", "topic": "", "title": ""},
+        )
+        assert bad_resp.status_code == 422
+
+        # Audio uç noktası gerçek okunabilir PCM WAV ve .ass altyazı üretmeli
+        audio_resp = await client.post(
+            "/api/v1/pipeline/audio",
+            headers=headers,
+            json={"script_id": "scr_real_test", "voice_id": "tr-TR", "text": "Gerçek kelime hizalama ve ses testi."},
+        )
+        assert audio_resp.status_code == 200
+        audio_data = audio_resp.json()
+        wav_path = Path(audio_data["audio_path"])
+        ass_path = Path(audio_data["ass_path"])
+        assert wav_path.is_file() and wav_path.stat().st_size > 44
+        with wave.open(str(wav_path), "rb") as wf:
+            assert wf.getnchannels() == 1
+            assert wf.getnframes() > 0
+        assert ass_path.is_file()
+        assert "[Events]" in ass_path.read_text(encoding="utf-8")
+        assert audio_data["word_count"] == 6
+
+

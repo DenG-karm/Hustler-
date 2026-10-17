@@ -4,7 +4,7 @@ Hustler Database Modülü (K-008 & K-802)
 - SQLite Yerel Backup & Önbellek İzolasyonu (create_backup, restore_backup, verify_backup)
 """
 
-from services.core.hustler.db.engine import Database, WriteJob
+from services.core.hustler.db.engine import Database, PooledReaderConnection, WriteJob
 from services.core.hustler.db.backup import (
     BackupError,
     CorruptedBackupError,
@@ -17,6 +17,7 @@ from services.core.hustler.db.backup import (
 
 __all__ = [
     "Database",
+    "PooledReaderConnection",
     "WriteJob",
     "BackupError",
     "CorruptedBackupError",

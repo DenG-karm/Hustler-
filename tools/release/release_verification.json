@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-15T17:38:17.650608+00:00",
+  "timestamp": "2026-10-17T16:54:39.065157+00:00",
   "expected_version": "1.0.0",
   "all_passed": true,
   "checks": [
@@ -18,7 +18,7 @@
     {
       "name": "5 Kronometreli Koşu Raporu",
       "passed": true,
-      "details": "5/5 koşu başarılı, Medyan: 960.28 ms (Bütçe: <= 900000 ms)",
+      "details": "5/5 koşu başarılı, Medyan: 1162.30 ms (Bütçe: <= 900000 ms)",
       "errors": []
     },
     {

@@ -36,14 +36,21 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from services.core.hustler.api.routes.pipeline import DeterministicLocalLLMPort, _default_pipeline_template  # noqa: E402
 from services.core.hustler.db.engine import Database  # noqa: E402
 from services.core.hustler.discovery.service import fallback_discovery  # noqa: E402
+from services.core.hustler.domain.models.profile import RenderProfile  # noqa: E402
+from services.core.hustler.domain.models.template import RenderConfig, SafeZone, TemplateSpec  # noqa: E402
+from services.core.hustler.generators.ffmpeg_compiler import FFmpegCompiler  # noqa: E402
+from services.core.hustler.generators.graph_validator import GraphValidator  # noqa: E402
+from services.core.hustler.generators.script_generator import ScriptGenerator  # noqa: E402
 from services.core.hustler.generators.subtitle_generator import AssDocument, SubtitleStyle  # noqa: E402
+from services.core.hustler.generators.visual_prompts import VisualPromptCompiler  # noqa: E402
 from services.core.hustler.infrastructure.timecode import SceneSynchronizer, TimeCode  # noqa: E402
 from services.core.hustler.infrastructure.timestamp_normalizer import WordTiming  # noqa: E402
 from services.core.hustler.storage.jobs import JobRepository, JobStatus  # noqa: E402
 from services.core.hustler.storage.scripts import ScriptRepository  # noqa: E402
-from services.core.hustler.validation.claims import ClaimReport, ScriptStatusDecider  # noqa: E402
+from services.core.hustler.validation.claims import ClaimMarker, ScriptStatusDecider  # noqa: E402
 
 RUN_TOPICS: list[str] = [
     "Kuantum Hesaplama",
@@ -138,27 +145,35 @@ async def execute_e2e_run(run_idx: int, topic: str, db: Database, workdir: Path)
     details["idea_title"] = idea_title
 
     # -------------------------------------------------------------------------
-    # Adım 2: Senaryo & İddia Doğrulama (Script & Claim Verification)
+    # Adım 2: Senaryo & İddia Doğrulama (ScriptGenerator + VisualPromptCompiler + ClaimMarker)
     # -------------------------------------------------------------------------
     t_step = time.perf_counter()
     script_id = f"scr_timed_{run_idx}"
-    full_text = (
-        f"{idea_title}. Bugün sizlere {topic} konusundaki en şaşırtıcı detayları açıklıyoruz. "
-        f"Geliştirilen yeni modeller ve yapılan kapsamlı testler neticesinde kritik sonuçlar elde edildi. "
-        f"Geleceği şekillendiren bu bulgular hakkında ne düşünüyorsunuz? Yorumlarda paylaşın!"
+    local_llm = DeterministicLocalLLMPort(topic=topic, title=idea_title)
+    script_doc = await ScriptGenerator(local_llm, validate_semantics=False).generate_script(
+        template=_default_pipeline_template(),
+        context=f"Konu: {topic} | Başlık: {idea_title}",
     )
-    scenes: list[dict[str, object]] = [
-        {"order": 1, "narration": idea_hook, "visual_prompt": f"Dramatic intro visual about {topic}, 9:16 vertical"},
-        {"order": 2, "narration": "Detaylı analizler ve veriler durumu özetliyor.", "visual_prompt": f"Data visual {topic}"},
-        {"order": 3, "narration": "Abone olmayı ve takip etmeyi unutmayın!", "visual_prompt": "Dynamic subscribe animation"},
+    scene_narrations = [
+        script_doc.hook or idea_hook,
+        script_doc.body[0] if script_doc.body else f"{topic} analizi.",
+        script_doc.cta,
     ]
+    compiled_prompts = await VisualPromptCompiler(local_llm).compile_prompts(scene_narrations)
+    prompt_map = {int(c["scene_index"]): str(c["final_prompt"]) for c in compiled_prompts}
+
+    scenes: list[dict[str, object]] = [
+        {"order": idx + 1, "narration": text, "visual_prompt": prompt_map.get(idx, f"Visual {topic}")}
+        for idx, text in enumerate(scene_narrations)
+    ]
+    full_text = f"{idea_title}. {' '.join(scene_narrations)}"
     claims: list[dict[str, object]] = [
         {"id": "claim_1", "text": f"{topic} verileri bilimsel araştırmalara dayanır.", "verified": True},
         {"id": "claim_2", "text": "Metin yanıltıcı içerik barındırmaz.", "verified": True},
     ]
 
     # İddia güvenliği doğrulaması
-    claim_report = ClaimReport(is_safe=True, flagged_claims=[], risk_level="LOW")
+    claim_report = await ClaimMarker(local_llm).verify_claims(full_text)
     status = ScriptStatusDecider.get_final_status(claim_report)
     assert status == "APPROVED", "Senaryo güvenlik testini geçemedi!"
 
@@ -250,49 +265,79 @@ async def execute_e2e_run(run_idx: int, topic: str, db: Database, workdir: Path)
     ass_path.write_text(ass_content, encoding="utf-8")
     assert ass_path.is_file() and ass_path.stat().st_size > 0, ".ass dosyası diske yazılamadı!"
 
-    # 2. FFmpeg ile slot için gerçek görsel kare (PNG) üret
-    slot_img_path = assets_dir / f"{topic.replace(' ', '_')}_scene1.png"
+    # 2. FFmpeg ile slot için gerçek görsel video klip (1080x1920 MP4) üret
+    slot_media_path = assets_dir / f"{topic.replace(' ', '_')}_scene1.mp4"
     subprocess.run(
         [
             "ffmpeg", "-y", "-nostdin", "-hide_banner",
-            "-f", "lavfi", "-i", "color=c=0x1E1E2E:s=1080x1920:d=0.1",
-            "-vframes", "1",
-            str(slot_img_path),
+            "-f", "lavfi", "-i", "color=c=0x1E1E2E:s=1080x1920:r=30:d=1.5",
+            "-c:v", "libx264", "-preset", "ultrafast",
+            str(slot_media_path),
         ],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         check=True,
         creationflags=creationflags,
     )
-    assert slot_img_path.is_file() and slot_img_path.stat().st_size > 0, "Slot görseli üretilemedi!"
+    assert slot_media_path.is_file() and slot_media_path.stat().st_size > 0, "Slot görseli üretilemedi!"
 
     slot_assignments: list[dict[str, object]] = [
         {"slot_id": "slot_intro_audio", "type": "audio", "required": True, "assigned_path": str(wav_path)},
-        {"slot_id": "slot_body_img1", "type": "image", "required": True, "assigned_path": str(slot_img_path)},
+        {"slot_id": "slot_body_video1", "type": "video", "required": True, "assigned_path": str(slot_media_path)},
         {"slot_id": "slot_subtitles", "type": "subtitle", "required": True, "assigned_path": str(ass_path)},
     ]
     all_required_filled = all(Path(str(s["assigned_path"])).is_file() for s in slot_assignments if s.get("required"))
     assert all_required_filled, "Zorunlu slotlar diskte mevcut değil!"
 
+    # Render için katı şablon tanımı (TemplateSpec)
+    render_template = TemplateSpec(
+        name="TimedRunsTemplate",
+        target_duration_sec=30,
+        max_scenes=5,
+        allowed_tones=["dramatic", "informative"],
+        render_config=RenderConfig(
+            width=1080,
+            height=1920,
+            fps=30,
+            bg_color="#1E1E2E",
+            safe_zone=SafeZone(
+                margin_top=10,
+                margin_bottom=10,
+                margin_left=10,
+                margin_right=10,
+            ),
+        ),
+    )
+
     steps.media_and_slots_ms = round((time.perf_counter() - t_step) * 1000.0, 3)
     details["slots_count"] = len(slot_assignments)
     details["ass_size_bytes"] = ass_path.stat().st_size
-    details["img_size_bytes"] = slot_img_path.stat().st_size
+    details["media_size_bytes"] = slot_media_path.stat().st_size
 
     # -------------------------------------------------------------------------
-    # Adım 5: Önizleme (Preview Generation & Verification) - GERÇEK FFmpeg MP4
+    # Adım 5: Önizleme (Preview Generation & Verification) - GERÇEK FFmpegCompiler DRAFT & ASS BURN-IN
     # -------------------------------------------------------------------------
     t_step = time.perf_counter()
     preview_dir = run_dir / "preview"
     preview_dir.mkdir(parents=True, exist_ok=True)
     preview_path = preview_dir / f"{script_id}_preview.mp4"
 
-    cmd_preview = [
-        "ffmpeg", "-y", "-nostdin", "-hide_banner",
-        "-f", "lavfi", "-i", "color=c=0x1E1E2E:s=540x960:r=30:d=1.0",
-        "-c:v", "libx264", "-preset", "ultrafast",
-        str(preview_path),
-    ]
+    cmd_preview = FFmpegCompiler.build_render_command(
+        template=render_template,
+        audio_path=str(wav_path),
+        ass_path=str(ass_path),
+        assets=[str(slot_media_path)],
+        output_path=str(preview_path),
+        profile=RenderProfile.DRAFT,
+        duration_sec=1.5,
+    )
+
+    # Topolojik Graf Doğrulaması (GraphValidator)
+    fc_idx_prev = cmd_preview.index("-filter_complex")
+    graph_lines_prev = cmd_preview[fc_idx_prev + 1].split(";")
+    map_args_prev = [cmd_preview[i + 1] for i, a in enumerate(cmd_preview) if a == "-map"]
+    GraphValidator.validate_graph(graph_lines_prev, map_args_prev)
+
     proc_prev = subprocess.run(
         cmd_preview,
         stdout=subprocess.PIPE,
@@ -311,7 +356,7 @@ async def execute_e2e_run(run_idx: int, topic: str, db: Database, workdir: Path)
     details["preview_size_bytes"] = preview_path.stat().st_size
 
     # -------------------------------------------------------------------------
-    # Adım 6: Final Render & QC (Final Render & Quality Control) - GERÇEK FFmpeg & QC
+    # Adım 6: Final Render & QC (Final Render & Quality Control) - GERÇEK FFmpegCompiler FINAL & ASS BURN-IN
     # -------------------------------------------------------------------------
     t_step = time.perf_counter()
     renders_dir = run_dir / "renders"
@@ -323,16 +368,22 @@ async def execute_e2e_run(run_idx: int, topic: str, db: Database, workdir: Path)
 
     final_output_path = renders_dir / f"{job_id}_final_output.mp4"
 
-    # FFmpeg ile 1080x1920 dikey H.264 video + AAC ses kanallı tam render
-    cmd_render = [
-        "ffmpeg", "-y", "-nostdin", "-hide_banner",
-        "-f", "lavfi", "-i", "color=c=0x11111B:s=1080x1920:r=30:d=1.5",
-        "-i", str(wav_path),
-        "-c:v", "libx264", "-preset", "ultrafast",
-        "-c:a", "aac",
-        "-shortest",
-        str(final_output_path),
-    ]
+    cmd_render = FFmpegCompiler.build_render_command(
+        template=render_template,
+        audio_path=str(wav_path),
+        ass_path=str(ass_path),
+        assets=[str(slot_media_path)],
+        output_path=str(final_output_path),
+        profile=RenderProfile.FINAL,
+        duration_sec=1.5,
+    )
+
+    # Topolojik Graf Doğrulaması (GraphValidator)
+    fc_idx_rend = cmd_render.index("-filter_complex")
+    graph_lines_rend = cmd_render[fc_idx_rend + 1].split(";")
+    map_args_rend = [cmd_render[i + 1] for i, a in enumerate(cmd_render) if a == "-map"]
+    GraphValidator.validate_graph(graph_lines_rend, map_args_rend)
+
     proc_render = subprocess.run(
         cmd_render,
         stdout=subprocess.PIPE,

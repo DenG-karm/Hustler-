@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from tests.conftest import LLMFactory
 
-from services.core.hustler.evaluation.harness import EvalHarness
+from tests.eval.harness import EvalHarness
 
 IDEAL = {"has_hook": True, "hook_text": "linke tıklayın", "topic": "finans"}
 

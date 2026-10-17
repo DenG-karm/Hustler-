@@ -84,8 +84,9 @@ class PipelineOrchestrator:
         result.error_message = message
         await self.jobs.update(job_id, JobStatus.FAILED, error_message=message)
 
-    async def _run(self, job_id: str, videos: list[PipelineVideo], result: PipelineResult) -> None:
-        # --- Map A (saf fonksiyon, ağ yok) ---
+    async def _stage_map_a(
+        self, job_id: str, videos: list[PipelineVideo], result: PipelineResult
+    ) -> list[PipelineVideo] | None:
         await self.jobs.update(job_id, JobStatus.DISCOVERY, PROGRESS_MAP_A[0], "Map A: aday filtreleme")
         accepted: list[PipelineVideo] = []
         for v in videos:
@@ -97,26 +98,32 @@ class PipelineOrchestrator:
         if not accepted:
             reasons = "; ".join(f"{k}: {r}" for k, r in result.rejected.items()) or "aday yok"
             await self._fail(job_id, result, f"Map A hiçbir adayı kabul etmedi ({reasons})")
-            return
+            return None
         await self.jobs.update(job_id, JobStatus.DISCOVERY, PROGRESS_MAP_A[1], "Map A tamamlandı")
+        return accepted
 
-        # --- Reduce (içerik hash'li önbellek + LLM) ---
+    async def _stage_reduce(
+        self, job_id: str, accepted: list[PipelineVideo], result: PipelineResult
+    ) -> list[PipelineVideo] | None:
         await self.jobs.update(job_id, JobStatus.GENERATING, PROGRESS_REDUCE[0], "Reduce: analiz")
         reduced: list[PipelineVideo] = []
         for i, v in enumerate(accepted, start=1):
             try:
                 result.analyses.append({"video_id": v.video_id, **await self.reduce.analyze(v.transcript)})
                 reduced.append(v)
-            except Exception as exc:  # noqa: BLE001 - tek video diğerlerini düşürmez
+            except Exception as exc:  # noqa: BLE001
                 result.failed[v.video_id] = f"Reduce: {type(exc).__name__}: {exc}"
             await self.jobs.update(
                 job_id, JobStatus.GENERATING, _scale(PROGRESS_REDUCE, i, len(accepted)), "Reduce: analiz"
             )
         if not reduced:
             await self._fail(job_id, result, f"Reduce hiçbir videoyu işleyemedi ({_join(result.failed)})")
-            return
+            return None
+        return reduced
 
-        # --- Map B (kanca analizi) ---
+    async def _stage_map_b(
+        self, job_id: str, reduced: list[PipelineVideo], result: PipelineResult
+    ) -> bool:
         await self.jobs.update(job_id, JobStatus.GENERATING, PROGRESS_MAP_B[0], "Map B: kanca analizi")
         outputs = await self.map_b.execute_batch(
             [{"video_id": v.video_id, "transcript": v.transcript} for v in reduced],
@@ -130,21 +137,34 @@ class PipelineOrchestrator:
                 result.failed[str(out["video_id"])] = f"Map B: {out.get('error')}"
         if succeeded == 0:
             await self._fail(job_id, result, f"Map B hiçbir videoyu işleyemedi ({_join(result.failed)})")
-            return
+            return False
         await self.jobs.update(job_id, JobStatus.GENERATING, PROGRESS_MAP_B[1], "Map B tamamlandı")
+        return True
 
-        # --- Render ---
-        output_path: Optional[str] = None
-        if self.render is not None:
-            await self.jobs.update(job_id, JobStatus.RENDERING, PROGRESS_RENDER[0], "Render")
+    async def _stage_render(self, job_id: str) -> str | None:
+        if self.render is None:
+            return None
+        await self.jobs.update(job_id, JobStatus.RENDERING, PROGRESS_RENDER[0], "Render")
 
-            async def report(pct: int) -> None:
-                pct = max(0, min(100, pct))
-                await self.jobs.update(
-                    job_id, JobStatus.RENDERING, _scale(PROGRESS_RENDER, pct, 100), "Render"
-                )
+        async def report(pct: int) -> None:
+            pct = max(0, min(100, pct))
+            await self.jobs.update(job_id, JobStatus.RENDERING, _scale(PROGRESS_RENDER, pct, 100), "Render")
 
-            output_path = await self.render(job_id, report)
+        return await self.render(job_id, report)
+
+    async def _run(self, job_id: str, videos: list[PipelineVideo], result: PipelineResult) -> None:
+        accepted = await self._stage_map_a(job_id, videos, result)
+        if accepted is None:
+            return
+
+        reduced = await self._stage_reduce(job_id, accepted, result)
+        if reduced is None:
+            return
+
+        if not await self._stage_map_b(job_id, reduced, result):
+            return
+
+        output_path = await self._stage_render(job_id)
 
         await self.jobs.update(job_id, JobStatus.COMPLETED, output_path=output_path, current_step="Tamamlandı")
         result.status = JobStatus.COMPLETED

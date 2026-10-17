@@ -76,6 +76,66 @@ def get_video_fps(video_path: str | Path, default_fps: float = 30.0) -> float:
     return default_fps
 
 
+FRAME_SSIM_PATTERN = re.compile(
+    r"n:(?P<frame>\d+)\s+Y:(?P<y>[\d\.]+)\s+U:(?P<u>[\d\.]+)\s+V:(?P<v>[\d\.]+)\s+All:(?P<all>[\d\.]+)"
+)
+OVERALL_SSIM_PATTERN = re.compile(
+    r"SSIM\s+Y:(?P<y>[\d\.]+)\s+.*?U:(?P<u>[\d\.]+)\s+.*?V:(?P<v>[\d\.]+)\s+.*?All:(?P<all>[\d\.]+)"
+)
+
+
+def _parse_ssim_frame_lines(
+    stdout: str, fps: float, min_ssim: float
+) -> tuple[list[FrameSSIM], list[FrameSSIM], float, FrameSSIM | None]:
+    all_frames: list[FrameSSIM] = []
+    failed_frames: list[FrameSSIM] = []
+    min_frame_ssim = 1.0
+    worst_frame: Optional[FrameSSIM] = None
+
+    for line in stdout.splitlines():
+        match = FRAME_SSIM_PATTERN.search(line)
+        if not match:
+            continue
+        frame_num = int(match.group("frame"))
+        y_val, u_val, v_val, all_val = float(match.group("y")), float(match.group("u")), float(match.group("v")), float(match.group("all"))
+        timestamp_sec = round((frame_num - 1) / fps, 3)
+
+        frame_data = FrameSSIM(
+            frame=frame_num,
+            timestamp_sec=timestamp_sec,
+            all_ssim=all_val,
+            y=y_val,
+            u=u_val,
+            v=v_val,
+        )
+        all_frames.append(frame_data)
+        if all_val < min_ssim:
+            failed_frames.append(frame_data)
+        if all_val < min_frame_ssim or worst_frame is None:
+            min_frame_ssim = all_val
+            worst_frame = frame_data
+
+    return all_frames, failed_frames, min_frame_ssim, worst_frame
+
+
+def _parse_overall_ssim(stderr: str, all_frames: list[FrameSSIM]) -> tuple[float, float, float, float]:
+    match = OVERALL_SSIM_PATTERN.search(stderr)
+    if match:
+        return (
+            float(match.group("all")),
+            float(match.group("y")),
+            float(match.group("u")),
+            float(match.group("v")),
+        )
+    total = len(all_frames)
+    return (
+        sum(f.all_ssim for f in all_frames) / total,
+        sum(f.y for f in all_frames) / total,
+        sum(f.u for f in all_frames) / total,
+        sum(f.v for f in all_frames) / total,
+    )
+
+
 def compute_video_ssim(
     test_video_path: str | Path,
     golden_video_path: str | Path,
@@ -94,18 +154,12 @@ def compute_video_ssim(
         )
 
     fps = get_video_fps(golden_path)
-
     cmd = [
-        "ffmpeg",
-        "-nostdin",
-        "-hide_banner",
-        "-i", str(test_path),
-        "-i", str(golden_path),
+        "ffmpeg", "-nostdin", "-hide_banner",
+        "-i", str(test_path), "-i", str(golden_path),
         "-lavfi", "[0:v][1:v]ssim=stats_file=-",
-        "-f", "null",
-        "-",
+        "-f", "null", "-",
     ]
-
     proc = subprocess.run(
         cmd,
         stdout=subprocess.PIPE,
@@ -115,84 +169,22 @@ def compute_video_ssim(
         errors="replace",
         check=False,
     )
-
     if proc.returncode != 0:
         err_msg = proc.stderr.strip()
-        raise RuntimeError(
-            f"FFmpeg SSIM hesaplama hatası (çıkış kodu: {proc.returncode}):\n{err_msg[-1000:]}"
-        )
+        raise RuntimeError(f"FFmpeg SSIM hesaplama hatası (çıkış kodu: {proc.returncode}):\n{err_msg[-1000:]}")
 
-    # Kare bazlı ayrıştırma (stdout)
-    # Örnek format: n:1 Y:1.000000 U:1.000000 V:1.000000 All:1.000000 (inf)
-    frame_pattern = re.compile(
-        r"n:(?P<frame>\d+)\s+Y:(?P<y>[\d\.]+)\s+U:(?P<u>[\d\.]+)\s+V:(?P<v>[\d\.]+)\s+All:(?P<all>[\d\.]+)"
-    )
+    all_frames, failed_frames, min_frame_ssim, worst_frame = _parse_ssim_frame_lines(proc.stdout, fps, min_ssim)
+    if not all_frames:
+        raise RuntimeError(f"Hiçbir kare için SSIM ölçümü alınamadı. FFmpeg çıktısı:\n{proc.stderr[-1000:]}")
 
-    all_frames: list[FrameSSIM] = []
-    failed_frames: list[FrameSSIM] = []
-    min_frame_ssim = 1.0
-    worst_frame: Optional[FrameSSIM] = None
-
-    for line in proc.stdout.splitlines():
-        match = frame_pattern.search(line)
-        if match:
-            frame_num = int(match.group("frame"))
-            y_val = float(match.group("y"))
-            u_val = float(match.group("u"))
-            v_val = float(match.group("v"))
-            all_val = float(match.group("all"))
-
-            # 1-indexed kare numarasına göre tahmini zaman damgası
-            timestamp_sec = round((frame_num - 1) / fps, 3)
-
-            frame_data = FrameSSIM(
-                frame=frame_num,
-                timestamp_sec=timestamp_sec,
-                all_ssim=all_val,
-                y=y_val,
-                u=u_val,
-                v=v_val,
-            )
-            all_frames.append(frame_data)
-
-            if all_val < min_ssim:
-                failed_frames.append(frame_data)
-
-            if all_val < min_frame_ssim or worst_frame is None:
-                min_frame_ssim = all_val
-                worst_frame = frame_data
-
-    total_frames = len(all_frames)
-    if total_frames == 0:
-        raise RuntimeError(
-            f"Hiçbir kare için SSIM ölçümü alınamadı. FFmpeg çıktısı:\n{proc.stderr[-1000:]}"
-        )
-
-    # Genel SSIM değerini stderr üzerinden çek
-    # Örnek format: SSIM Y:1.000000 (inf) U:1.000000 (inf) V:1.000000 (inf) All:1.000000 (inf)
-    overall_pattern = re.search(
-        r"SSIM\s+Y:(?P<y>[\d\.]+)\s+.*?U:(?P<u>[\d\.]+)\s+.*?V:(?P<v>[\d\.]+)\s+.*?All:(?P<all>[\d\.]+)",
-        proc.stderr,
-    )
-
-    if overall_pattern:
-        overall_ssim = float(overall_pattern.group("all"))
-        overall_y = float(overall_pattern.group("y"))
-        overall_u = float(overall_pattern.group("u"))
-        overall_v = float(overall_pattern.group("v"))
-    else:
-        # Yedek: karelerin ortalamasını al
-        overall_ssim = sum(f.all_ssim for f in all_frames) / total_frames
-        overall_y = sum(f.y for f in all_frames) / total_frames
-        overall_u = sum(f.u for f in all_frames) / total_frames
-        overall_v = sum(f.v for f in all_frames) / total_frames
+    overall_ssim, overall_y, overall_u, overall_v = _parse_overall_ssim(proc.stderr, all_frames)
 
     return SSIMResult(
         overall_ssim=overall_ssim,
         y_ssim=overall_y,
         u_ssim=overall_u,
         v_ssim=overall_v,
-        total_frames=total_frames,
+        total_frames=len(all_frames),
         failed_frames=failed_frames,
         min_frame_ssim=min_frame_ssim,
         worst_frame=worst_frame,

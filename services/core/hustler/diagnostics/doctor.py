@@ -50,87 +50,77 @@ class DoctorReport(BaseModel):  # type: ignore[explicit-any]
         return _resolve().__await__()
 
 
-def run_system_doctor(db: Database) -> DoctorReport:
-    """
-    Sistemin röntgenini çeker ve yapılandırılmış DoctorReport döner.
-    Milisaniyeler içinde çalışır ve asenkron bağlamlarda doğrudan await edilebilir.
-    """
-    py_ver = platform.python_version()
-    sql_ver = sqlite3.sqlite_version
-
-    # 1. FFmpeg Varlık ve Sürüm Denetimi
+def _check_ffmpeg() -> tuple[bool, str | None]:
     ff_path = shutil.which("ffmpeg")
-    ff_avail = bool(ff_path)
-    ff_ver: Optional[str] = None
-    if ff_path:
-        try:
-            res = subprocess.run(
-                [ff_path, "-version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            if res.returncode == 0 and res.stdout:
-                ff_ver = res.stdout.splitlines()[0].strip()
-        except Exception:
-            pass
+    if not ff_path:
+        return False, None
+    try:
+        res = subprocess.run([ff_path, "-version"], capture_output=True, text=True, timeout=5, check=False)
+        if res.returncode == 0 and res.stdout:
+            return True, res.stdout.splitlines()[0].strip()
+    except Exception:
+        pass
+    return True, None
 
-    # 2. yt-dlp Varlık ve Sürüm Denetimi
+
+def _check_ytdlp() -> tuple[bool, str | None]:
     yt_path = shutil.which("yt-dlp")
-    yt_avail = bool(yt_path)
-    yt_ver: Optional[str] = None
-    if yt_path:
-        try:
-            res = subprocess.run(
-                [yt_path, "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-                check=False,
-            )
-            if res.returncode == 0 and res.stdout:
-                yt_ver = res.stdout.strip()
-        except Exception:
-            pass
+    if not yt_path:
+        return False, None
+    try:
+        res = subprocess.run([yt_path, "--version"], capture_output=True, text=True, timeout=5, check=False)
+        if res.returncode == 0 and res.stdout:
+            return True, res.stdout.strip()
+    except Exception:
+        pass
+    return True, None
 
-    # 3. Disk Boş Alan Denetimi (MB)
-    target_dir = db.path.parent if db.path.parent.exists() else Path.cwd()
+
+def _check_disk_space(target_dir: Path) -> float:
     try:
         usage = shutil.disk_usage(target_dir)
-        disk_free = round(usage.free / (1024 * 1024), 2)
+        return round(usage.free / (1024 * 1024), 2)
     except Exception:
-        disk_free = 0.0
+        return 0.0
 
-    # 4. Veritabanı PRAGMA quick_check
-    db_qc = "ok"
-    if db.path.exists():
+
+def _check_database_quick(db_path: Path) -> str:
+    if not db_path.exists():
+        return "not_created"
+    try:
+        conn = sqlite3.connect(f"file:{db_path.resolve()}?mode=ro", uri=True, timeout=5.0)
         try:
-            conn = sqlite3.connect(f"file:{db.path.resolve()}?mode=ro", uri=True, timeout=5.0)
-            try:
-                cur = conn.execute("PRAGMA quick_check;")
-                row = cur.fetchone()
-                db_qc = str(row[0]) if row else "unknown"
-            finally:
-                conn.close()
-        except Exception as e:
-            db_qc = f"error: {e}"
-    else:
-        db_qc = "not_created"
+            cur = conn.execute("PRAGMA quick_check;")
+            row = cur.fetchone()
+            return str(row[0]) if row else "unknown"
+        finally:
+            conn.close()
+    except Exception as e:
+        return f"error: {e}"
 
-    # 5. Sağlık Durumu Kararı
-    if db_qc not in ("ok", "not_created"):
-        status: Literal["HEALTHY", "DEGRADED", "CRITICAL"] = "CRITICAL"
-    elif disk_free < 500.0:
-        status = "CRITICAL"
-    elif not ff_avail or not yt_avail or disk_free < 2048.0:
-        status = "DEGRADED"
-    else:
-        status = "HEALTHY"
+
+def _determine_health_status(
+    db_qc: str, disk_free: float, ff_avail: bool, yt_avail: bool
+) -> Literal["HEALTHY", "DEGRADED", "CRITICAL"]:
+    if db_qc not in ("ok", "not_created") or disk_free < 500.0:
+        return "CRITICAL"
+    if not ff_avail or not yt_avail or disk_free < 2048.0:
+        return "DEGRADED"
+    return "HEALTHY"
+
+
+def run_system_doctor(db: Database) -> DoctorReport:
+    """Sistemin röntgenini çeker ve yapılandırılmış DoctorReport döner."""
+    ff_avail, ff_ver = _check_ffmpeg()
+    yt_avail, yt_ver = _check_ytdlp()
+    target_dir = db.path.parent if db.path.parent.exists() else Path.cwd()
+    disk_free = _check_disk_space(target_dir)
+    db_qc = _check_database_quick(db.path)
+    status = _determine_health_status(db_qc, disk_free, ff_avail, yt_avail)
 
     return DoctorReport(
-        python_version=py_ver,
-        sqlite_version=sql_ver,
+        python_version=platform.python_version(),
+        sqlite_version=sqlite3.sqlite_version,
         ffmpeg_available=ff_avail,
         ffmpeg_version=ff_ver,
         ytdlp_available=yt_avail,

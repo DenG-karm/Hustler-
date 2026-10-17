@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, lazy, Suspense } from 'react'
 import { Sidebar, type SidebarItem } from './components/ui/Sidebar/Sidebar'
 import { Button } from './components/ui/Button/Button'
 import { useTheme } from './theme/ThemeContext'
 import { FlowContainer } from './components/flow/FlowContainer'
-import { TemplateManager } from './components/templates/TemplateManager'
 import { ErrorModal } from './components/ui/ErrorModal'
 import { ToastContainer } from './components/ui/ToastContainer'
+import { StatusBar } from './components/ui/StatusBar/StatusBar'
+import { ColdStartSplash } from './components/ui/ColdStartSplash'
 import { useFlowStore } from './store/flowStore'
 import { useSupervisorStore } from './store/supervisorStore'
+
+// Faz F9: React.lazy ile Dinamik Yükleme
+const TemplateManager = lazy(() =>
+  import('./components/templates/TemplateManager').then((m) => ({ default: m.TemplateManager }))
+)
 
 export function App() {
   const { theme, resolvedTheme, setTheme } = useTheme()
@@ -187,7 +193,9 @@ export function App() {
           </div>
         ) : activeTab === 'templates' ? (
           <div className="flex-1 overflow-y-auto">
-            <TemplateManager />
+            <Suspense fallback={<div className="p-xl text-center text-xs text-text-muted">Şablon Modülü Yükleniyor...</div>}>
+              <TemplateManager />
+            </Suspense>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-lg space-y-xl max-w-5xl">
@@ -245,7 +253,13 @@ export function App() {
             </section>
           </div>
         )}
+
+        {/* Canlı Durum Çubuğu (Sidecar, SQLite, 15m SLA Timer, Tanılama .zip) */}
+        <StatusBar />
       </main>
+
+      {/* Soğuk Başlatma (Cold-Start) Karşılama Ekranı */}
+      <ColdStartSplash />
 
       {/* Global K-703 Dialogs */}
       <ErrorModal />

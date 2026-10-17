@@ -72,6 +72,68 @@ def _resolve_ytdlp_cmd(custom_binary: Path | str | None = None) -> list[str] | N
         return None
 
 
+def _resolve_version_string(
+    cmd: list[str],
+    binary_path: Path | str | None,
+    timeout_sec: float,
+) -> tuple[str | None, CanaryStatus | None, str | None]:
+    """yt-dlp sürüm bilgisini okur veya hata döner."""
+    if not binary_path and cmd == [sys.executable, "-m", "yt_dlp"]:
+        try:
+            return importlib.metadata.version("yt_dlp"), None, None
+        except Exception:
+            pass
+
+    try:
+        p_v = subprocess.run(
+            [*cmd, "--version"],
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            creationflags=_WIN32_NO_WINDOW,
+        )
+        if p_v.returncode != 0:
+            err = p_v.stderr.strip() or p_v.stdout.strip()
+            return None, CanaryStatus.BINARY_MISSING, f"--version başarısız: {err}"
+        return p_v.stdout.strip(), None, None
+    except subprocess.TimeoutExpired:
+        return None, CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, f"--version zaman aşımı ({timeout_sec}s)"
+    except Exception as e:
+        return None, CanaryStatus.BINARY_MISSING, f"yt-dlp çalıştırılamadı: {e}"
+
+
+def _probe_extractor_dump(
+    cmd: list[str],
+    test_url: str,
+    timeout_sec: float,
+) -> tuple[CanaryStatus, str | None]:
+    """Çıkarıcıyı test URL'si ile sorgular ve JSON şemasını doğrular."""
+    try:
+        p = subprocess.run(
+            [*cmd, "--dump-json", "--skip-download", "--no-warnings", "--no-playlist", test_url],
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            creationflags=_WIN32_NO_WINDOW,
+        )
+    except subprocess.TimeoutExpired:
+        return CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, f"Sonda zaman aşımı ({timeout_sec}s)"
+
+    if p.returncode != 0:
+        err = p.stderr.strip() or p.stdout.strip()
+        return CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, f"Çıkarıcı başarısız: {err}"
+
+    try:
+        payload = json.loads(p.stdout)
+    except Exception as e:
+        return CanaryStatus.SCHEMA_MISMATCH, f"JSON ayrıştırma hatası: {e}"
+
+    if validate_extractor_payload(payload) != CanaryStatus.HEALTHY:
+        return CanaryStatus.SCHEMA_MISMATCH, "Kontrat şema uyumsuzluğu."
+
+    return CanaryStatus.HEALTHY, None
+
+
 def run_ytdlp_canary(
     timeout_sec: float = 5.0,
     binary_path: Path | str | None = None,
@@ -93,41 +155,12 @@ def run_ytdlp_canary(
         if not cmd:
             return _rep(CanaryStatus.BINARY_MISSING, err="yt-dlp binary veya Python modülü bulunamadı.")
 
-        version_str: str | None = None
-        if not binary_path and cmd == [sys.executable, "-m", "yt_dlp"]:
-            try:
-                version_str = importlib.metadata.version("yt_dlp")
-            except Exception:
-                pass
+        version_str, err_status, err_msg = _resolve_version_string(cmd, binary_path, timeout_sec)
+        if err_status is not None:
+            return _rep(err_status, err=err_msg)
 
-        if not version_str:
-            try:
-                p_v = subprocess.run([*cmd, "--version"], capture_output=True, text=True, timeout=timeout_sec, creationflags=_WIN32_NO_WINDOW)
-                if p_v.returncode != 0:
-                    return _rep(CanaryStatus.BINARY_MISSING, err=f"--version başarısız: {p_v.stderr.strip() or p_v.stdout.strip()}")
-                version_str = p_v.stdout.strip()
-            except subprocess.TimeoutExpired:
-                return _rep(CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, err=f"--version zaman aşımı ({timeout_sec}s)")
-            except Exception as e:
-                return _rep(CanaryStatus.BINARY_MISSING, err=f"yt-dlp çalıştırılamadı: {e}")
-
-        try:
-            p = subprocess.run([*cmd, "--dump-json", "--skip-download", "--no-warnings", "--no-playlist", test_url], capture_output=True, text=True, timeout=timeout_sec, creationflags=_WIN32_NO_WINDOW)
-        except subprocess.TimeoutExpired:
-            return _rep(CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, version_str, f"Sonda zaman aşımı ({timeout_sec}s)")
-
-        if p.returncode != 0:
-            return _rep(CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, version_str, f"Çıkarıcı başarısız: {p.stderr.strip() or p.stdout.strip()}")
-
-        try:
-            payload = json.loads(p.stdout)
-        except Exception as e:
-            return _rep(CanaryStatus.SCHEMA_MISMATCH, version_str, f"JSON ayrıştırma hatası: {e}")
-
-        if validate_extractor_payload(payload) != CanaryStatus.HEALTHY:
-            return _rep(CanaryStatus.SCHEMA_MISMATCH, version_str, "Kontrat şema uyumsuzluğu.")
-
-        return _rep(CanaryStatus.HEALTHY, version_str, None)
+        probe_status, probe_err = _probe_extractor_dump(cmd, test_url, timeout_sec)
+        return _rep(probe_status, version_str, probe_err)
     except Exception as exc:
         return _rep(CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, None, f"Beklenmeyen sonda hatası (Zero-Crash): {exc}")
 

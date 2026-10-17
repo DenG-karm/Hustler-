@@ -81,16 +81,25 @@ class DiscoveryOrchestrator:
                 })
                 inserted += 1
                 
-        # 4. Kazananların DB'ye Kaydı (Side-Effect: WriterQueue Üzerinden)
-        now_ts = time.time()
-        for v in winning_videos:
-            await self.db.execute_write("""
+        # 4. Kazananların DB'ye Atomik Toplu Kaydı (Side-Effect: WriterQueue Üzerinden Tek Transaction)
+        if winning_videos:
+            now_ts = time.time()
+            batch_params = [
+                (v["video_id"], v["title"], v["topic"], v["score"], now_ts)
+                for v in winning_videos
+            ]
+            query = """
                 INSERT INTO discovery_videos (video_id, title, topic, score, discovered_at)
                 VALUES (?, ?, ?, ?, ?)
                 ON CONFLICT(video_id) DO UPDATE SET
                     score=excluded.score,
                     discovered_at=excluded.discovered_at
-            """, (v["video_id"], v["title"], v["topic"], v["score"], now_ts))
+            """
+            if hasattr(self.db, "executemany_write"):
+                await self.db.executemany_write(query, batch_params)
+            else:
+                for params in batch_params:
+                    await self.db.execute_write(query, params)
             
         return {
             "fetched": fetched,

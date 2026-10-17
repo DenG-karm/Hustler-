@@ -10,6 +10,7 @@ Hustler FastAPI Sidecar — K-005
 - Bearer token doğrulama middleware
 """
 
+import asyncio
 import os
 import secrets
 import socket
@@ -26,7 +27,10 @@ from services.core.hustler.api.auth import verify_token
 from services.core.hustler.db import Database
 from services.core.hustler.api.routes.discovery import router as discovery_router
 from services.core.hustler.api.routes.jobs import router as jobs_router
-from services.core.hustler.api.routes.pipeline import router as pipeline_router
+from services.core.hustler.api.routes.pipeline import (
+    router as pipeline_router,
+    alias_router as pipeline_alias_router,
+)
 from services.core.hustler.api.routes.diagnostics import router as diagnostics_router
 from services.core.hustler.storage.cache import YouTubeCache
 from services.core.hustler.storage.jobs import JobRepository
@@ -79,8 +83,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.event_broker = EventBroker()
     app.state.running_jobs = {}
     
-    # M2 Veri Katmanı Başlatma
-    db_path = Path("hustler_core.db")
+    # M2 Veri Katmanı Başlatma (Tauri src-tauri altından başlatıldığında kök dizine sabitle)
+    env_db_path = os.environ.get("HUSTLER_DB_PATH")
+    cwd = Path.cwd()
+    if env_db_path:
+        db_path = Path(env_db_path).resolve()
+    elif cwd.name == "src-tauri":
+        db_path = Path(__file__).resolve().parents[3] / "hustler_core.db"
+    else:
+        db_path = (cwd / "hustler_core.db").resolve()
     db = Database(db_path)
     await db.init()
     
@@ -106,9 +117,22 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.script_repo = script_repo
     app.state.session_repo = session_repo
 
+    from services.core.hustler.tasks.scheduler import maintenance_loop
+    maint_task = asyncio.create_task(
+        maintenance_loop(db=db, cache_ttl_sec=3600, interval_sec=1800)
+    )
+    app.state.maintenance_task = maint_task
+
     log.info("sidecar_started")  # token ve port burada bilinçli olarak yok
     yield
-    # Kapanışta çalışan işleri iptal et
+    # Kapanışta arka plan bakım görevini ve çalışan işleri iptal et
+    if maint_task and not maint_task.done():
+        maint_task.cancel()
+        try:
+            await maint_task
+        except asyncio.CancelledError:
+            pass
+
     running_jobs = getattr(app.state, "running_jobs", {})
     if isinstance(running_jobs, dict):
         for t in running_jobs.values():
@@ -121,12 +145,13 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
-app = FastAPI(title="Hustler Core", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Hustler Core", version="1.0.0", lifespan=lifespan)
 app.state.session_token = SESSION_TOKEN
 
 app.include_router(discovery_router, prefix="/api/v1")
 app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
+app.include_router(pipeline_alias_router, prefix="/api/v1")
 app.include_router(diagnostics_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
@@ -200,15 +225,54 @@ async def sse_stream(request: Request) -> StreamingResponse:
     )
 
 
+@app.post("/api/v1/system/shutdown", dependencies=[Depends(verify_token)])
+async def shutdown(request: Request) -> dict[str, str]:
+    """
+    K-807: Kontrollü ve Temiz Kapanış (Graceful Shutdown) Uç Noktası.
+    - Yalnızca geçerli HUSTLER_SESSION_TOKEN ile tetiklenebilir.
+    - DB üzerinde PRAGMA wal_checkpoint(TRUNCATE) çalıştırır ve veritabanını kapatır.
+    - Uvicorn sunucusuna çıkış sinyali verir (server.should_exit = True).
+    """
+    log.info("graceful_shutdown_requested")
+    db = getattr(request.app.state, "db", None)
+    if db and hasattr(db, "checkpoint_truncate"):
+        try:
+            await db.checkpoint_truncate()
+        except Exception as e:
+            log.warning("shutdown_wal_checkpoint_failed", error=str(e))
+
+    server = getattr(request.app.state, "server", None)
+
+    async def _trigger_exit() -> None:
+        await asyncio.sleep(0.15)
+        if server:
+            server.should_exit = True
+        else:
+            import signal
+            import sys
+            if sys.platform != "win32":
+                os.kill(os.getpid(), signal.SIGTERM)
+            else:
+                loop = asyncio.get_running_loop()
+                loop.stop()
+
+    asyncio.create_task(_trigger_exit())
+    return {"status": "shutting_down"}
+
+
 # ---------------------------------------------------------------------------
 # Entrypoint
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
     port = _resolve_port()
-    uvicorn.run(
+    config = uvicorn.Config(
         app,
         host="127.0.0.1",
         port=port,
         log_level="warning",
         access_log=False,
     )
+    server = uvicorn.Server(config)
+    app.state.server = server
+    server.run()
+

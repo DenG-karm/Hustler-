@@ -11,7 +11,7 @@
  *    alınarak yeni UUID üretilir, referans bağı tamamen koparılır.
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { secureInvoke } from './securityGuard'
 import { z, ZodError } from 'zod'
 
 // ---------------------------------------------------------------------------
@@ -129,7 +129,7 @@ export async function exportTemplateToFile(
   // Hedef dosya yolu: ya doğrudan verilir ya da Tauri native save dialog ile kullanıcıdan alınır
   let targetPath = targetPathOverride
   if (!targetPath) {
-    const dialogResult = await invoke<string | null>('plugin:dialog|save', {
+    const dialogResult = await secureInvoke<string | null>('plugin:dialog|save', {
       filters: [{ name: 'Hustler Şablonu', extensions: ['json'] }],
       defaultPath: `${valid.name.toLowerCase().replace(/[^a-z0-9]/g, '_')}_template.json`,
     })
@@ -142,7 +142,7 @@ export async function exportTemplateToFile(
 
   // Tauri Rust fs eklentisiyle diske yazılır
   const content = JSON.stringify(valid, null, 2)
-  await invoke('plugin:fs|write_text_file', {
+  await secureInvoke('plugin:fs|write_text_file', {
     path: targetPath,
     contents: content,
   })
@@ -157,7 +157,7 @@ export async function exportTemplateToFile(
 export async function importTemplateFromFile(sourcePathOverride?: string): Promise<Template> {
   let sourcePath = sourcePathOverride
   if (!sourcePath) {
-    const dialogResult = await invoke<string | null>('plugin:dialog|open', {
+    const dialogResult = await secureInvoke<string | null>('plugin:dialog|open', {
       multiple: false,
       directory: false,
       filters: [{ name: 'Hustler Şablonu', extensions: ['json'] }],
@@ -170,7 +170,7 @@ export async function importTemplateFromFile(sourcePathOverride?: string): Promi
   }
 
   // Tauri Rust fs eklentisiyle diskten okunur
-  const fileContent = await invoke<string>('plugin:fs|read_text_file', {
+  const fileContent = await secureInvoke<string>('plugin:fs|read_text_file', {
     path: sourcePath,
   })
 

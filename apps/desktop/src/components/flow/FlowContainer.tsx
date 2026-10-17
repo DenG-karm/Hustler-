@@ -1,14 +1,25 @@
-import React from 'react'
+import React, { Suspense, lazy } from 'react'
 import { useFlowStore } from '../../store/flowStore'
 import { FlowStepper } from './FlowStepper'
 import { TimerPanel } from '../timer/TimerPanel'
 import { TopicScreen } from './TopicScreen'
 import { Top20Screen } from './Top20Screen'
-import { ScriptScreen } from './ScriptScreen'
-import { AudioScreen } from './AudioScreen'
-import { AssetsScreen } from './AssetsScreen'
-import { PreviewScreen } from './PreviewScreen'
-import { RenderScreen } from './RenderScreen'
+
+const ScriptScreen = lazy(() =>
+  import('./ScriptScreen').then((m) => ({ default: m.ScriptScreen }))
+)
+const AudioScreen = lazy(() =>
+  import('./AudioScreen').then((m) => ({ default: m.AudioScreen }))
+)
+const AssetsScreen = lazy(() =>
+  import('./AssetsScreen').then((m) => ({ default: m.AssetsScreen }))
+)
+const PreviewScreen = lazy(() =>
+  import('./PreviewScreen').then((m) => ({ default: m.PreviewScreen }))
+)
+const RenderScreen = lazy(() =>
+  import('./RenderScreen').then((m) => ({ default: m.RenderScreen }))
+)
 
 export const FlowContainer: React.FC = () => {
   const currentStep = useFlowStore((s) => s.currentStep)
@@ -46,7 +57,15 @@ export const FlowContainer: React.FC = () => {
 
       {/* Aktif Ekran İçeriği */}
       <div className="flex-1 overflow-y-auto p-lg">
-        {renderActiveScreen()}
+        <Suspense
+          fallback={
+            <div className="flex items-center justify-center py-xl text-xs font-mono text-text-muted">
+              Ekran yükleniyor...
+            </div>
+          }
+        >
+          {renderActiveScreen()}
+        </Suspense>
       </div>
     </div>
   )

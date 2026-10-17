@@ -82,7 +82,7 @@ class ScenarioEvaluationEngine:
                 
         except _StageFailed:
             pass  # Hata zaten actual_stage ve actual_res değişkenlerine kaydedildi
-        except Exception as e:  # noqa: BLE001 - beklenmeyen hata (örn. bozuk LLM JSON) asla PASS sayılmamalı
+        except Exception as e:  # noqa: BLE001 - beklenmeyen hata asla PASS sayılmamalı
             actual_res = "FAIL"
             actual_stage = "ENGINE_ERROR"
             err_msg = f"{type(e).__name__}: {e}"

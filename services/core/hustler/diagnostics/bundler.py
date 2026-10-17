@@ -124,6 +124,64 @@ def _read_recent_log(log_path: Optional[Path] = None) -> str:
         )
 
 
+def _parse_script_meta(script_j: str | None) -> dict[str, object]:
+    if not script_j:
+        return {}
+    try:
+        sd = json.loads(script_j)
+        if isinstance(sd, dict):
+            return {
+                "id": sd.get("id"),
+                "title": sd.get("title"),
+                "has_full_text": bool(sd.get("full_text")),
+            }
+        return {}
+    except Exception:
+        return {"parse_error": True}
+
+
+def _parse_audio_meta(audio_j: str | None) -> dict[str, object]:
+    if not audio_j:
+        return {}
+    try:
+        ad = json.loads(audio_j)
+        if isinstance(ad, dict):
+            return {
+                "voice_id": ad.get("voiceId"),
+                "has_audio": bool(ad.get("audioUrl")),
+            }
+        return {}
+    except Exception:
+        return {"parse_error": True}
+
+
+def _parse_preview_meta(preview_j: str | None) -> dict[str, object]:
+    if not preview_j:
+        return {}
+    try:
+        pd = json.loads(preview_j)
+        if isinstance(pd, dict):
+            return {"is_verified": pd.get("isVerified")}
+        return {}
+    except Exception:
+        return {"parse_error": True}
+
+
+def _parse_render_meta(render_j: str | None) -> dict[str, object]:
+    if not render_j:
+        return {}
+    try:
+        rd = json.loads(render_j)
+        if isinstance(rd, dict):
+            return {
+                "status": rd.get("status"),
+                "progress": rd.get("progress"),
+            }
+        return {}
+    except Exception:
+        return {"parse_error": True}
+
+
 def _get_session_summary(db: Database) -> dict[str, object]:
     """Aktif projenin durumunu metin içeriklerinden arındırılmış meta özet olarak döner."""
     if not db.path.exists():
@@ -147,67 +205,9 @@ def _get_session_summary(db: Database) -> dict[str, object]:
                 return {"active_session": None, "reason": "no_sessions_found"}
 
             (
-                session_id,
-                topic,
-                current_step,
-                checkpoint_step,
-                status,
-                script_j,
-                audio_j,
-                preview_j,
-                render_j,
-                last_err,
-                updated_at,
+                session_id, topic, current_step, checkpoint_step, status,
+                script_j, audio_j, preview_j, render_j, last_err, updated_at,
             ) = row
-
-            # Senaryo metin içeriği hariç meta verisi
-            script_meta: dict[str, object] = {}
-            if script_j:
-                try:
-                    sd = json.loads(script_j)
-                    if isinstance(sd, dict):
-                        script_meta = {
-                            "id": sd.get("id"),
-                            "title": sd.get("title"),
-                            "has_full_text": bool(sd.get("full_text")),
-                        }
-                except Exception:
-                    script_meta = {"parse_error": True}
-
-            # Ses URL ve ID meta verisi
-            audio_meta: dict[str, object] = {}
-            if audio_j:
-                try:
-                    ad = json.loads(audio_j)
-                    if isinstance(ad, dict):
-                        audio_meta = {
-                            "voice_id": ad.get("voiceId"),
-                            "has_audio": bool(ad.get("audioUrl")),
-                        }
-                except Exception:
-                    audio_meta = {"parse_error": True}
-
-            # Önizleme ve Render meta verisi
-            preview_meta: dict[str, object] = {}
-            if preview_j:
-                try:
-                    pd = json.loads(preview_j)
-                    if isinstance(pd, dict):
-                        preview_meta = {"is_verified": pd.get("isVerified")}
-                except Exception:
-                    preview_meta = {"parse_error": True}
-
-            render_meta: dict[str, object] = {}
-            if render_j:
-                try:
-                    rd = json.loads(render_j)
-                    if isinstance(rd, dict):
-                        render_meta = {
-                            "status": rd.get("status"),
-                            "progress": rd.get("progress"),
-                        }
-                except Exception:
-                    render_meta = {"parse_error": True}
 
             return {
                 "active_session": {
@@ -216,10 +216,10 @@ def _get_session_summary(db: Database) -> dict[str, object]:
                     "current_step": str(current_step),
                     "checkpoint_step": str(checkpoint_step),
                     "status": str(status),
-                    "script": script_meta,
-                    "audio": audio_meta,
-                    "preview": preview_meta,
-                    "render": render_meta,
+                    "script": _parse_script_meta(script_j),
+                    "audio": _parse_audio_meta(audio_j),
+                    "preview": _parse_preview_meta(preview_j),
+                    "render": _parse_render_meta(render_j),
                     "last_error": last_err,
                     "updated_at": updated_at,
                 }

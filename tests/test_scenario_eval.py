@@ -6,7 +6,7 @@ import pytest
 from tests.conftest import LLMFactory
 from tests.test_semantic_validator import CLEAN_BODY
 
-from services.core.hustler.evaluation.scenario_eval import ScenarioEvaluationEngine
+from tests.eval.scenario_eval import ScenarioEvaluationEngine
 from services.core.hustler.validation.claims import ClaimMarker
 
 GOOD = {

@@ -25,6 +25,7 @@ export const ScriptScreen: React.FC = () => {
   const [isCopying, setIsCopying] = useState(false)
   const [copySuccess, setCopySuccess] = useState(false)
   const [copyError, setCopyError] = useState<string | null>(null)
+  const [copiedSceneIndex, setCopiedSceneIndex] = useState<number | null>(null)
 
   // K-705: Tek Tık Toplu Prompt Kopyalama (Tauri Native IPC)
   const handleCopyPrompt = async () => {
@@ -55,6 +56,23 @@ export const ScriptScreen: React.FC = () => {
       })
     } finally {
       setIsCopying(false)
+    }
+  }
+
+  // Sahne Bazlı 9:16 Prompt Kopyalama
+  const handleCopyScenePrompt = async (prompt: string, idx: number) => {
+    try {
+      await clipboardWrite(prompt)
+      setCopiedSceneIndex(idx)
+      addToast({
+        title: `Sahne #${idx + 1} Promptu Kopyalandı`,
+        message: '9:16 dikey görsel prompt panoya aktarıldı.',
+        code: 'SCENE_PROMPT_COPIED',
+        status: 200,
+      })
+      setTimeout(() => setCopiedSceneIndex(null), 2000)
+    } catch {
+      // no-op
     }
   }
 
@@ -92,10 +110,9 @@ export const ScriptScreen: React.FC = () => {
   const handleApprove = () => {
     try {
       approveScript()
-      // Onaylandığı an sunucuya da güncel durumu kaydet
       void saveScriptContent()
     } catch {
-      // Store zaten hata mesajını yönetir
+      // Store zaten yönetir
     }
   }
 
@@ -117,41 +134,51 @@ export const ScriptScreen: React.FC = () => {
     )
   }
 
+  const canAdvance = script.isApproved && allClaimsVerified && script.fullText.length >= 20
+
   return (
-    <div className="space-y-lg max-w-3xl mx-auto" data-testid="screen-script">
-      <div className="border-b border-border pb-md flex items-center justify-between">
+    <div className="space-y-md max-w-6xl mx-auto py-sm animate-in fade-in duration-200" data-testid="screen-script">
+      {/* Üst Bar: Başlık, Durum Rozeti ve Toplu Pano Aksiyonu */}
+      <div className="border-b border-border/80 pb-sm flex flex-col sm:flex-row sm:items-center justify-between gap-sm">
         <div>
-          <h2 className="text-xl font-bold text-text-primary">3. Senaryo İnceleme & Onay</h2>
-          <p className="text-sm text-text-secondary">
-            Ses sentezi ve görselleştirmeye geçmeden önce senaryoyu düzenleyin ve güvenlik iddialarını onaylayın.
-          </p>
+          <div className="flex items-center gap-xs">
+            <span className="text-primary font-bold text-xs uppercase tracking-wider">Adım 2 / 6</span>
+            <span className="text-text-muted">•</span>
+            <span className="text-text-muted text-xs">Senaryo Editörü & İddia Doğrulama</span>
+          </div>
+          <h2 className="text-2xl font-bold tracking-tight text-text-primary">
+            3 Perdeli Senaryo ve Doğrulama Masası
+          </h2>
         </div>
-        <div className="flex items-center gap-xs">
+
+        <div className="flex items-center gap-xs sm:gap-sm shrink-0">
           {script.saveStatus === 'SAVING' && (
-            <span className="text-xs text-text-muted animate-pulse" data-testid="script-saving-indicator">
+            <span className="text-xs text-text-muted animate-pulse font-mono" data-testid="script-saving-indicator">
               Kaydediliyor...
             </span>
           )}
           {script.saveStatus === 'SAVED' && (
-            <span className="text-xs text-success" data-testid="script-saved-indicator">
+            <span className="text-xs text-emerald-400 font-mono" data-testid="script-saved-indicator">
               Kaydedildi ✓
             </span>
           )}
           {script.saveStatus === 'UNCHANGED' && (
-            <span className="text-xs text-text-muted" data-testid="script-unchanged-indicator">
+            <span className="text-xs text-text-muted font-mono" data-testid="script-unchanged-indicator">
               Senkron ✓
             </span>
           )}
+
           <span
-            className={`text-xs px-sm py-xs rounded font-semibold ${
+            className={`text-xs px-2.5 py-1 rounded-full font-semibold border ${
               script.isApproved
-                ? 'bg-success/15 text-success border border-success/30'
-                : 'bg-warning/15 text-warning border border-warning/30'
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
             }`}
             data-testid="script-status-badge"
           >
             {script.isApproved ? 'Onaylandı ✓' : 'Onay Bekliyor'}
           </span>
+
           <Button
             variant="outline"
             size="sm"
@@ -188,126 +215,223 @@ export const ScriptScreen: React.FC = () => {
         </div>
       )}
 
-      <div className="space-y-md">
-        <div>
-          <label className="block text-xs font-semibold text-text-secondary mb-xs">Senaryo Başlığı</label>
-          <input
-            type="text"
-            value={script.title}
-            onChange={(e) => handleTitleChange(e.target.value)}
-            className="w-full px-md py-sm rounded-lg border border-border bg-surface text-text-primary text-sm font-medium"
-            data-testid="script-title-input"
-          />
+      {/* İki Sütunlu Stüdyo Düzeni: Sol = Metin & Sahneler, Sağ = İddia Doğrulama Masası */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-lg">
+        {/* SOL SÜTUN (7/12): Başlık, Seslendirme Metni ve 9:16 Sahne Blokları */}
+        <div className="lg:col-span-7 space-y-md">
+          {/* Başlık Girişi */}
+          <div className="space-y-xs">
+            <label className="block text-xs font-semibold text-text-primary uppercase tracking-wider">
+              Senaryo Başlığı
+            </label>
+            <input
+              type="text"
+              value={script.title}
+              onChange={(e) => handleTitleChange(e.target.value)}
+              className="w-full px-md py-2.5 rounded-xl border border-border bg-surface text-text-primary text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-inner"
+              data-testid="script-title-input"
+            />
+          </div>
+
+          {/* Seslendirme Metni (Full Text) */}
+          <div className="space-y-xs">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-text-primary uppercase tracking-wider">
+                Seslendirme Metni (TTS Anlatımı)
+              </label>
+              <span className="text-[11px] text-text-muted font-mono">
+                {script.fullText.length} Karakter • ~{Math.round(script.fullText.split(/\s+/).length * 0.35)} sn
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              value={script.fullText}
+              onChange={(e) => handleTextChange(e.target.value)}
+              className="w-full p-md rounded-xl border border-border bg-surface text-text-primary text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-primary focus:border-primary shadow-inner resize-y"
+              data-testid="script-text-input"
+            />
+          </div>
+
+          {/* Sahne Bazlı (Scene 1, 2, 3) 9:16 Görsel Prompt Kartları */}
+          <div className="space-y-sm">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-semibold text-text-primary uppercase tracking-wider">
+                3 Perdeli Sahneler & 9:16 Görsel Promptlar ({script.scenes.length})
+              </label>
+              <span className="text-[11px] text-text-muted">Dikey Video 9:16 Midjourney/FLUX Uyumlu</span>
+            </div>
+
+            <div className="space-y-sm">
+              {script.scenes.map((scene, idx) => {
+                const isCopied = copiedSceneIndex === idx
+                return (
+                  <div
+                    key={idx}
+                    className="p-md rounded-xl border border-border/80 bg-surface/80 hover:bg-surface space-y-sm transition-all"
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="px-2 py-0.5 rounded-md bg-primary/10 text-primary text-xs font-bold font-mono">
+                        Sahne #{scene.order}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleCopyScenePrompt(scene.visualPrompt, idx)}
+                        className="text-[11px] font-semibold text-primary hover:text-primary-hover hover:underline transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        {isCopied ? (
+                          <>
+                            <span className="text-emerald-400">✓</span>
+                            <span>Kopyalandı</span>
+                          </>
+                        ) : (
+                          <>
+                            <span>📋</span>
+                            <span>9:16 Promptu Kopyala</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] text-text-muted font-semibold">Anlatım (Voiceover):</span>
+                      <p className="text-xs text-text-primary font-medium mt-0.5">{scene.narration}</p>
+                    </div>
+
+                    <div className="p-2 rounded-lg bg-surface-hover/70 border border-border/60">
+                      <div className="flex items-center justify-between text-[10px] text-text-muted uppercase font-mono mb-1">
+                        <span>Görselleştirme Promptu (9:16 Aspect)</span>
+                        <span className="text-primary font-semibold">--ar 9:16</span>
+                      </div>
+                      <p className="text-xs text-text-secondary font-mono leading-relaxed select-all">
+                        {scene.visualPrompt}
+                      </p>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-xs font-semibold text-text-secondary mb-xs">Seslendirme Metni</label>
-          <textarea
-            rows={4}
-            value={script.fullText}
-            onChange={(e) => handleTextChange(e.target.value)}
-            className="w-full px-md py-sm rounded-lg border border-border bg-surface text-text-primary text-sm"
-            data-testid="script-text-input"
-          />
-        </div>
+        {/* SAĞ SÜTUN (5/12): İddia Doğrulama Masası & Senaryo Onay Kartı */}
+        <div className="lg:col-span-5 space-y-md">
+          {/* İddia Doğrulama (Claim Verification) Listesi */}
+          <div className="p-md rounded-2xl border border-border bg-surface shadow-sm space-y-sm" data-testid="claims-card">
+            <div className="flex items-center justify-between border-b border-border/60 pb-sm">
+              <div>
+                <h4 className="text-sm font-bold text-text-primary flex items-center gap-1">
+                  <span>İddia Doğrulama</span>
+                  <span className="text-xs text-text-muted font-mono">({claims.length})</span>
+                </h4>
+                <p className="text-[11px] text-text-secondary mt-0.5">
+                  Yapay zekanın ürettiği gerçeklik iddialarını teyit edin.
+                </p>
+              </div>
+              <span
+                className={`text-xs px-2 py-0.5 rounded-full font-bold font-mono border ${
+                  allClaimsVerified
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                }`}
+                data-testid="claims-badge"
+              >
+                {verifiedCount} / {claims.length} Onaylandı
+              </span>
+            </div>
 
-        {/* K-704: LLM Tarafından Üretilen İddialar (Claims) Listesi & Katı Kilit */}
-        <div className="p-md rounded-xl border border-border bg-surface/50 space-y-sm" data-testid="claims-card">
-          <div className="flex items-center justify-between">
+            <div className="space-y-xs pt-xs max-h-[320px] overflow-y-auto pr-xs">
+              {claims.map((claim) => (
+                <label
+                  key={claim.id}
+                  className={`flex items-start gap-sm p-sm rounded-xl border transition-all cursor-pointer ${
+                    claim.verified
+                      ? 'border-emerald-500/30 bg-emerald-500/5 text-text-primary'
+                      : 'border-border/80 bg-surface-hover/30 hover:bg-surface-hover text-text-secondary'
+                  }`}
+                  data-testid={`claim-item-${claim.id}`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={claim.verified}
+                    onChange={() => toggleClaim(claim.id)}
+                    className="mt-0.5 rounded border-border text-primary focus:ring-primary w-4 h-4 cursor-pointer"
+                    data-testid={`claim-checkbox-${claim.id}`}
+                  />
+                  <span className={`text-xs leading-snug select-none ${claim.verified ? 'font-medium text-text-primary' : 'text-text-muted'}`}>
+                    {claim.text}
+                  </span>
+                </label>
+              ))}
+            </div>
+
+            {!allClaimsVerified && (
+              <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs flex items-center gap-1.5" data-testid="claims-lock-warning">
+                <span>⚠️</span>
+                <span>Tüm iddialar onaylanmadan senaryo onayı açılamaz.</span>
+              </div>
+            )}
+          </div>
+
+          {/* Senaryo Onay Kartı */}
+          <div className="p-md rounded-2xl border border-border bg-surface/90 shadow-sm space-y-sm">
             <div>
-              <h4 className="text-sm font-semibold text-text-primary flex items-center gap-xs">
-                <span>Doğruluk ve Güvenlik İddiaları (Claims)</span>
-                <span className="text-xs text-text-muted">({claims.length})</span>
-              </h4>
-              <p className="text-xs text-text-secondary">
-                Yapay zekanın ürettiği iddiaların doğruluğunu tek tek teyit etmeden seslendirmeye geçilemez.
+              <h4 className="text-sm font-bold text-text-primary">Senaryo Nihai Onayı</h4>
+              <p className="text-xs text-text-secondary mt-0.5">
+                Tüm iddialar doğrulandıktan sonra senaryoyu kilitleyip ses sentezine geçebilirsiniz.
               </p>
             </div>
-            <span
-              className={`text-xs px-sm py-xs rounded font-semibold ${
-                allClaimsVerified
-                  ? 'bg-success/15 text-success border border-success/30'
-                  : 'bg-warning/15 text-warning border border-warning/30'
-              }`}
-              data-testid="claims-badge"
+
+            <Button
+              variant={script.isApproved ? 'outline' : 'primary'}
+              size="md"
+              onClick={handleApprove}
+              disabled={!allClaimsVerified}
+              className="w-full justify-center"
+              data-testid="script-approve-btn"
             >
-              {verifiedCount} / {claims.length} Onaylandı
-            </span>
+              {script.isApproved ? '✓ Senaryo Onaylandı' : 'Senaryoyu Onayla'}
+            </Button>
           </div>
 
-          <div className="space-y-xs pt-xs">
-            {claims.map((claim) => (
-              <label
-                key={claim.id}
-                className="flex items-start gap-sm p-sm rounded-lg border border-border hover:bg-surface cursor-pointer transition-colors"
-                data-testid={`claim-item-${claim.id}`}
-              >
-                <input
-                  type="checkbox"
-                  checked={claim.verified}
-                  onChange={() => toggleClaim(claim.id)}
-                  className="mt-0.5 rounded border-border text-accent focus:ring-accent"
-                  data-testid={`claim-checkbox-${claim.id}`}
-                />
-                <span className={`text-xs ${claim.verified ? 'text-text-primary font-medium' : 'text-text-muted'}`}>
-                  {claim.text}
-                </span>
-              </label>
-            ))}
-          </div>
-
-          {!allClaimsVerified && (
-            <p className="text-xs text-warning font-medium pt-xs" data-testid="claims-lock-warning">
-              ⚠️ Katı Kural: Devam edebilmek için yukarıdaki tüm iddiaların onaylanması zorunludur.
-            </p>
+          {/* Kilit Açıklama Mikro-Kopyası */}
+          {!canAdvance && (
+            <div className="p-sm rounded-xl border border-border/80 bg-surface-hover/40 text-text-muted text-xs space-y-1">
+              <span className="font-semibold text-text-secondary block">İlerleme Koşulları:</span>
+              <ul className="list-disc list-inside space-y-0.5 text-[11px]">
+                <li className={allClaimsVerified ? 'text-emerald-400 font-medium' : ''}>
+                  Tüm iddiaların ({verifiedCount}/{claims.length}) onaylanması
+                </li>
+                <li className={script.isApproved ? 'text-emerald-400 font-medium' : ''}>
+                  Senaryo Nihai Onay butonuna basılması
+                </li>
+              </ul>
+            </div>
           )}
-        </div>
-
-        <div className="space-y-xs">
-          <label className="block text-xs font-semibold text-text-secondary">Sahneler ({script.scenes.length})</label>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-sm">
-            {script.scenes.map((scene, i) => (
-              <div key={i} className="p-sm rounded-lg border border-border bg-surface text-xs space-y-xs">
-                <span className="font-bold text-accent">Sahne #{scene.order}</span>
-                <p className="text-text-primary line-clamp-2">{scene.narration}</p>
-                <p className="text-text-muted italic line-clamp-2">{scene.visualPrompt}</p>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        <div className="p-md rounded-xl border border-border bg-surface flex items-center justify-between">
-          <div>
-            <h4 className="text-sm font-semibold text-text-primary">Senaryo Onayı</h4>
-            <p className="text-xs text-text-secondary">
-              Tüm iddialar doğrulandıktan sonra senaryo kilitlenir ve ses sentezi aşamasına açılır.
-            </p>
-          </div>
-          <Button
-            variant={script.isApproved ? 'outline' : 'primary'}
-            size="sm"
-            onClick={handleApprove}
-            disabled={!allClaimsVerified}
-            data-testid="script-approve-btn"
-          >
-            {script.isApproved ? 'Onaylandı ✓' : 'Senaryoyu Onayla'}
-          </Button>
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-md border-t border-border">
+      {/* Alt Navigasyon ve İlerleme Barı */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-sm pt-md border-t border-border/80">
         <Button variant="ghost" onClick={prevStep} data-testid="script-back-btn">
           ← Fikirlere Dön
         </Button>
-        <Button
-          variant="primary"
-          onClick={handleAdvance}
-          isLoading={isLoading}
-          disabled={!script.isApproved || !allClaimsVerified || script.fullText.length < 20}
-          data-testid="script-submit-btn"
-        >
-          Ses Üret & İlerle →
-        </Button>
+
+        <div className="flex items-center gap-md">
+          {!canAdvance && (
+            <span className="text-xs text-amber-400 font-medium hidden sm:inline" title="İlerleme kilitli">
+              ⚠️ Tüm iddialar onaylanmadan ses üretimine geçilemez.
+            </span>
+          )}
+          <Button
+            variant="primary"
+            onClick={handleAdvance}
+            isLoading={isLoading}
+            disabled={!canAdvance}
+            data-testid="script-submit-btn"
+          >
+            Sese Geç & Ses Üret →
+          </Button>
+        </div>
       </div>
     </div>
   )

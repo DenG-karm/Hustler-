@@ -4,13 +4,12 @@ import { App } from '../App'
 import { ThemeProvider } from '../theme/ThemeContext'
 import { useFlowStore } from '../store/flowStore'
 import { setIpcClient, resetIpcClient, type FlowIpcClient } from '../lib/ipc'
+import { setEventBridge, resetEventBridge } from '../lib/events'
 import {
-  setEventBridge,
-  resetEventBridge,
   mockEventBridge,
   emitMockEvent,
   emitMockConnectionState,
-} from '../lib/events'
+} from './mockEvents'
 
 describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilience) Testleri', () => {
   let mockIpc: FlowIpcClient
@@ -79,7 +78,9 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
     )
 
     // Başlangıçta %10 görünür olmalı
-    expect(screen.getByText('%10')).toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByText('%10')).toBeInTheDocument()
+    })
 
     // FastAPI -> Rust -> Tauri Window::emit -> hustler:event (%55 İlerleme Simülasyonu)
     act(() => {
@@ -133,7 +134,7 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
       </ThemeProvider>
     )
 
-    const cancelBtn = screen.getByTestId('render-cancel-btn')
+    const cancelBtn = await waitFor(() => screen.getByTestId('render-cancel-btn'))
     expect(cancelBtn).toBeInTheDocument()
 
     fireEvent.click(cancelBtn)

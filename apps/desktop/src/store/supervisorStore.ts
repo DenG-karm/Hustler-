@@ -16,7 +16,7 @@
  */
 
 import { create } from 'zustand'
-import { invoke } from '@tauri-apps/api/core'
+import { secureInvoke } from '../lib/securityGuard'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { useFlowStore } from './flowStore'
 
@@ -249,12 +249,12 @@ export const useSupervisorStore = create<SupervisorStore>((set, get) => ({
       const activeProcesses = get().activeProcesses
 
       // 1. Alt süreçleri sonlandırma sinyalini IPC üzerinden gönder
-      await invoke('supervisor:terminate_sidecar', {
+      await secureInvoke('supervisor:terminate_sidecar', {
         processes: activeProcesses,
       })
 
       // 2. Yetim kalan alt süreçleri temizle
-      await invoke('supervisor:cleanup_orphans')
+      await secureInvoke('supervisor:cleanup_orphans')
 
       dispatch({ type: 'CLEANUP_COMPLETED' })
       return true
@@ -302,7 +302,16 @@ export const useSupervisorStore = create<SupervisorStore>((set, get) => ({
               tauriEvent.preventDefault()
             },
           }
-          await get().handleCloseRequested(isBusy, ctx)
+          try {
+            const canClose = await get().handleCloseRequested(isBusy, ctx)
+            if (canClose && typeof (currentWindow as { hide?: () => Promise<void> }).hide === 'function') {
+              await (currentWindow as { hide: () => Promise<void> }).hide()
+            }
+          } catch {
+            if (!isBusy && typeof (currentWindow as { hide?: () => Promise<void> }).hide === 'function') {
+              await (currentWindow as { hide: () => Promise<void> }).hide().catch(() => {})
+            }
+          }
         }
       )
 

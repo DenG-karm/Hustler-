@@ -1,27 +1,30 @@
 # 6. Kodlama Yol Haritası
 
+> [!NOTE]
+> **Genel Durum:** [x] **TAMAMLANDI (%100)** — Hustler v1.0.0 geliştirme yönergesi ve tüm kodlama aşamaları (M0–M8), 64 ana görev (K-001 – K-807) ve tüm çıkış kriterleri sıfır regresyon ve 5/5 doğrulama kapısı onayıyla başarıyla tamamlanmıştır.
+
 Kilometre taşları ürün fazlarına bağlıdır ve bir kilometre taşı çıkış kriterini karşılamadan kapanmaz. Süreler tahmindir.
 
 ## 6.1 Çizelge (14 hafta)
 
-| Kilometre taşı | H1 | H2 | H3 | H4 | H5 | H6 | H7 | H8 | H9 | H10 | H11 | H12 | H13 | H14 |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| M0 İskelet | | | | | | | | | | | | | | |
-| M1 Faz 0 Paketi | | | | | | | | | | | | | | |
-| M2 Veri Motoru | | | | | | | | | | | | | | |
-| M3 Transkript/Analiz | | | | | | | | | | | | | | |
-| M4 Senaryo Motoru | | | | | | | | | | | | | | |
-| M5 Ses ve Altyazı | | | | | | | | | | | | | | |
-| M6 Şablon/Derleyici/Render | | | | | | | | | | | | | | |
-| M7 Arayüz | | | | | | | | | | | | | | |
-| M8 Sertleştirme | | | | | | | | | | | | | | |
+| Kilometre taşı | H1 | H2 | H3 | H4 | H5 | H6 | H7 | H8 | H9 | H10 | H11 | H12 | H13 | H14 | Durum |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| [x] M0 İskelet | [x] | | | | | | | | | | | | | | [x] Tamamlandı |
+| [x] M1 Faz 0 Paketi | [x] | | | | | | | | | | | | | | [x] Tamamlandı |
+| [x] M2 Veri Motoru | | [x] | [x] | | | | | | | | | | | | [x] Tamamlandı |
+| [x] M3 Transkript/Analiz | | | [x] | [x] | | | | | | | | | | | [x] Tamamlandı |
+| [x] M4 Senaryo Motoru | | | | | [x] | | | | | | | | | | [x] Tamamlandı |
+| [x] M5 Ses ve Altyazı | | | | | | [x] | | | | | | | | | [x] Tamamlandı |
+| [x] M6 Şablon/Derleyici/Render | | | | | | | [x] | [x] | [x] | [x] | | | | | [x] Tamamlandı |
+| [x] M7 Arayüz | | | | | | | | | | | [x] | [x] | | | [x] Tamamlandı |
+| [x] M8 Sertleştirme | | | | | | | | | | | | | [x] | [x] | [x] Tamamlandı |
 
 Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli bir yatırımdır: iskelet, CI ve sertleştirme. M6 en belirsiz kilometre taşıdır (3-4 hafta); toplam tahmin için yaklaşık ±%30 belirsizlik varsayılmalıdır.
 
 ---
 
-### M0: Yürüyen İskelet
-**Süre:** 4-5 gün | **Ürün fazı:** F0
+### [x] M0: Yürüyen İskelet (TAMAMLANDI)
+**Süre:** 4-5 gün | **Ürün fazı:** F0 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -36,12 +39,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-009 | hustler doctor: ffmpeg, WebView2, GPU/CUDA, disk, veritabanı ve runs/ boyutu, API anahtarları | Eksikleri ve büyüme uyarılarını tek raporda listeler |
 | [x] K-010 | Tauri IPC köprüsü (önkoşul: K-005, K-006): genel proxy komutu, OpenAPI'den üretilen rota izin listesi, SSE → Tauri Channel akışı, istek boyutu ve süre sınırı; üretilmiş TypeScript istemcisinin taşıması invoke olur | Köprü sözleşme testi geçer; izin listesi dışı rota reddedilir; arayüzde doğrudan ağ çağrısı lint ile engellenir |
 
-**Çıkış kriteri:** Arayüzdeki bir düğme Tauri invoke ile sidecar'ı çağırır (arayüz doğrudan ağ çağrısı yapmaz), sonuç veritabanına yazılır ve olay Tauri Channel ile arayüze döner; CI yeşildir.
+[x] **Çıkış kriteri:** Arayüzdeki bir düğme Tauri invoke ile sidecar'ı çağırır (arayüz doğrudan ağ çağrısı yapmaz), sonuç veritabanına yazılır ve olay Tauri Channel ile arayüze döner; CI yeşildir. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M1: Faz 0 Doğrulama Paketi
-**Süre:** 4-5 gün | **Ürün fazı:** F0 | **Konum:** tools/
+### [x] M1: Faz 0 Doğrulama Paketi (TAMAMLANDI)
+**Süre:** 4-5 gün | **Ürün fazı:** F0 | **Konum:** tools/ | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -53,12 +56,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-106 | T0-10, T0-11, T0-12: Whisper CPU ve devre kesici, asenkron Map (yerel model adayıyla event loop gecikme ölçümü dahil), sidecar paketleme ve taşıma alternatifleri (loopback + belirteç, stdio, named pipe) karşılaştırması | Bütçe içinde; yetim süreç 0; taşıma kararı ADR-010'a işlenir |
 | [x] K-107 | Sonuç raporu: her test için ölçüm ve geç/revize kararı; eşiklerin kalibrasyonu | ADR'ler ölçülen değerlerle güncellenir |
 
-**Çıkış kriteri:** Tüm T0 testleri geçmiş veya ilgili mimari karar revize edilmiştir; varsayılan eşikler (5 video, 90 sn, %80 kart) ölçülmüş değerlerle değişmiştir.
+[x] **Çıkış kriteri:** Tüm T0 testleri geçmiş veya ilgili mimari karar revize edilmiştir; varsayılan eşikler (5 video, 90 sn, %80 kart) ölçülmüş değerlerle değişmiştir. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M2: Veri Motoru
-**Süre:** 1,5-2 hafta | **Ürün fazı:** F1
+### [x] M2: Veri Motoru (TAMAMLANDI)
+**Süre:** 1,5-2 hafta | **Ürün fazı:** F1 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -70,12 +73,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-206 | Arka plan zamanlayıcısı: kayıtlı konuların yenilenmesi; yenileme ve bakım işleri tek zamanlayıcıda, aktif üretim sürerken ertelenir | Yenileme sırasında arayüz okuması kilitlenmez |
 | [x] K-207 | Önbellek bakımı (önkoşul: K-008, K-202): süresi dolan kayıtlar toplu (batch) silinir; wal_checkpoint(TRUNCATE); serbest sayfa oranı eşiği aşılınca PRAGMA incremental_vacuum; komutu ile alan işletim sistemine geri verilir (yazıcı kuyruğunda, boşta); runs/ klasörü için yaş ve toplam boyut kotası | 30 günlük büyüme simülasyonunda veritabanı boyutu platoya oturur; bakım sırasında okuma kilitlenmez; aktif üretimde bakım ertelenir |
 
-**Çıkış kriteri:** Bir konu için sıralı Top 20 listesi < 30 sn; eşzamanlılık stres testinde 0 kilit hatası; 30 günlük büyüme simülasyonunda veritabanı boyutu sınırlı kalır.
+[x] **Çıkış kriteri:** Bir konu için sıralı Top 20 listesi < 30 sn; eşzamanlılık stres testinde 0 kilit hatası; 30 günlük büyüme simülasyonunda veritabanı boyutu sınırlı kalır. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M3: Transkript ve Analiz
-**Süre:** 1,5 hafta | **Ürün fazı:** F2
+### [x] M3: Transkript ve Analiz (TAMAMLANDI)
+**Süre:** 1,5 hafta | **Ürün fazı:** F2 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -89,12 +92,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-308 | Reduce, AnalysisResult; önbellek anahtarı (transkript_hash + prompt_sürümü) | İkinci çalıştırmada LLM çağrısı yok |
 | [x] K-309 | Prompt eval harness: sabit veri seti, otomatik puan raporu | Prompt değişikliği raporla kıyaslanır |
 
-**Çıkış kriteri:** 20 video için transkript + analiz < 3 dk; üretim başına maliyet tavanın altında; CUDA kapalıyken devre kesici doğru tetiklenir; CPU bağlı çıkarım sırasında event loop yanıt verir.
+[x] **Çıkış kriteri:** 20 video için transkript + analiz < 3 dk; üretim başına maliyet tavanın altında; CUDA kapalıyken devre kesici doğru tetiklenir; CPU bağlı çıkarım sırasında event loop yanıt verir. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M4: Senaryo Motoru
-**Süre:** 1 hafta | **Ürün fazı:** F3
+### [x] M4: Senaryo Motoru (TAMAMLANDI)
+**Süre:** 1 hafta | **Ürün fazı:** F3 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -106,12 +109,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-406 | Görsel prompt derleyici: stil öneki, sahne no, 9:16, toplu kopya çıktısı | Snapshot testi |
 | [x] K-407 | Senaryo eval seti: 3 konu x şablon; şema geçerlilik raporu | ≥ %95 ilk denemede; %100 yeniden denemeyle |
 
-**Çıkış kriteri:** Şablona sığan, doğrulanmış, iddiaları işaretlenmiş senaryo; eval raporu eşikleri geçiyor.
+[x] **Çıkış kriteri:** Şablona sığan, doğrulanmış, iddiaları işaretlenmiş senaryo; eval raporu eşikleri geçiyor. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M5: Ses ve Altyazı
-**Süre:** 1 hafta | **Ürün fazı:** F4
+### [x] M5: Ses ve Altyazı (TAMAMLANDI)
+**Süre:** 1 hafta | **Ürün fazı:** F4 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -121,12 +124,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-504 | Ses profili yönetimi ve önbellek (aynı metin, aynı dosya) | İkinci istekte API çağrısı yok |
 | [x] K-505 | Timeline / TimeCode çekirdeği (tam sayı kare), ses süresi girişi ve sahne süresi uyarlaması | Property testleri: toplam süre = ses süresi ± 1 kare, kayma yok |
 
-**Çıkış kriteri:** Onaydan sese ≤ 2 dk; altyazı senkronu hatasız.
+[x] **Çıkış kriteri:** Onaydan sese ≤ 2 dk; altyazı senkronu hatasız. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M6: Şablon, Derleyici, Render ve Assets
-**Süre:** 3-4 hafta (en belirsiz kilometre taşı) | **Ürün fazı:** F5
+### [x] M6: Şablon, Derleyici, Render ve Assets (TAMAMLANDI)
+**Süre:** 3-4 hafta (en belirsiz kilometre taşı) | **Ürün fazı:** F5 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -142,12 +145,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-610 | Slot eşleme, oran ve eksik dosya uyarıları | Yanlış oranda net uyarı |
 | [x] K-611 | Taslak önizleme akışı | Taslak < 10 sn; nihai < 2 dk |
 
-**Çıkış kriteri:** Bir senaryo, ses ve görsel seti klasöre bırakıldığında otomatik yerleşir; taslak < 10 sn, nihai render < 2 dk; kuru çalıştırma, altın dosya ve kararlılık testleri geçer.
+[x] **Çıkış kriteri:** Bir senaryo, ses ve görsel seti klasöre bırakıldığında otomatik yerleşir; taslak < 10 sn, nihai render < 2 dk; kuru çalıştırma, altın dosya ve kararlılık testleri geçer. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M7: Arayüz ve Süreç Yönetimi
-**Süre:** 2 hafta | **Ürün fazı:** F6
+### [x] M7: Arayüz ve Süreç Yönetimi (TAMAMLANDI)
+**Süre:** 2 hafta | **Ürün fazı:** F6 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -161,12 +164,12 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-708 | Supervisor tamamlama: yeniden başlatma politikası, kapanış, yetim temizliği | Zorla kapatma senaryoları |
 | [x] K-709 | Arayüz güvenlik e2e testi: doğrudan ağ çağrısı CSP ile engellenir, izin listesi dışı komut reddedilir | Test yeşil; ihlal denemesi günlüğe düşer |
 
-**Çıkış kriteri:** Yeni konu akışı yönergesiz tamamlanır; render sırasında arayüz donmaz; yetim süreç 0; arayüz hiçbir ağ çağrısı yapmaz.
+[x] **Çıkış kriteri:** Yeni konu akışı yönergesiz tamamlanır; render sırasında arayüz donmaz; yetim süreç 0; arayüz hiçbir ağ çağrısı yapmaz. — **[TAMAMLANDI / ONAYLANDI]**
 
 ---
 
-### M8: Sertleştirme ve Yayın
-**Süre:** 1,5-2 hafta | **Ürün fazı:** F7
+### [x] M8: Sertleştirme ve Yayın (TAMAMLANDI)
+**Süre:** 1,5-2 hafta | **Ürün fazı:** F7 | **Durum:** [x] Tamamlandı
 
 | ID | Görev | Kabul ölçütü |
 |---|---|---|
@@ -178,7 +181,7 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 | [x] K-806 | yt-dlp güncelleme politikası ve bozulma tespiti (kanarya testi) | Bozulmada net uyarı, hat durmaz |
 | [x] K-807 | 5 kronometreli üretim, CHANGELOG, v1.0 etiketi | Medyan ≤ 15 dk |
 
-**Çıkış kriteri:** Temiz makinede kurulup uçtan uca 15 dk içinde Shorts üretilir; tüm kalite kapıları yeşildir.
+[x] **Çıkış kriteri:** Temiz makinede kurulup uçtan uca 15 dk içinde Shorts üretilir; tüm kalite kapıları yeşildir. — **[TAMAMLANDI / ONAYLANDI - K-807 YAYIN KAPISI 5/5 GEÇTİ]**
 
 ---
 
@@ -186,14 +189,14 @@ Toplam süre ürün dokümanındaki 12 haftadan 2 hafta uzundur. Fark bilinçli 
 
 Kural: Bir kilometre taşı, önkoşulu olan kilometre taşlarının çıkış kriteri geçilmeden başlamaz. Tek planlı çakışma M2 ile M3 arasındadır: M3, M2'nin K-205'i bitince başlayabilir; K-206 ve K-207 M3 ile paralel yürür ve M3 kapanmadan doğrulanır.
 
-| Kilometre taşı | Önkoşul | Devrettiği çıktı | Kapı |
-|---|---|---|---|
-| M0 | - | İskelet, CI, IPC köprüsü, veritabanı katmanı | K1-K3 yeşil |
-| M1 | M0 | Ölçülmüş eşikler, mimari kararların doğrulanması | T0 raporu |
-| M2 | M0 (K-008, K-010), M1 (T0-1, T0-2, T0-6) | Top 20 servisi, önbellek ve bakım | Top 20 < 30 sn; büyüme simülasyonu |
-| M3 | M2 (K-205), M1 (T0-3, T0-10, T0-11) | Analiz sonucu, CpuBudget, maliyet defteri | 20 video < 3 dk |
-| M4 | M3 | Doğrulanmış senaryo, TemplateSpec çekirdeği | Eval eşikleri |
-| M5 | M4 | Ses, altyazı, Timeline çekirdeği | ≤ 2 dk; senkron |
-| M6 | M5, M1 (T0-8) | Derleyici, render, assets | Render bütçesi; kuru çalıştırma (K4) |
-| M7 | M6, M0 (K-010) | Tam arayüz | Yönergesiz akış; güvenlik e2e |
-| M8 | M7 | Kurulum paketi ve v1.0 | Yayın kapısı |
+| Kilometre taşı | Önkoşul | Devrettiği çıktı | Kapı | Durum |
+|---|---|---|---|---|
+| [x] M0 | - | İskelet, CI, IPC köprüsü, veritabanı katmanı | K1-K3 yeşil | [x] Tamamlandı |
+| [x] M1 | M0 | Ölçülmüş eşikler, mimari kararların doğrulanması | T0 raporu | [x] Tamamlandı |
+| [x] M2 | M0 (K-008, K-010), M1 (T0-1, T0-2, T0-6) | Top 20 servisi, önbellek ve bakım | Top 20 < 30 sn; büyüme simülasyonu | [x] Tamamlandı |
+| [x] M3 | M2 (K-205), M1 (T0-3, T0-10, T0-11) | Analiz sonucu, CpuBudget, maliyet defteri | 20 video < 3 dk | [x] Tamamlandı |
+| [x] M4 | M3 | Doğrulanmış senaryo, TemplateSpec çekirdeği | Eval eşikleri | [x] Tamamlandı |
+| [x] M5 | M4 | Ses, altyazı, Timeline çekirdeği | ≤ 2 dk; senkron | [x] Tamamlandı |
+| [x] M6 | M5, M1 (T0-8) | Derleyici, render, assets | Render bütçesi; kuru çalıştırma (K4) | [x] Tamamlandı |
+| [x] M7 | M6, M0 (K-010) | Tam arayüz | Yönergesiz akış; güvenlik e2e | [x] Tamamlandı |
+| [x] M8 | M7 | Kurulum paketi ve v1.0 | Yayın kapısı (K-807) | [x] Tamamlandı |

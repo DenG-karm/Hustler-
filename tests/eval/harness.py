@@ -6,6 +6,29 @@ from services.core.hustler.infrastructure.llm_port import LLMPort
 
 logger = structlog.get_logger()
 
+
+def _score_key(ideal_val: object, actual_val: object, weight: float) -> float:
+    """Tek bir anahtar için doğruluk skorunu hesaplar."""
+    if type(ideal_val) is not type(actual_val):
+        return 0.0
+
+    if isinstance(ideal_val, bool):
+        return weight if ideal_val == actual_val else 0.0
+
+    if isinstance(ideal_val, str) and isinstance(actual_val, str):
+        if ideal_val == "" and actual_val == "":
+            return weight
+        if ideal_val != "" and actual_val != "":
+            iv_low = ideal_val.lower()
+            av_low = actual_val.lower()
+            if iv_low in av_low or av_low in iv_low:
+                return weight
+            if len(ideal_val) > 3 and iv_low[:4] in av_low:
+                return weight * 0.8
+
+    return 0.0
+
+
 class EvalHarness:
     """
     K-309: Prompt Değerlendirme Takımı (Eval Harness)
@@ -31,33 +54,9 @@ class EvalHarness:
         weight = 100.0 / len(keys_to_check)
         
         for k in keys_to_check:
-            # Eksik anahtar cezası
             if k not in actual:
                 continue
-                
-            ideal_val = ideal.get(k)
-            actual_val = actual.get(k)
-            
-            # Tip Uyuşmazlığı Cezası (Boolean yerine string "True" döndürmek vs.)
-            if type(ideal_val) is not type(actual_val):
-                continue
-                
-            if isinstance(ideal_val, bool):
-                # Mantıksal Birebir Eşleşme
-                if ideal_val == actual_val:
-                    score += weight
-            if isinstance(ideal_val, str) and isinstance(actual_val, str):
-                # Anlamsal kapsama eşleşmesi (Birebir değil, kelime içermesi yeterli)
-                # LLM büyük harf veya noktalama kullanmış olabilir
-                if ideal_val == "" and actual_val == "":
-                    score += weight
-                elif ideal_val != "" and actual_val != "":
-                    # "linke tıklayın" -> "Linke tıklayın"
-                    if ideal_val.lower() in actual_val.lower() or actual_val.lower() in ideal_val.lower():
-                        score += weight
-                    elif len(ideal_val) > 3 and ideal_val[:4].lower() in actual_val.lower():
-                        # Kısmi anlamsal tolerans (Örn: "abone olmayı unutmayın" vs "abone ol")
-                        score += weight * 0.8
+            score += _score_key(ideal.get(k), actual.get(k), weight)
                         
         return round(score, 2)
 
@@ -72,15 +71,12 @@ class EvalHarness:
             transcript = item["transcript"]
             ideal = item["ideal_output"]
             
-            # Prompt enjeksiyonu
             prompt = prompt_template.replace("{{TRANSCRIPT}}", transcript)
-            
             res = await self.llm_port.generate_text(prompt)
             
             try:
                 actual = json.loads(res.text)
             except Exception:
-                # LLM JSON yerine düz metin döndüyse 0 puan (Hallucination / Bad Format)
                 actual = {}
                 
             total_score += self._compare(ideal, actual)

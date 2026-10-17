@@ -14,7 +14,7 @@
  *    script-src ve default-src bağlamında `data:` ve `blob:` şemaları KESİNLİKLE yasaktır.
  */
 
-import { invoke } from '@tauri-apps/api/core'
+import { invoke, convertFileSrc } from '@tauri-apps/api/core'
 
 // ---------------------------------------------------------------------------
 // GÜVENLİK HATALARI VE GÜNLÜK MODELLERİ
@@ -104,6 +104,13 @@ export function installNetworkSecurityTrap(): void {
           ? input.toString()
           : (input as Request).url
 
+      // Tauri'nin dahili IPC köprüsü (http://ipc.localhost veya ipc://) harici ağ değildir
+      if (targetUrl.startsWith('http://ipc.localhost') || targetUrl.startsWith('ipc://')) {
+        if (originalFetch) {
+          return originalFetch(input, _init)
+        }
+      }
+
       const trappedApi = 'fetch'
       SecurityAuditLogger.log({
         type: 'FETCH_ATTEMPT',
@@ -185,6 +192,43 @@ export function isIpcCommandAllowed(command: string): boolean {
   return ALLOWED_IPC_COMMANDS.has(command)
 }
 
+export const ALLOWED_PROXY_ROUTE_PREFIXES: readonly string[] = [
+  '/health',
+  '/api/v1/discovery',
+  '/api/v1/script',
+  '/api/v1/audio',
+  '/api/v1/render',
+  '/api/v1/pipeline',
+  '/api/v1/jobs',
+  '/api/v1/diagnostics',
+  '/api/v1/session',
+  '/api/v1/system',
+] as const
+
+export function isProxyRouteAllowed(route: string): boolean {
+  if (!route || typeof route !== 'string') return false
+  const cleanRoute = route.trim().split('?')[0]
+  return ALLOWED_PROXY_ROUTE_PREFIXES.some(
+    (prefix) => cleanRoute === prefix || cleanRoute.startsWith(prefix + '/')
+  )
+}
+
+export function validateProxyRoute(route: string): string {
+  if (!isProxyRouteAllowed(route)) {
+    SecurityAuditLogger.log({
+      type: 'UNAUTHORIZED_IPC',
+      target: route,
+      reason: `Yetkisiz API proxy rotası: ${route}`,
+    })
+    throw new SecurityViolationError(
+      'CSP',
+      route,
+      `[PROXY GÜVENLİK İHLALİ] İzin listesi dışı API rotasına proxy isteği reddedildi: ${route}`
+    )
+  }
+  return route
+}
+
 /**
  * Güvenli Tauri invoke sarmalayıcısı:
  * İzin listesi dışındaki herhangi bir komut çağrıldığında anında reddeder ve günlüğe kaydeder.
@@ -205,10 +249,10 @@ export async function secureInvoke<T>(
   }
 
   if (rawInvoker) {
-    return rawInvoker(command, args)
+    return args !== undefined ? rawInvoker(command, args) : rawInvoker(command)
   }
 
-  return invoke<T>(command, args)
+  return args !== undefined ? invoke<T>(command, args) : invoke<T>(command)
 }
 
 // ---------------------------------------------------------------------------
@@ -270,6 +314,39 @@ export function validateMediaSource(src: string): string {
     throw new UnsafeAssetSourceError(src, 'Yalnızca Tauri asset:// veya yerel blob kaynakları kullanılabilir')
   }
   return src
+}
+
+/**
+ * Yerel disk dosya yolunu (C:\... veya renders/...) Tauri WebView2 içinde oynatılabilecek
+ * güvenli https://asset.localhost/... protokolüne dönüştürür ve doğrular.
+ */
+export function toSafeAssetUrl(filePath: string): string {
+  if (!filePath || typeof filePath !== 'string') return ''
+  const trimmed = filePath.trim()
+  if (isSafeAssetUrl(trimmed)) {
+    return validateMediaSource(trimmed)
+  }
+
+  // Harici ağ veya yasaklı şemalar (http://, https://, file://, javascript:, vb.) doğrudan validateMediaSource ile reddedilir
+  if (/^(https?:\/\/|file:\/\/|javascript:|vbscript:|data:|ws:\/\/|wss:\/\/|ftp:\/\/)/i.test(trimmed)) {
+    return validateMediaSource(trimmed)
+  }
+
+  // Tauri çalışma zamanı convertFileSrc desteği (@tauri-apps/api/core)
+  try {
+    if (typeof window !== 'undefined' && (window as unknown as { __TAURI_INTERNALS__?: { convertFileSrc?: unknown } }).__TAURI_INTERNALS__?.convertFileSrc) {
+      const converted = convertFileSrc(trimmed, 'asset')
+      return validateMediaSource(converted)
+    }
+  } catch {
+    // Test veya tarayıcı fallback
+  }
+
+  // Windows sürücü harfi (C:\ veya C:/) veya göreli yolu https://asset.localhost/ protokolüne dönüştür
+  const normalized = trimmed.replace(/\\/g, '/')
+  const cleanPath = normalized.startsWith('/') ? normalized.slice(1) : normalized
+  const assetUrl = `https://asset.localhost/${cleanPath}`
+  return validateMediaSource(assetUrl)
 }
 
 /**

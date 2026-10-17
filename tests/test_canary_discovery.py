@@ -29,7 +29,6 @@ from services.core.hustler.discovery.canary import (
 )
 from services.core.hustler.discovery.service import (
     DEGRADED_WARNING_MSG,
-    ResilientDiscoveryService,
     fallback_discovery,
     generate_deterministic_fallback,
     query_youtube_cache_for_topic,
@@ -203,18 +202,38 @@ async def test_fallback_discovery_uses_cache_or_template(db: Database) -> None:
     assert first_res["video_id"] == "cached_vid_1"
 
 
-async def test_resilient_discovery_service_integration(db: Database) -> None:
-    """ResilientDiscoveryService: Çıkarıcı çöktüğünde graceful degradation ile kurtarmalıdır."""
-    service = ResilientDiscoveryService(db)
+async def test_api_route_canary_broken_extractor_triggers_graceful_degradation(
+    db: Database, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Canary çıkarıcısı bozulduğunda API rotası anında fallback_discovery'ye geçmelidir."""
+    TOKEN = "canary-token"
+    monkeypatch.setenv("YOUTUBE_API_KEY", "real-looking-key")
 
-    async def _failing_orchestrator() -> dict[str, object]:
-        raise subprocess.SubprocessError("yt-dlp process failure")
+    async def _broken_canary(*args: object, **kwargs: object) -> CanaryReport:
+        return CanaryReport(status=CanaryStatus.DEGRADED_EXTRACTOR_BROKEN, error_detail="Mock broken extractor")
 
-    res = await service.run_resilient_discovery("Siber Güvenlik", orchestrator_call=_failing_orchestrator)
-    assert res["degraded"] is True
-    assert res["warning"] == DEGRADED_WARNING_MSG
-    assert isinstance(res["results"], list)
-    assert len(res["results"]) == 5
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    app.state.session_token = TOKEN
+    app.state.db = db
+    app.state.cache = object()
+
+    transport = httpx.ASGITransport(app=app)
+    with patch("services.core.hustler.api.routes.discovery.run_ytdlp_canary_async", _broken_canary):
+        async with httpx.AsyncClient(transport=transport, base_url="http://test") as c:
+            resp = await c.post(
+                "/api/v1/discovery/run",
+                json={"topic": "Siber Güvenlik", "max_results": 20, "score_threshold": 30.0},
+                headers={"Authorization": f"Bearer {TOKEN}"},
+            )
+
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["degraded"] is True
+    assert data["warning"] == DEGRADED_WARNING_MSG
+    assert isinstance(data["results"], list)
+    assert len(data["results"]) == 5
+    assert all("Siber Güvenlik" in it["title"] for it in data["results"])
 
 
 async def test_api_route_graceful_degradation_on_exception(db: Database, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -37,6 +37,79 @@ def strip_rust_comments(source: str) -> str:
 # =============================================================================
 # 1. Tauri CSP ve İzin Denetimi
 # =============================================================================
+def _parse_csp_directives(raw_csp: str | dict[str, Any]) -> dict[str, list[str]]:
+    directives: dict[str, list[str]] = {}
+    if isinstance(raw_csp, dict):
+        for k, v in raw_csp.items():
+            k_clean = k.lower().strip()
+            directives[k_clean] = [str(x).strip() for x in v] if isinstance(v, list) else str(v).strip().split()
+    elif isinstance(raw_csp, str):
+        for part in raw_csp.split(";"):
+            tokens = part.strip().split()
+            if tokens:
+                directives[tokens[0].lower()] = tokens[1:]
+    return directives
+
+
+def _is_safe_loopback_http(src: str) -> bool:
+    return (
+        src.startswith("http://localhost")
+        or src.startswith("http://ipc.localhost")
+        or src.startswith("http://127.0.0.1")
+    )
+
+
+def _audit_csp_directives(directives: dict[str, list[str]]) -> list[str]:
+    errors: list[str] = []
+    all_sources = [s for srcs in directives.values() for s in srcs]
+    if any("'unsafe-eval'" in s for s in all_sources):
+        errors.append("CSP içinde 'unsafe-eval' direktifi tespit edildi (XSS riski)!")
+
+    if any("'unsafe-inline'" in s for s in directives.get("script-src", [])):
+        errors.append("CSP script-src içinde 'unsafe-inline' tespit edildi (CWE-79 XSS riski)!")
+
+    for directive, sources in directives.items():
+        for src in sources:
+            if src == "*":
+                errors.append(f"CSP {directive} direktifinde wildcard (*) kaynağı tespit edildi!")
+            if src.startswith("http://") and not _is_safe_loopback_http(src):
+                errors.append(f"CSP {directive} direktifinde güvensiz HTTP kaynağı: {src}")
+
+    for d_name in ("script-src", "default-src"):
+        for src in directives.get(d_name, []):
+            if src.startswith("data:") or src.startswith("blob:"):
+                errors.append(f"CWE-79: {d_name} direktifi içinde güvensiz '{src}' tespit edildi!")
+    return errors
+
+
+def _audit_single_capability_perm(cap_name: str, perm: Any, forbidden_tokens: set[str]) -> list[str]:
+    errors: list[str] = []
+    if isinstance(perm, str) and any(tok in perm for tok in forbidden_tokens):
+        errors.append(f"{cap_name}: Güvensiz kapsam/wildcard içeren dosya izni: {perm}")
+    elif isinstance(perm, dict):
+        for scope in ("allow", "deny"):
+            for item in perm.get(scope, []):
+                p_str = str(item.get("path", "") if isinstance(item, dict) else item)
+                if any(tok in p_str for tok in forbidden_tokens):
+                    errors.append(f"{cap_name}: Güvensiz dosya erişim yolu ({scope}): {p_str}")
+    return errors
+
+
+def _audit_capabilities_dir(cap_dir: Path) -> list[str]:
+    errors: list[str] = []
+    if not cap_dir.exists():
+        return errors
+    forbidden_tokens = {"$HOME", "$DOCUMENT", "$DESKTOP", "$DOWNLOAD", "**", "*", "/*", "C:\\*", "C:/*"}
+    for cap_file in cap_dir.glob("*.json"):
+        try:
+            cap_data = json.loads(cap_file.read_text(encoding="utf-8"))
+            for perm in cap_data.get("permissions", []):
+                errors.extend(_audit_single_capability_perm(cap_file.name, perm, forbidden_tokens))
+        except Exception as e:
+            errors.append(f"Capability dosyası okunamadı {cap_file.name}: {e}")
+    return errors
+
+
 def audit_tauri_csp_and_permissions(repo_root: Path = REPO_ROOT) -> list[str]:
     errors: list[str] = []
     tauri_conf_path = repo_root / "apps" / "desktop" / "src-tauri" / "tauri.conf.json"
@@ -52,59 +125,11 @@ def audit_tauri_csp_and_permissions(repo_root: Path = REPO_ROOT) -> list[str]:
     if not raw_csp:
         errors.append("tauri.conf.json içinde üretim CSP (app.security.csp) tanımlı değil!")
     else:
-        directives: dict[str, list[str]] = {}
-        if isinstance(raw_csp, dict):
-            for k, v in raw_csp.items():
-                k_clean = k.lower().strip()
-                directives[k_clean] = [str(x).strip() for x in v] if isinstance(v, list) else str(v).strip().split()
-        elif isinstance(raw_csp, str):
-            for part in raw_csp.split(";"):
-                tokens = part.strip().split()
-                if tokens:
-                    directives[tokens[0].lower()] = tokens[1:]
-
-        all_sources = [s for srcs in directives.values() for s in srcs]
-        if any("'unsafe-eval'" in s for s in all_sources):
-            errors.append("CSP içinde 'unsafe-eval' direktifi tespit edildi (XSS riski)!")
-
-        script_srcs = directives.get("script-src", [])
-        if any("'unsafe-inline'" in s for s in script_srcs):
-            errors.append("CSP script-src içinde 'unsafe-inline' tespit edildi (CWE-79 XSS riski)!")
-
-        for directive, sources in directives.items():
-            for src in sources:
-                if src == "*":
-                    errors.append(f"CSP {directive} direktifinde wildcard (*) kaynağı tespit edildi!")
-                if src.startswith("http://") and not (
-                    src.startswith("http://localhost")
-                    or src.startswith("http://ipc.localhost")
-                    or src.startswith("http://127.0.0.1")
-                ):
-                    errors.append(f"CSP {directive} direktifinde güvensiz HTTP kaynağı: {src}")
-
-        for d_name in ("script-src", "default-src"):
-            for src in directives.get(d_name, []):
-                if src in ("data:", "blob:") or src.startswith("data:") or src.startswith("blob:"):
-                    errors.append(f"CWE-79: {d_name} direktifi içinde güvensiz '{src}' tespit edildi!")
+        directives = _parse_csp_directives(raw_csp)
+        errors.extend(_audit_csp_directives(directives))
 
     cap_dir = repo_root / "apps" / "desktop" / "src-tauri" / "capabilities"
-    forbidden_tokens = {"$HOME", "$DOCUMENT", "$DESKTOP", "$DOWNLOAD", "**", "*", "/*", "C:\\*", "C:/*"}
-    if cap_dir.exists():
-        for cap_file in cap_dir.glob("*.json"):
-            try:
-                cap_data = json.loads(cap_file.read_text(encoding="utf-8"))
-                for perm in cap_data.get("permissions", []):
-                    if isinstance(perm, str) and any(tok in perm for tok in forbidden_tokens):
-                        errors.append(f"{cap_file.name}: Güvensiz kapsam/wildcard içeren dosya izni: {perm}")
-                    elif isinstance(perm, dict):
-                        for scope in ("allow", "deny"):
-                            for item in perm.get(scope, []):
-                                p_str = str(item.get("path", "") if isinstance(item, dict) else item)
-                                if any(tok in p_str for tok in forbidden_tokens):
-                                    errors.append(f"{cap_file.name}: Güvensiz dosya erişim yolu ({scope}): {p_str}")
-            except Exception as e:
-                errors.append(f"Capability dosyası okunamadı {cap_file.name}: {e}")
-
+    errors.extend(_audit_capabilities_dir(cap_dir))
     return errors
 
 

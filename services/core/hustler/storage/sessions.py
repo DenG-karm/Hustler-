@@ -36,6 +36,7 @@ class ProjectSession:
 
     def to_dict(self) -> dict[str, object]:
         return {
+            "id": self.session_id,
             "session_id": self.session_id,
             "topic": self.topic,
             "current_step": self.current_step,
@@ -48,6 +49,16 @@ class ProjectSession:
             "assets": self.assets,
             "preview": self.preview,
             "render": self.render,
+            "state_payload": {
+                "topic": self.topic,
+                "ideas": self.ideas,
+                "selectedIdea": self.selected_idea,
+                "script": self.script,
+                "audio": self.audio,
+                "assets": self.assets,
+                "preview": self.preview,
+                "render": self.render,
+            },
             "last_error": self.last_error,
             "updated_at": self.updated_at,
         }

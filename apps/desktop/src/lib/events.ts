@@ -111,39 +111,6 @@ export const tauriEventBridge: EventBridgeClient = {
 }
 
 let activeBridge: EventBridgeClient = tauriEventBridge
-const mockEventListeners = new Set<EventHandler>()
-const mockConnectionListeners = new Set<ConnectionHandler>()
-
-/**
- * Mock Event Bridge (Testler ve Tauri dışı ortamlar için)
- */
-export const mockEventBridge: EventBridgeClient = {
-  async onEvent(handler: EventHandler): Promise<() => void> {
-    mockEventListeners.add(handler)
-    return () => {
-      mockEventListeners.delete(handler)
-    }
-  },
-
-  async onConnectionState(handler: ConnectionHandler): Promise<() => void> {
-    mockConnectionListeners.add(handler)
-    return () => {
-      mockConnectionListeners.delete(handler)
-    }
-  },
-}
-
-export function emitMockEvent(event: HustlerEvent): void {
-  for (const listener of mockEventListeners) {
-    listener(event)
-  }
-}
-
-export function emitMockConnectionState(state: ConnectionStatePayload): void {
-  for (const listener of mockConnectionListeners) {
-    listener(state)
-  }
-}
 
 export function setEventBridge(bridge: EventBridgeClient): void {
   activeBridge = bridge
@@ -151,10 +118,9 @@ export function setEventBridge(bridge: EventBridgeClient): void {
 
 export function resetEventBridge(): void {
   activeBridge = tauriEventBridge
-  mockEventListeners.clear()
-  mockConnectionListeners.clear()
 }
 
 export function getEventBridge(): EventBridgeClient {
   return activeBridge
 }
+

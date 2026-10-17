@@ -43,6 +43,19 @@ class ReleaseVerificationReport:
     checks: list[CheckResult]
 
 
+def _extract_version_from_file(path: Path, content: str) -> str | None:
+    if path.suffix == ".json":
+        data = json.loads(content)
+        return str(data.get("version", "")) if isinstance(data, dict) else None
+    if path.name == "Cargo.toml":
+        pkg = tomllib.loads(content).get("package", {})
+        return str(pkg.get("version", "")) if isinstance(pkg, dict) else None
+    if path.name == "pyproject.toml":
+        proj = tomllib.loads(content).get("project", {})
+        return str(proj.get("version", "")) if isinstance(proj, dict) else None
+    return None
+
+
 def verify_versions(repo_root: Path = REPO_ROOT) -> CheckResult:
     """Tüm paket tanımlarında sürümün '1.0.0' olduğunu doğrular."""
     target_files: dict[str, Path] = {
@@ -63,30 +76,13 @@ def verify_versions(repo_root: Path = REPO_ROOT) -> CheckResult:
 
         try:
             content = path.read_text(encoding="utf-8")
-            resolved_version: str | None = None
-
-            if path.suffix == ".json":
-                data = json.loads(content)
-                if isinstance(data, dict):
-                    resolved_version = str(data.get("version", ""))
-            elif path.name == "Cargo.toml":
-                data_toml = tomllib.loads(content)
-                pkg = data_toml.get("package", {})
-                if isinstance(pkg, dict):
-                    resolved_version = str(pkg.get("version", ""))
-            elif path.name == "pyproject.toml":
-                data_toml = tomllib.loads(content)
-                proj = data_toml.get("project", {})
-                if isinstance(proj, dict):
-                    resolved_version = str(proj.get("version", ""))
-
+            resolved_version = _extract_version_from_file(path, content)
             if resolved_version != EXPECTED_VERSION:
                 errors.append(
                     f"{label}: Sürüm uyuşmazlığı! Beklenen '{EXPECTED_VERSION}', bulunan '{resolved_version}' ({path})"
                 )
             else:
                 verified_entries.append(f"{label} = {resolved_version}")
-
         except Exception as exc:
             errors.append(f"{label}: Okuma/ayrıştırma hatası -> {exc}")
 
