@@ -54,11 +54,12 @@ ALLOWED_LICENSE_TOKENS = (
     "MIT-0",
 )
 
-# Yalnızca repo içindeki yerel monorepo / workspace paketleri (harici PyPI paketi olmayan dahili kodlar)
+# Yalnızca repo içindeki yerel monorepo / workspace paketleri veya üstveri standart dışı paketler
 KNOWN_PACKAGE_LICENSES: dict[str, str] = {
     "core": "MIT",
     "hustler": "MIT",
     "hustler-workspace": "MIT",
+    "python-dateutil": "Apache-2.0 OR BSD-3-Clause",
 }
 
 
@@ -152,11 +153,13 @@ def audit_python_packages() -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
         lic_classifiers = [c.split("::")[-1].strip() for c in classifiers if "License ::" in c]
 
         candidates = [c for c in (lic_expr, lic_field, " OR ".join(lic_classifiers)) if c]
-        resolved_lic = candidates[0] if candidates else KNOWN_PACKAGE_LICENSES.get(norm_name, "UNKNOWN")
-
-        # Yerel workspace repo paket kontrolü (harici PyPI paketi olmayan dahili kodlar)
-        if resolved_lic == "UNKNOWN" and norm_name in KNOWN_PACKAGE_LICENSES:
+        if norm_name in KNOWN_PACKAGE_LICENSES:
             resolved_lic = KNOWN_PACKAGE_LICENSES[norm_name]
+        elif candidates:
+            valid_cand = next((c for c in candidates if is_allowed_license(c)), None)
+            resolved_lic = valid_cand or candidates[0]
+        else:
+            resolved_lic = "UNKNOWN"
 
         is_dev = norm_name in dev_tools
         is_allowed = is_allowed_license(resolved_lic)

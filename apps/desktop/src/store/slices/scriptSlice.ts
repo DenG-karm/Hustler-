@@ -135,7 +135,7 @@ export const createScriptSlice: StateCreator<
           : null,
       }))
       return resp
-    } catch (err: any) {
+    } catch (err: unknown) {
       set((s) => ({
         script: s.script ? { ...s.script, isSaving: false, saveStatus: 'ERROR' } : null,
       }))
@@ -175,16 +175,19 @@ export const createScriptSlice: StateCreator<
   },
 
   generateScriptForIdea: async () => {
-    const { selectedIdea, topic } = get()
+    const { selectedIdea, topic, flowChannelId, activeChannelId } = get()
     if (!selectedIdea) {
       set({ errorMessage: 'Önce bir fikir seçmelisiniz.' })
       return
     }
 
+    const currentIdea = selectedIdea
+    const channelId = flowChannelId ?? activeChannelId
+
     set({ isLoading: true, errorMessage: null })
     try {
       const client = getIpcClient()
-      const resp = await client.generateScript(selectedIdea.id, topic, selectedIdea.title)
+      const resp = await client.generateScript(currentIdea.id, topic, currentIdea.title, channelId)
       if (resp.status >= 400) {
         const err = parseProblemDetails(resp)
         if (err.mode === 'modal') set({ activeModalError: err })
@@ -197,10 +200,10 @@ export const createScriptSlice: StateCreator<
       const rawClaims = Array.isArray(data.claims) ? data.claims : []
       const claims: ScriptClaim[] =
         rawClaims.length > 0
-          ? rawClaims.map((c: any, idx: number) => ({
-              id: c.id ?? `claim_${idx + 1}`,
-              text: typeof c === 'string' ? c : c.text ?? `İddia #${idx + 1}`,
-              verified: Boolean(c.verified),
+          ? rawClaims.map((c: ScriptClaim | { id?: string; text?: string; verified?: boolean } | string, idx: number) => ({
+              id: typeof c === 'object' && c && 'id' in c && c.id ? c.id : `claim_${idx + 1}`,
+              text: typeof c === 'string' ? c : (c.text ?? `İddia #${idx + 1}`),
+              verified: typeof c === 'object' && c && 'verified' in c ? Boolean(c.verified) : false,
             }))
           : [
               { id: 'claim_1', text: `${topic} konusundaki veriler resmi kaynaklarla doğrulanmıştır.`, verified: false },
@@ -210,18 +213,18 @@ export const createScriptSlice: StateCreator<
 
       const script: ScriptData = {
         id: data.script_id ?? `scr_${Date.now()}`,
-        title: data.title ?? selectedIdea.title,
-        hook: data.hook ?? selectedIdea.hook,
-        fullText: data.full_text ?? `${selectedIdea.title}. ${selectedIdea.hook}`,
+        title: data.title ?? currentIdea.title,
+        hook: data.hook ?? currentIdea.hook,
+        fullText: data.full_text ?? `${currentIdea.title}. ${currentIdea.hook}`,
         scenes: data.scenes ?? [
-          { order: 1, narration: selectedIdea.hook, visualPrompt: 'Cinematic visual' },
+          { order: 1, narration: currentIdea.hook, visualPrompt: 'Cinematic visual' },
         ],
         claims,
         isApproved: false,
       }
 
       set({ script, isLoading: false })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
@@ -260,7 +263,7 @@ export const createScriptSlice: StateCreator<
       }
 
       set({ audio, isLoading: false })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })

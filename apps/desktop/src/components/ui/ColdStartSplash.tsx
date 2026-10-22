@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useFlowStore } from '../../store/flowStore'
 import { useSupervisorStore } from '../../store/supervisorStore'
 import { getIpcClient } from '../../lib/ipc'
+import hustlerLogoUrl from '../../assets/HustlerLogo.png'
 
 interface CheckpointItem {
   id: string
@@ -23,16 +24,10 @@ export const ColdStartSplash: React.FC = () => {
   const isSupervisorAlive = supervisorStatus === 'RUNNING'
 
   const isConnected = connectionState === 'connected'
-  const hasConnectedRef = useRef(isConnected)
-  if (isConnected) {
-    hasConnectedRef.current = true
-  }
-
   const [hasInitialized, setHasInitialized] = useState(isConnected)
 
   useEffect(() => {
-    if (isConnected || hasConnectedRef.current) {
-      setHasInitialized(true)
+    if (isConnected || hasInitialized) {
       return
     }
 
@@ -41,7 +36,6 @@ export const ColdStartSplash: React.FC = () => {
       try {
         const resp = await getIpcClient().proxyRequest('GET', '/health')
         if (!cancelled && resp && resp.status === 200) {
-          hasConnectedRef.current = true
           setConnectionState('connected', 0)
           setHasInitialized(true)
         }
@@ -56,42 +50,36 @@ export const ColdStartSplash: React.FC = () => {
       cancelled = true
       clearInterval(interval)
     }
-  }, [isConnected, setConnectionState])
+  }, [isConnected, hasInitialized, setConnectionState])
 
   // Eğer gerçek bağlantı kurulduysa perdeden çık
-  if (hasConnectedRef.current || hasInitialized || isConnected) {
+  if (hasInitialized || isConnected) {
     return null
   }
 
   const checkpoints: CheckpointItem[] = [
     {
       id: 'sidecar',
-      label: 'Python Sidecar Süreci (FastAPI)',
-      detail: isSupervisorAlive || connectionState !== 'disconnected'
-        ? 'Dinamik portta dinleniyor, /health uç noktası doğrulanıyor'
-        : 'İzole subprocess ayağa kaldırılıyor...',
+      label: 'Sidecar (FastAPI)',
+      detail: isSupervisorAlive || connectionState !== 'disconnected' ? '/health uç noktası doğrulanıyor' : 'Başlatılıyor...',
       isDone: isConnected || isSupervisorAlive,
     },
     {
       id: 'db',
-      label: 'SQLite WAL & Veritabanı Bütünlüğü',
-      detail: isConnected
-        ? 'Zero-Dirty-WAL kontrolü ve checkpoint truncate mekanizması aktif'
-        : 'Veritabanı yazıcı kuyruğu bekleniyor...',
+      label: 'SQLite WAL',
+      detail: isConnected ? 'Bütünlük denetimi aktif' : 'Veritabanı bekleniyor...',
       isDone: isConnected,
     },
     {
       id: 'ipc',
-      label: 'Zero-Network Güvenlik Duvarı & IPC Köprüsü',
-      detail: 'Dış ağ çağrıları engellendi, Rust proxy el sıkışması aktif',
+      label: 'Zero-Network IPC',
+      detail: 'Tauri Rust proxy devrede',
       isDone: true,
     },
     {
       id: 'sse',
-      label: 'SSE Gerçek Zamanlı Olay Akışı El Sıkışması',
-      detail: connectionState === 'reconnecting'
-        ? `Yeniden bağlantı kuruluyor [#${reconnectAttempt}]...`
-        : 'http://127.0.0.1/events SSE kanalı bekleniyor',
+      label: 'SSE Olay Akışı',
+      detail: connectionState === 'reconnecting' ? `Yeniden deneme #${reconnectAttempt}` : 'Olay köprüsü hazır',
       isDone: isConnected,
     },
   ]
@@ -107,13 +95,16 @@ export const ColdStartSplash: React.FC = () => {
       </div>
 
       {/* Ana Kart */}
-      <div className="relative w-full max-w-lg p-xl mx-md rounded-2xl bg-surface/90 border border-border/80 shadow-2xl backdrop-blur-2xl flex flex-col items-center text-center space-y-lg animate-in fade-in zoom-in-95 duration-300">
+      <div className="relative w-full max-w-lg p-xl mx-md rounded-xl bg-surface/95 border border-border studio-panel backdrop-blur-2xl flex flex-col items-center text-center space-y-lg animate-in fade-in zoom-in-95 duration-300">
         {/* Logo / Yükleme Çemberi */}
-        <div className="relative flex items-center justify-center">
-          <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-primary to-purple-600 flex items-center justify-center shadow-lg shadow-primary/30 text-white font-extrabold text-2xl tracking-wider">
-            H
-          </div>
-          <div className="absolute -inset-2 rounded-2xl border-2 border-primary/30 border-t-primary animate-spin" />
+        <div className="relative flex items-center justify-center p-2">
+          <img
+            src={hustlerLogoUrl}
+            alt="Hustler Logo"
+            className="w-24 h-20 object-contain drop-shadow-md select-none"
+            draggable={false}
+          />
+          <div className="absolute -inset-2 rounded-xl border-2 border-primary/30 border-t-primary animate-spin" />
         </div>
 
         {/* Başlık & Açıklama */}
@@ -168,7 +159,7 @@ export const ColdStartSplash: React.FC = () => {
         {/* Canlı Bağlantı Durumu (Atla Düğmesi Kesinlikle Yok) */}
         <div className="w-full pt-sm border-t border-border/60 flex items-center justify-between text-xs text-text-muted">
           <div className="flex items-center gap-1.5 font-mono text-[11px]">
-            <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+            <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
             <span>Motor bekleniyor...</span>
           </div>
 

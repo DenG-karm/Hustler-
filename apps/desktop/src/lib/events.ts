@@ -14,7 +14,6 @@ import type { ProblemDetails } from './problemDetails'
 
 export interface BaseHustlerEvent {
   type: string
-  [key: string]: any
 }
 
 export interface JobProgressEvent extends BaseHustlerEvent {

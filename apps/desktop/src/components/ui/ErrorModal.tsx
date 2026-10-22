@@ -14,56 +14,63 @@ export const ErrorModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-md"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 backdrop-blur-sm p-4"
       data-testid="error-modal-backdrop"
       role="dialog"
       aria-modal="true"
       aria-labelledby="error-modal-title"
     >
       <div
-        className="w-full max-w-md bg-surface border border-destructive/40 rounded-2xl p-lg shadow-2xl space-y-md animate-in fade-in zoom-in-95"
+        className="w-full max-w-md studio-panel border border-destructive/40 rounded-lg overflow-hidden shadow-2xl animate-in fade-in zoom-in-95"
         data-testid="error-modal"
       >
-        <div className="flex items-start gap-md">
-          <div className="w-10 h-10 rounded-xl bg-destructive/15 text-destructive flex items-center justify-center shrink-0 font-bold text-lg">
-            !
-          </div>
-          <div className="space-y-xs flex-1">
-            <div className="flex items-center justify-between">
-              <h3
-                id="error-modal-title"
-                className="text-base font-bold text-text-primary"
-                data-testid="error-modal-title"
-              >
-                {activeModalError.title}
-              </h3>
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-surface-hover font-mono text-destructive">
-                {activeModalError.code}
-              </span>
+        <div className="h-[2px] w-full bg-destructive" />
+        <div className="p-5 space-y-4">
+          <div className="flex items-start gap-3.5">
+            <div className="w-8 h-8 rounded-md bg-destructive/10 border border-destructive/25 text-destructive flex items-center justify-center shrink-0 font-mono font-semibold text-sm">
+              !
             </div>
-            <p className="text-sm text-text-secondary leading-relaxed" data-testid="error-modal-message">
-              {activeModalError.message}
-            </p>
+            <div className="space-y-1 flex-1 min-w-0">
+              <div className="flex items-center justify-between gap-2">
+                <h3
+                  id="error-modal-title"
+                  className="text-[14px] font-semibold text-zinc-900 dark:text-zinc-100 tracking-tight"
+                  data-testid="error-modal-title"
+                >
+                  {activeModalError.title}
+                </h3>
+                <span className="text-[10px] px-2 py-0.5 rounded bg-destructive/10 font-mono font-medium text-destructive shrink-0">
+                  {activeModalError.code}
+                </span>
+              </div>
+              <p className="text-[12px] text-zinc-500 dark:text-zinc-400 leading-relaxed" data-testid="error-modal-message">
+                {activeModalError.message}
+              </p>
+            </div>
           </div>
-        </div>
 
-        {activeModalError.instance && (
-          <div className="text-[11px] font-mono text-text-muted bg-surface-hover p-xs rounded border border-border">
-            Kaynak: {activeModalError.instance}
+          {activeModalError.instance && (
+            <div className="text-[11px] font-mono text-zinc-500 studio-recessed px-3 py-1.5 rounded-md">
+              Kaynak: {activeModalError.instance}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 pt-2 border-t border-border/70">
+            <span className="text-[10px] font-mono text-zinc-500 uppercase tracking-wider">
+              RFC 7807 // DIAGNOSTIC FAULT
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={dismissModalError}
+              data-testid="error-modal-dismiss-btn"
+            >
+              Anladım, Kapat
+            </Button>
           </div>
-        )}
-
-        <div className="flex items-center justify-end gap-sm pt-xs border-t border-border">
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={dismissModalError}
-            data-testid="error-modal-dismiss-btn"
-          >
-            Anladım, Kapat
-          </Button>
         </div>
       </div>
     </div>
   )
 }
+

@@ -4,37 +4,50 @@
 
 @layer base {
   :root {
-    /* Color Tokens - Light */
-    --color-bg-app: hsl(220 20% 98%);
+    /* =========================================================================
+     * LIGHT MODE — "Linear / Arc Neutral Zinc & Precision Teal"
+     * Saf nötr zinc yüzeyler, keskin tipografi, teal-600/500 vurgu
+     * ========================================================================= */
+    --color-bg-app: hsl(240 5% 96%);
     --color-bg-surface: hsl(0 0% 100%);
-    --color-bg-surface-hover: hsl(220 14% 96%);
+    --color-bg-surface-hover: hsl(240 5% 93%);
     --color-bg-elevated: hsl(0 0% 100%);
 
-    --color-border-subtle: hsl(220 13% 91%);
-    --color-border-default: hsl(220 13% 86%);
-    --color-border-strong: hsl(220 13% 70%);
+    --color-border-subtle: hsl(240 6% 90%);
+    --color-border-default: hsl(240 6% 84%);
+    --color-border-strong: hsl(240 5% 70%);
 
-    --color-text-primary: hsl(224 71% 4%);
-    --color-text-secondary: hsl(220 9% 46%);
-    --color-text-muted: hsl(220 9% 60%);
+    --color-text-primary: hsl(240 10% 9%);
+    --color-text-secondary: hsl(240 5% 36%);
+    --color-text-muted: hsl(240 4% 48%);
 
-    --color-primary: hsl(262 83% 58%);
-    --color-primary-hover: hsl(262 83% 50%);
+    /* Precision Teal (Sıfır Mor, Sıfır Turuncu) */
+    --color-primary: hsl(173 80% 34%);
+    --color-primary-hover: hsl(173 80% 28%);
     --color-primary-fg: hsl(0 0% 100%);
 
-    --color-secondary: hsl(220 14% 94%);
-    --color-secondary-hover: hsl(220 14% 88%);
-    --color-secondary-fg: hsl(224 71% 10%);
+    --color-secondary: hsl(240 5% 92%);
+    --color-secondary-hover: hsl(240 5% 87%);
+    --color-secondary-fg: hsl(240 10% 12%);
 
-    --color-destructive: hsl(0 84% 60%);
-    --color-destructive-hover: hsl(0 84% 50%);
+    --color-destructive: hsl(350 84% 50%);
+    --color-destructive-hover: hsl(350 84% 42%);
     --color-destructive-fg: hsl(0 0% 100%);
 
-    --color-accent: hsl(262 83% 96%);
-    --color-accent-hover: hsl(262 83% 92%);
-    --color-accent-fg: hsl(262 83% 45%);
+    --color-accent: hsl(240 5% 92%);
+    --color-accent-hover: hsl(240 5% 88%);
+    --color-accent-fg: hsl(240 10% 9%);
 
-    --color-focus-ring: hsl(262 83% 58% / 0.4);
+    /* Telemetri Sinyal Renkleri */
+    --color-success: hsl(158 64% 36%);
+    --color-warning: hsl(45 92% 38%);
+
+    --color-focus-ring: hsl(173 80% 34% / 0.25);
+
+    /* Yüzey Işık & Doku Değişkenleri */
+    --grid-dot-color: hsl(240 6% 10% / 0.055);
+    --panel-bevel: inset 0 1px 0 0 hsl(0 0% 100% / 0.9);
+    --recessed-shadow: inset 0 1px 2px 0 hsl(240 10% 10% / 0.06);
 
     /* Spacing Tokens */
     --spacing-xs: 0.25rem;
@@ -44,51 +57,64 @@
     --spacing-xl: 2rem;
     --spacing-2xl: 3rem;
 
-    /* Radius Tokens */
+    /* Radius Tokens — Linear / Arc Standardı */
     --radius-sm: 0.25rem;
-    --radius-md: 0.5rem;
-    --radius-lg: 0.75rem;
+    --radius-md: 0.375rem;
+    --radius-lg: 0.5rem;
     --radius-full: 9999px;
 
     /* Font Tokens */
-    --font-sans: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    --font-mono: 'JetBrains Mono', 'Cascadia Mono', ui-monospace, SFMono-Regular, Consolas, monospace;
 
     color-scheme: light;
   }
 
   .dark {
-    /* Color Tokens - Dark */
-    --color-bg-app: hsl(224 32% 8%);
-    --color-bg-surface: hsl(224 30% 12%);
-    --color-bg-surface-hover: hsl(224 25% 16%);
-    --color-bg-elevated: hsl(224 25% 18%);
+    /* =========================================================================
+     * DARK MODE — "Linear / Arc Obsidian Zinc & Teal-400 / Emerald-400"
+     * Zinc-950/900/800 katmanları, zinc-100/400/500 tipografi, teal-400 vurgu
+     * ========================================================================= */
+    --color-bg-app: hsl(240 10% 4%);
+    --color-bg-surface: hsl(240 6% 7.5%);
+    --color-bg-surface-hover: hsl(240 5% 13%);
+    --color-bg-elevated: hsl(240 5% 15%);
 
-    --color-border-subtle: hsl(224 20% 18%);
-    --color-border-default: hsl(224 20% 24%);
-    --color-border-strong: hsl(224 20% 36%);
+    --color-border-subtle: hsl(240 4% 13%);
+    --color-border-default: hsl(240 4% 16%);
+    --color-border-strong: hsl(240 5% 26%);
 
-    --color-text-primary: hsl(210 20% 98%);
-    --color-text-secondary: hsl(215 16% 70%);
-    --color-text-muted: hsl(215 16% 50%);
+    --color-text-primary: hsl(240 5% 96%);
+    --color-text-secondary: hsl(240 5% 65%);
+    --color-text-muted: hsl(240 4% 46%);
 
-    --color-primary: hsl(263 70% 66%);
-    --color-primary-hover: hsl(263 70% 74%);
-    --color-primary-fg: hsl(224 71% 4%);
+    /* Teal-400 / Teal-500 — Sıfır Mor, Sıfır Turuncu */
+    --color-primary: hsl(172 66% 45%);
+    --color-primary-hover: hsl(172 66% 50%);
+    --color-primary-fg: hsl(240 10% 4%);
 
-    --color-secondary: hsl(224 25% 18%);
-    --color-secondary-hover: hsl(224 25% 24%);
-    --color-secondary-fg: hsl(210 20% 98%);
+    --color-secondary: hsl(240 4% 15%);
+    --color-secondary-hover: hsl(240 4% 20%);
+    --color-secondary-fg: hsl(240 5% 96%);
 
-    --color-destructive: hsl(0 72% 51%);
-    --color-destructive-hover: hsl(0 72% 60%);
+    --color-destructive: hsl(350 84% 60%);
+    --color-destructive-hover: hsl(350 84% 65%);
     --color-destructive-fg: hsl(0 0% 100%);
 
-    --color-accent: hsl(263 50% 20%);
-    --color-accent-hover: hsl(263 50% 26%);
-    --color-accent-fg: hsl(263 70% 80%);
+    --color-accent: hsl(240 4% 16%);
+    --color-accent-hover: hsl(240 4% 20%);
+    --color-accent-fg: hsl(240 5% 96%);
 
-    --color-focus-ring: hsl(263 70% 66% / 0.5);
+    /* Telemetri Sinyal Renkleri (Emerald-400 & Optical Gold) */
+    --color-success: hsl(158 64% 52%);
+    --color-warning: hsl(46 94% 52%);
+
+    --color-focus-ring: hsl(172 66% 50% / 0.25);
+
+    /* Yüzey Işık & Doku Değişkenleri */
+    --grid-dot-color: hsl(0 0% 100% / 0.035);
+    --panel-bevel: inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
+    --recessed-shadow: inset 0 1px 2px 0 hsl(0 0% 0% / 0.35);
 
     color-scheme: dark;
   }
@@ -97,9 +123,64 @@
     background-color: var(--color-bg-app);
     color: var(--color-text-primary);
     font-family: var(--font-sans);
+    letter-spacing: -0.011em;
     margin: 0;
     min-height: 100vh;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  }
+
+  /* Beyaz Dış Çerçeve (Outline/Ring) Kirliliğini Küresel Olarak Sıfırla */
+  button:focus,
+  button:focus-visible,
+  input:focus,
+  textarea:focus,
+  select:focus {
+    outline: none;
+  }
+
+  /* Teknik Tabular Rakamlar (Timecode & Sayaçlar İçin Sıfır Titreme) */
+  .font-mono {
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.015em;
+  }
+
+  /* İnce Linear/Arc Kaydırma Çubukları */
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-border-default);
+    border-radius: 9999px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--color-border-strong);
   }
 }
+
+@layer utilities {
+  /* Milimetrik Stüdyo Çalışma Zemini */
+  .studio-grid-bg {
+    background-image: radial-gradient(var(--grid-dot-color) 1px, transparent 1px);
+    background-size: 20px 20px;
+  }
+
+  /* Linear/Arc Yumuşak Panel Yüzeyi */
+  .studio-panel {
+    box-shadow: var(--panel-bevel), 0 1px 3px 0 rgba(0, 0, 0, 0.18);
+  }
+
+  /* Gömülü Terminal / Giriş Yuvası */
+  .studio-recessed {
+    box-shadow: var(--recessed-shadow);
+  }
+}
+

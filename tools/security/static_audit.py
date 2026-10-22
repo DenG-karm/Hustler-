@@ -14,7 +14,6 @@ import json
 from pathlib import Path
 import re
 import sys
-from typing import Any
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,7 +36,7 @@ def strip_rust_comments(source: str) -> str:
 # =============================================================================
 # 1. Tauri CSP ve İzin Denetimi
 # =============================================================================
-def _parse_csp_directives(raw_csp: str | dict[str, Any]) -> dict[str, list[str]]:
+def _parse_csp_directives(raw_csp: str | dict[str, object]) -> dict[str, list[str]]:
     directives: dict[str, list[str]] = {}
     if isinstance(raw_csp, dict):
         for k, v in raw_csp.items():
@@ -82,7 +81,7 @@ def _audit_csp_directives(directives: dict[str, list[str]]) -> list[str]:
     return errors
 
 
-def _audit_single_capability_perm(cap_name: str, perm: Any, forbidden_tokens: set[str]) -> list[str]:
+def _audit_single_capability_perm(cap_name: str, perm: object, forbidden_tokens: set[str]) -> list[str]:
     errors: list[str] = []
     if isinstance(perm, str) and any(tok in perm for tok in forbidden_tokens):
         errors.append(f"{cap_name}: Güvensiz kapsam/wildcard içeren dosya izni: {perm}")
@@ -121,7 +120,7 @@ def audit_tauri_csp_and_permissions(repo_root: Path = REPO_ROOT) -> list[str]:
     except Exception as e:
         return [f"tauri.conf.json okunamadı: {e}"]
 
-    raw_csp: str | dict[str, Any] = conf.get("app", {}).get("security", {}).get("csp", "")
+    raw_csp: str | dict[str, object] = conf.get("app", {}).get("security", {}).get("csp", "")
     if not raw_csp:
         errors.append("tauri.conf.json içinde üretim CSP (app.security.csp) tanımlı değil!")
     else:

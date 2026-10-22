@@ -7,7 +7,7 @@ import { setIpcClient, resetIpcClient, type FlowIpcClient } from '../lib/ipc'
 
 describe('K-702: Akış Ekranları Uçtan Uca (E2E) Testi', () => {
   let mockIpc: FlowIpcClient
-  let fetchSpy: any
+  let fetchSpy: ReturnType<typeof vi.fn>
 
   beforeEach(() => {
     useFlowStore.getState().resetFlow()
@@ -114,61 +114,50 @@ describe('K-702: Akış Ekranları Uçtan Uca (E2E) Testi', () => {
     setIpcClient(mockIpc)
   })
 
-  it('Ana akışı (Konu → Top 20 → Senaryo → Ses → Görseller → Önizleme → Render) kilitlenmeden tamamlamalıdır', async () => {
+  it('Ana akışı (Kanal Fikir Seçimi → Senaryo → Ses → Görseller → Önizleme → Render) kilitlenmeden tamamlamalıdır', async () => {
+    // Faz 2 Kanal-Merkezli Mimari: Senaryo adımından itibaren tam akış
+    useFlowStore.setState({
+      activeView: 'pipeline',
+      currentStep: 'SCRIPT',
+      script: {
+        id: 'scr_e2e_456',
+        title: 'Piramitlerin Gizli Odaları',
+        hook: 'Piramitler ve Gizemler',
+        fullText: 'Piramitlerin altında bilinmeyen gizli odalar var. Arkeologlar yeni keşiflerle tarihi yeniden yazıyor.',
+        scenes: [
+          {
+            order: 1,
+            visualPrompt: 'Büyük piramitin altındaki tüneller',
+            narration: 'Piramitlerin altında bilinmeyen gizli odalar var.',
+          },
+          {
+            order: 2,
+            visualPrompt: 'Antik hiyeroglifler ve sırlar',
+            narration: 'Arkeologlar yeni keşiflerle tarihi yeniden yazıyor.',
+          },
+        ],
+        claims: [
+          {
+            id: 'claim_1',
+            text: 'Piramitlerin altında yeni odalar bulundu',
+            verified: false,
+          },
+        ],
+        isApproved: false,
+      },
+    })
+
     render(
       <ThemeProvider>
         <App />
       </ThemeProvider>
     )
 
-    // Başlangıçta Stepper ve Ekran 1 (Konu) görünür
-    expect(screen.getByTestId('flow-stepper')).toBeInTheDocument()
-    expect(screen.getByTestId('screen-topic')).toBeInTheDocument()
-
-    // -------------------------------------------------------------
-    // ADIM 1: KONU GİRİŞİ
-    // -------------------------------------------------------------
-    const topicInput = screen.getByTestId('topic-input')
-    const topicSubmitBtn = screen.getByTestId('topic-submit-btn')
-
-    // Konu girilmeden buton kilitli olmalı
-    expect(topicSubmitBtn).toBeDisabled()
-
-    fireEvent.change(topicInput, { target: { value: 'Piramitler ve Gizemler' } })
-    expect(topicSubmitBtn).toBeEnabled()
-
-    fireEvent.click(topicSubmitBtn)
-
-    // IPC runDiscovery çağrılmalı
-    await waitFor(() => {
-      expect(mockIpc.runDiscovery).toHaveBeenCalledWith('Piramitler ve Gizemler')
-    })
-
-    // -------------------------------------------------------------
-    // ADIM 2: TOP 20 LİSTESİ VE FİKİR SEÇİMİ
-    // -------------------------------------------------------------
-    await waitFor(() => {
-      expect(screen.getByTestId('screen-top20')).toBeInTheDocument()
-    })
-
-    const top20SubmitBtn = screen.getByTestId('top20-submit-btn')
-    expect(top20SubmitBtn).toBeDisabled()
-
-    // İlk fikre tıkla ve seç
-    const firstIdeaCard = screen.getByTestId('idea-card-vid_101')
-    fireEvent.click(firstIdeaCard)
-    expect(top20SubmitBtn).toBeEnabled()
-
-    fireEvent.click(top20SubmitBtn)
-
-    await waitFor(() => {
-      expect(mockIpc.generateScript).toHaveBeenCalledWith('vid_101', 'Piramitler ve Gizemler', 'Piramitlerin Gizli Odaları')
-    })
-
     // -------------------------------------------------------------
     // ADIM 3: SENARYO ONAYI
     // -------------------------------------------------------------
     await waitFor(() => {
+      expect(screen.getByTestId('flow-stepper')).toBeInTheDocument()
       expect(screen.getByTestId('screen-script')).toBeInTheDocument()
     })
 

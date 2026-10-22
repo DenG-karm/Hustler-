@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState, useMemo, type ReactNode } from 'react'
 
-export type Theme = 'light' | 'dark' | 'system'
-export type ResolvedTheme = 'light' | 'dark'
+export type Theme = 'light'
+export type ResolvedTheme = 'light'
 
 export interface ThemeContextValue {
   theme: Theme
@@ -13,11 +13,6 @@ const THEME_STORAGE_KEY = 'hustler-theme-preference'
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined)
 
-function getSystemTheme(): ResolvedTheme {
-  if (typeof window === 'undefined') return 'dark'
-  return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
-}
-
 export interface ThemeProviderProps {
   children: ReactNode
   defaultTheme?: Theme
@@ -26,66 +21,26 @@ export interface ThemeProviderProps {
 
 export function ThemeProvider({
   children,
-  defaultTheme = 'system',
   storageKey = THEME_STORAGE_KEY,
 }: ThemeProviderProps) {
-  const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === 'undefined') return defaultTheme
-    try {
-      const saved = localStorage.getItem(storageKey) as Theme | null
-      if (saved && (saved === 'light' || saved === 'dark' || saved === 'system')) {
-        return saved
-      }
-    } catch {
-      // localStorage may fail in restricted environments
-    }
-    return defaultTheme
-  })
+  const [theme, setThemeState] = useState<Theme>('light')
+  const resolvedTheme: ResolvedTheme = 'light'
 
-  const [systemTheme, setSystemTheme] = useState<ResolvedTheme>(getSystemTheme)
-
-  // Listen to system prefers-color-scheme changes
-  useEffect(() => {
-    if (typeof window === 'undefined') return
-
-    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (e: MediaQueryListEvent) => {
-      setSystemTheme(e.matches ? 'dark' : 'light')
-    }
-
-    if (mediaQuery.addEventListener) {
-      mediaQuery.addEventListener('change', handleChange)
-      return () => mediaQuery.removeEventListener('change', handleChange)
-    } else {
-      // Legacy browser support
-      mediaQuery.addListener(handleChange)
-      return () => mediaQuery.removeListener(handleChange)
-    }
-  }, [])
-
-  const resolvedTheme: ResolvedTheme = useMemo(() => {
-    return theme === 'system' ? systemTheme : theme
-  }, [theme, systemTheme])
-
-  // Apply `dark` class to <html> element at DOM level
+  // Koyu temayı kaldır ve daima açık temayı zorla
   useEffect(() => {
     if (typeof document === 'undefined') return
-
     const root = document.documentElement
-    if (resolvedTheme === 'dark') {
-      root.classList.add('dark')
-    } else {
-      root.classList.remove('dark')
-    }
-  }, [resolvedTheme])
-
-  const setTheme = (newTheme: Theme) => {
+    root.classList.remove('dark')
+    root.style.colorScheme = 'light'
     try {
-      localStorage.setItem(storageKey, newTheme)
+      localStorage.setItem(storageKey, 'light')
     } catch {
-      // Ignore localStorage write error
+      // Ignore
     }
-    setThemeState(newTheme)
+  }, [storageKey])
+
+  const setTheme = (_newTheme: Theme) => {
+    setThemeState('light')
   }
 
   const value = useMemo(

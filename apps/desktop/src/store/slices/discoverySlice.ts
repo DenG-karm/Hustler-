@@ -3,7 +3,7 @@
  */
 
 import type { StateCreator } from 'zustand'
-import type { FlowState, VideoIdea } from '../flowTypes'
+import type { FlowState, VideoIdea, DiscoveryItem } from '../flowTypes'
 import { getIpcClient } from '../../lib/ipc'
 import { parseProblemDetails } from '../../lib/problemDetails'
 
@@ -52,8 +52,10 @@ export const createDiscoverySlice: StateCreator<
 
     set({ isLoading: true, errorMessage: null })
     try {
+      const { topic, activeChannelId, flowChannelId } = get()
+      const channelId = flowChannelId ?? activeChannelId
       const client = getIpcClient()
-      const resp = await client.runDiscovery(topic)
+      const resp = await client.runDiscovery(topic, channelId)
       if (resp.status >= 400) {
         const err = parseProblemDetails(resp)
         if (err.mode === 'modal') set({ activeModalError: err })
@@ -76,9 +78,11 @@ export const createDiscoverySlice: StateCreator<
         })
       }
 
-      const rawItems = Array.isArray(resp.body) ? resp.body : resp.body?.results ?? []
+      const rawItems: DiscoveryItem[] = Array.isArray(resp.body?.results)
+        ? resp.body.results
+        : (Array.isArray(resp.body) ? resp.body : [])
 
-      const ideas: VideoIdea[] = rawItems.map((item: any, idx: number) => ({
+      const ideas: VideoIdea[] = rawItems.map((item: DiscoveryItem, idx: number) => ({
         id: item.video_id ?? item.id ?? `idea_${idx + 1}`,
         title: item.title ?? `Fikir #${idx + 1}: ${topic}`,
         hook: item.hook ?? item.description ?? `Dikkat çeken kanca #${idx + 1}`,
@@ -98,7 +102,7 @@ export const createDiscoverySlice: StateCreator<
             }))
 
       set({ ideas: fallbackIdeas, isLoading: false })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })

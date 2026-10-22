@@ -1,6 +1,6 @@
 /**
  * Hustler Desktop — Akış Ekranları Durum Makinesi (K-702 & K-703)
- * Modüler Dilim Patterni: discoverySlice, scriptSlice, renderSlice orkestrasyonu.
+ * Modüler Dilim Patterni: discoverySlice, scriptSlice, renderSlice ve channelSlice orkestrasyonu.
  */
 
 import { create } from 'zustand'
@@ -13,12 +13,22 @@ import {
   createInitialRenderData,
   type FlowStep,
   type FlowState,
+  type RenderData,
 } from './flowTypes'
 import { createDiscoverySlice } from './slices/discoverySlice'
 import { createScriptSlice } from './slices/scriptSlice'
 import { createRenderSlice } from './slices/renderSlice'
+import { createChannelSlice } from './slices/channelSlice'
 import { getIpcClient } from '../lib/ipc'
-import { getEventBridge, type HustlerEvent, type ConnectionStatePayload } from '../lib/events'
+import {
+  getEventBridge,
+  type HustlerEvent,
+  type ConnectionStatePayload,
+  type JobProgressEvent,
+  type JobCompletedEvent,
+  type JobFailedEvent,
+  type LlmLoopWarningEvent,
+} from '../lib/events'
 import { parseProblemDetails, type UIError } from '../lib/problemDetails'
 
 export * from './flowTypes'
@@ -27,6 +37,7 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
   ...createDiscoverySlice(set, get, api),
   ...createScriptSlice(set, get, api),
   ...createRenderSlice(set, get, api),
+  ...createChannelSlice(set, get, api),
 
   currentStep: 'TOPIC',
   isLoading: false,
@@ -59,8 +70,16 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
   prevStep: () => {
     const { currentStep } = get()
     const currentIndex = FLOW_STEPS.indexOf(currentStep)
-    if (currentIndex <= 0) return
-    set({ currentStep: FLOW_STEPS[currentIndex - 1], errorMessage: null })
+    if (currentIndex > 0) {
+      const prevStepName = FLOW_STEPS[currentIndex - 1]
+      if (currentStep === 'SCRIPT') {
+        set({ currentStep: prevStepName, activeView: 'channels', errorMessage: null })
+        return
+      }
+      set({ currentStep: prevStepName, errorMessage: null })
+      return
+    }
+    set({ activeView: 'channels', errorMessage: null })
   },
 
   goToStep: (targetStep: FlowStep) => {
@@ -106,6 +125,8 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
       assets: createInitialAssetsData(),
       preview: createInitialPreviewData(),
       render: createInitialRenderData(),
+      activeView: 'channels',
+      flowChannelId: null,
     })
   },
 
@@ -145,7 +166,7 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
       bridge.onEvent((event: HustlerEvent) => {
         const currentState = get()
         if (event.type === 'job_progress') {
-          const evt = event as any
+          const evt = event as JobProgressEvent
           if (!currentState.render.jobId || currentState.render.jobId === evt.job_id) {
             set((s) => ({
               render: {
@@ -154,12 +175,12 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
                 progress: typeof evt.progress === 'number' ? evt.progress : s.render.progress,
                 status: 'RENDERING',
                 stepName: evt.step ?? s.render.stepName,
-                encoder: evt.encoder ?? s.render.encoder,
+                encoder: (evt as unknown as { encoder?: string }).encoder ?? s.render.encoder,
               },
             }))
           }
         } else if (event.type === 'job_completed') {
-          const evt = event as any
+          const evt = event as JobCompletedEvent
           if (!currentState.render.jobId || currentState.render.jobId === evt.job_id) {
             set((s) => ({
               render: {
@@ -167,17 +188,17 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
                 progress: 100,
                 status: 'COMPLETED',
                 outputPath: evt.output_path ?? s.render.outputPath,
-                encoder: evt.encoder ?? s.render.encoder,
+                encoder: (evt as unknown as { encoder?: string }).encoder ?? s.render.encoder,
               },
             }))
           }
         } else if (event.type === 'job_cancelled') {
-          const evt = event as any
+          const evt = event as { job_id: string }
           if (!currentState.render.jobId || currentState.render.jobId === evt.job_id) {
             set((s) => ({ render: { ...s.render, status: 'CANCELLED' } }))
           }
         } else if (event.type === 'job_failed') {
-          const evt = event as any
+          const evt = event as JobFailedEvent
           const uiError = parseProblemDetails(evt.error)
           if (uiError.mode === 'modal') {
             set((s) => ({ activeModalError: uiError, render: { ...s.render, status: 'FAILED', error: uiError.message }, errorMessage: uiError.message }))
@@ -185,7 +206,7 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
             set((s) => ({ toasts: [...s.toasts, uiError], render: { ...s.render, status: 'FAILED', error: uiError.message }, errorMessage: uiError.message }))
           }
         } else if (event.type === 'llm_loop_warning') {
-          const evt = event as any
+          const evt = event as LlmLoopWarningEvent
           const warningToast: UIError = {
             id: `warn_${Date.now()}`,
             mode: 'toast',
@@ -240,13 +261,13 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
         return false
       }
 
-      const payload = (session.state_payload || {}) as Record<string, any>
+      const payload = session.state_payload || {}
       const candidateStep = (session.checkpoint_step || session.current_step || 'TOPIC') as FlowStep
       const targetStep = (FLOW_STEPS as readonly string[]).includes(candidateStep) ? candidateStep : 'TOPIC'
 
       const wasRecovered = session.status === 'RECOVERED' || session.status === 'RUNNING' || session.status === 'RENDERING'
 
-      let renderState = payload.render ?? createInitialRenderData()
+      let renderState: RenderData = payload.render ?? createInitialRenderData()
       if (wasRecovered && (renderState.status === 'RENDERING' || renderState.status === 'PENDING')) {
         renderState = {
           ...renderState,
@@ -278,7 +299,7 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
       }
 
       return true
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       set({ isLoading: false, errorMessage: uiError.message })
       return false

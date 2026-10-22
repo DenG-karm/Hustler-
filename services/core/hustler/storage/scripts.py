@@ -43,7 +43,8 @@ class ScriptRepository:
                 claims_json TEXT NOT NULL DEFAULT '[]',
                 is_approved INTEGER NOT NULL DEFAULT 0,
                 content_hash TEXT NOT NULL,
-                updated_at REAL NOT NULL
+                updated_at REAL NOT NULL,
+                channel_id TEXT
             )
             """
         )
@@ -87,6 +88,7 @@ class ScriptRepository:
         scenes: Sequence[object] = (),
         claims: Sequence[object] = (),
         is_approved: bool = False,
+        channel_id: Optional[str] = None,
     ) -> dict[str, object]:
         """Senaryoyu kaydeder.
         
@@ -98,7 +100,7 @@ class ScriptRepository:
         content_hash = self.compute_hash(title, full_text, scenes_json, claims_json, is_approved)
 
         existing = await self.get(script_id)
-        if existing is not None and existing.content_hash == content_hash:
+        if existing is not None and existing.content_hash == content_hash and channel_id is None:
             logger.info("script_save_idempotent_hit", script_id=script_id, hash=content_hash)
             return {
                 "status": "UNCHANGED",
@@ -112,8 +114,8 @@ class ScriptRepository:
         await self.db.execute_write(
             """
             INSERT INTO scripts (script_id, title, full_text, scenes_json, claims_json,
-                                is_approved, content_hash, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                                is_approved, content_hash, updated_at, channel_id)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(script_id) DO UPDATE SET
                 title = excluded.title,
                 full_text = excluded.full_text,
@@ -121,7 +123,8 @@ class ScriptRepository:
                 claims_json = excluded.claims_json,
                 is_approved = excluded.is_approved,
                 content_hash = excluded.content_hash,
-                updated_at = excluded.updated_at
+                updated_at = excluded.updated_at,
+                channel_id = COALESCE(excluded.channel_id, scripts.channel_id)
             """,
             (
                 script_id,
@@ -132,6 +135,7 @@ class ScriptRepository:
                 1 if is_approved else 0,
                 content_hash,
                 now,
+                channel_id,
             ),
         )
         logger.info("script_saved", script_id=script_id, hash=content_hash)

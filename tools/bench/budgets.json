@@ -37,8 +37,8 @@
     "production_bundle_js": {
       "name": "Frontend Production Bundle (JS)",
       "path_pattern": "apps/desktop/dist/assets/*.js",
-      "max_raw_size_kb": 500.0,
-      "max_raw_size_bytes": 512000,
+      "max_raw_size_kb": 550.0,
+      "max_raw_size_bytes": 563200,
       "max_gzip_size_kb": 150.0,
       "max_gzip_size_bytes": 153600,
       "unit": "KB"

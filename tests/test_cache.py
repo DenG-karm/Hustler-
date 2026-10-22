@@ -2,10 +2,9 @@
 
 import time
 
-import aiosqlite
 import pytest
 
-from services.core.hustler.db import Database
+from services.core.hustler.db import Database, PooledReaderConnection
 from services.core.hustler.storage.cache import YouTubeCache
 
 
@@ -101,10 +100,10 @@ async def test_corrupt_json_does_not_crash_and_returns_none(
 async def test_get_before_init_tables_swallows_error_and_closes_reader(
     db: Database, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    opened: list[aiosqlite.Connection] = []
+    opened: list[PooledReaderConnection] = []
     real_get_reader = db.get_reader
 
-    async def tracking_get_reader() -> aiosqlite.Connection:
+    async def tracking_get_reader() -> PooledReaderConnection:
         conn = await real_get_reader()
         opened.append(conn)
         return conn
@@ -113,7 +112,7 @@ async def test_get_before_init_tables_swallows_error_and_closes_reader(
 
     result = await YouTubeCache(db).get("k")
 
-    leaked: list[aiosqlite.Connection] = []
+    leaked: list[PooledReaderConnection] = []
     for c in opened:
         try:
             await c.execute("SELECT 1")

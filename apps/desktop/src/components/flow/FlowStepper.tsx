@@ -1,12 +1,12 @@
 import React from 'react'
 import { type FlowStep, useFlowStore } from '../../store/flowStore'
+import { resolveChannelAvatar } from '../channels/channelMetadata'
 
 export interface StudioStep {
   number: number
   key: FlowStep
   label: string
   sublabel: string
-  icon: string
   isActive: boolean
   isCompleted: boolean
   isLocked: boolean
@@ -22,9 +22,13 @@ export const FlowStepper: React.FC = () => {
   const preview = useFlowStore((s) => s.preview)
   const render = useFlowStore((s) => s.render)
   const goToStep = useFlowStore((s) => s.goToStep)
+  const setActiveView = useFlowStore((s) => s.setActiveView)
+  const channels = useFlowStore((s) => s.channels)
+  const activeChannelId = useFlowStore((s) => s.activeChannelId)
 
-  // Step 1: Keşif (Topic & Top20)
-  const isStep1Active = currentStep === 'TOPIC' || currentStep === 'TOP20'
+  const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null
+
+  // Step 1: Kanal Masası & Fikir Keşfi
   const isStep1Completed =
     selectedIdea !== null || ['SCRIPT', 'AUDIO', 'ASSETS', 'PREVIEW', 'RENDER'].includes(currentStep)
 
@@ -38,7 +42,7 @@ export const FlowStepper: React.FC = () => {
   const isStep3Active = currentStep === 'AUDIO'
   const isStep3Completed =
     Boolean(audio?.audioPath) || ['ASSETS', 'PREVIEW', 'RENDER'].includes(currentStep)
-  const isStep3Locked = !isStep2Completed && !isStep3Active
+  const isStep3Locked = !script && !isStep3Active
 
   // Step 4: Varlık & Slot (Assets)
   const isStep4Active = currentStep === 'ASSETS'
@@ -61,26 +65,20 @@ export const FlowStepper: React.FC = () => {
     {
       number: 1,
       key: 'TOPIC',
-      label: 'Keşif',
-      sublabel: 'Konu & Top 20',
-      icon: '🔍',
-      isActive: isStep1Active,
-      isCompleted: isStep1Completed && !isStep1Active,
+      label: 'Kanal Masası',
+      sublabel: 'Fikir & Araştırma',
+      isActive: false,
+      isCompleted: true,
       isLocked: false,
       onClick: () => {
-        try {
-          goToStep(selectedIdea ? 'TOP20' : 'TOPIC')
-        } catch {
-          // Engellendiyse sessizce geç
-        }
+        setActiveView('channels')
       },
     },
     {
       number: 2,
       key: 'SCRIPT',
-      label: 'Senaryo & İddia',
-      sublabel: 'Metin & Doğrulama',
-      icon: '✍️',
+      label: 'Senaryo',
+      sublabel: '3 Perde & İddia',
       isActive: isStep2Active,
       isCompleted: isStep2Completed && !isStep2Active,
       isLocked: isStep2Locked,
@@ -97,9 +95,8 @@ export const FlowStepper: React.FC = () => {
     {
       number: 3,
       key: 'AUDIO',
-      label: 'Ses & Zamanlama',
-      sublabel: 'TTS & AudioCache',
-      icon: '🎙️',
+      label: 'Ses Sentezi',
+      sublabel: 'TTS & Zamanlama',
       isActive: isStep3Active,
       isCompleted: isStep3Completed && !isStep3Active,
       isLocked: isStep3Locked,
@@ -108,7 +105,7 @@ export const FlowStepper: React.FC = () => {
           try {
             goToStep('AUDIO')
           } catch {
-            // no-op
+            useFlowStore.setState({ currentStep: 'AUDIO', errorMessage: null })
           }
         }
       },
@@ -116,9 +113,8 @@ export const FlowStepper: React.FC = () => {
     {
       number: 4,
       key: 'ASSETS',
-      label: 'Varlık & Slot',
-      sublabel: 'Görseller & Müzik',
-      icon: '🖼️',
+      label: 'Görsel Slotlar',
+      sublabel: '9:16 Medya & Slot',
       isActive: isStep4Active,
       isCompleted: isStep4Completed && !isStep4Active,
       isLocked: isStep4Locked,
@@ -137,7 +133,6 @@ export const FlowStepper: React.FC = () => {
       key: 'PREVIEW',
       label: 'Önizleme',
       sublabel: 'Kare Kontrolü',
-      icon: '👁️',
       isActive: isStep5Active,
       isCompleted: isStep5Completed && !isStep5Active,
       isLocked: isStep5Locked,
@@ -154,9 +149,8 @@ export const FlowStepper: React.FC = () => {
     {
       number: 6,
       key: 'RENDER',
-      label: 'Render & Çıktı',
-      sublabel: 'FFmpeg & Dağıtım',
-      icon: '⚡',
+      label: 'Render',
+      sublabel: 'FFmpeg Çıktısı',
       isActive: isStep6Active,
       isCompleted: isStep6Completed,
       isLocked: isStep6Locked,
@@ -172,122 +166,110 @@ export const FlowStepper: React.FC = () => {
     },
   ]
 
+  const avatarData = activeChannel
+    ? resolveChannelAvatar(activeChannel.channel_url, activeChannel.name)
+    : null
+
   return (
     <nav
-      className="w-full bg-surface/90 backdrop-blur-md border-b border-border/80 px-lg py-sm shadow-sm select-none"
+      className="w-full bg-white dark:bg-zinc-900 border-b border-[#E5E7EB] dark:border-zinc-800 px-6 py-3 select-none shrink-0 shadow-xs"
       aria-label="Üretim Akış Adımları"
       data-testid="flow-stepper"
     >
-      <div className="flex items-center justify-between max-w-6xl mx-auto gap-xs sm:gap-sm">
-        {steps.map((step, idx) => {
-          return (
-            <React.Fragment key={step.number}>
-              {/* Adım Düğmesi */}
-              <button
-                type="button"
-                onClick={step.onClick}
-                disabled={step.isLocked}
-                aria-current={step.isActive ? 'step' : undefined}
-                data-testid={`studio-step-${step.number}`}
-                data-test-key={`step-indicator-${step.key}`}
-                className={`group relative flex items-center gap-xs sm:gap-sm py-1.5 px-2 sm:px-3 rounded-xl transition-all duration-200 outline-none focus-visible:ring-2 focus-visible:ring-primary ${
-                  step.isActive
-                    ? 'bg-primary/10 border border-primary/30 shadow-sm shadow-primary/10'
-                    : step.isCompleted
-                    ? 'hover:bg-surface-hover cursor-pointer border border-transparent hover:border-border'
-                    : step.isLocked
-                    ? 'opacity-40 cursor-not-allowed border border-transparent'
-                    : 'hover:bg-surface-hover cursor-pointer border border-transparent'
-                }`}
-              >
-                {/* Rozet / İkon */}
-                <div
-                  className={`w-7 h-7 sm:w-8 sm:h-8 rounded-lg flex items-center justify-center font-bold text-xs transition-all duration-200 shrink-0 ${
+      <div className="flex items-center justify-between max-w-7xl mx-auto gap-4">
+        {/* Sol: Aktif Kanal Bilgisi ve Masaya Hızlı Dönüş */}
+        <div className="flex items-center gap-3 shrink-0">
+          <button
+            type="button"
+            onClick={() => setActiveView('channels')}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-[#E5E7EB] dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-800/60 hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-200 text-xs font-medium transition-colors cursor-pointer group"
+            title="Kanal Masasına Dön"
+          >
+            <svg className="w-3.5 h-3.5 text-zinc-500 group-hover:-translate-x-0.5 transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+            </svg>
+            <span className="hidden sm:inline">Kanal Masası</span>
+          </button>
+
+          {activeChannel && avatarData && (
+            <div className="hidden md:flex items-center gap-2 pl-2 border-l border-[#E5E7EB] dark:border-zinc-800">
+              <img
+                src={avatarData.avatarUrl}
+                alt={activeChannel.name}
+                className="w-6 h-6 rounded-full object-cover ring-1 ring-black/5 dark:ring-white/10"
+                onError={(e) => {
+                  ;(e.currentTarget as HTMLElement).style.display = 'none'
+                }}
+              />
+              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100 max-w-[130px] truncate">
+                {activeChannel.name}
+              </span>
+            </div>
+          )}
+        </div>
+
+        {/* Orta/Sağ: Modern 6 Adımlı Stepper Barı */}
+        <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto py-1 scrollbar-none">
+          {steps.map((step, idx) => {
+            return (
+              <React.Fragment key={step.number}>
+                <button
+                  type="button"
+                  onClick={step.onClick}
+                  disabled={step.isLocked}
+                  aria-current={step.isActive ? 'step' : undefined}
+                  data-testid={`studio-step-${step.number}`}
+                  data-test-key={`step-indicator-${step.key}`}
+                  className={`group relative flex items-center gap-2 px-3 py-1.5 rounded-xl text-xs font-medium transition-all duration-200 outline-none ring-0 ${
                     step.isActive
-                      ? 'bg-gradient-to-tr from-primary to-purple-500 text-white shadow-md shadow-primary/30 ring-2 ring-primary/40 scale-105'
+                      ? 'bg-[#111827] dark:bg-white text-white dark:text-zinc-900 shadow-xs scale-[1.02]'
                       : step.isCompleted
-                      ? 'bg-emerald-500/15 text-emerald-500 border border-emerald-500/30'
+                      ? 'bg-zinc-100 dark:bg-zinc-800/80 text-zinc-800 dark:text-zinc-200 hover:bg-zinc-200/80 dark:hover:bg-zinc-700/80 cursor-pointer'
                       : step.isLocked
-                      ? 'bg-surface-hover text-text-muted border border-border/40'
-                      : 'bg-surface-hover text-text-secondary border border-border'
+                      ? 'opacity-40 cursor-not-allowed text-zinc-400 dark:text-zinc-600'
+                      : 'text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer'
                   }`}
                 >
-                  {step.isCompleted ? (
-                    <svg
-                      className="w-4 h-4 stroke-[2.5]"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                  ) : step.isLocked ? (
-                    <svg
-                      className="w-3.5 h-3.5"
-                      fill="none"
-                      viewBox="0 0 24 24"
-                      stroke="currentColor"
-                    >
-                      <path
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth={2}
-                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                      />
-                    </svg>
-                  ) : (
-                    <span>{step.number}</span>
-                  )}
-                </div>
-
-                {/* Adım Metinleri */}
-                <div className="flex flex-col text-left">
-                  <div className="flex items-center gap-1">
-                    <span
-                      className={`text-xs font-semibold tracking-tight transition-colors ${
-                        step.isActive
-                          ? 'text-primary font-bold'
-                          : step.isCompleted
-                          ? 'text-text-primary group-hover:text-primary'
-                          : 'text-text-muted'
-                      }`}
-                    >
-                      {step.number}. {step.label}
-                    </span>
-                    {step.isCompleted && (
-                      <span className="text-[10px] text-emerald-500 font-bold hidden md:inline">
-                        ✓
-                      </span>
-                    )}
-                  </div>
-                  <span
-                    className={`text-[10px] hidden lg:inline truncate max-w-[100px] transition-colors ${
+                  {/* Durum Rozeti / Numaratör */}
+                  <div
+                    className={`w-5 h-5 rounded-lg flex items-center justify-center text-[10px] font-bold transition-colors shrink-0 ${
                       step.isActive
-                        ? 'text-primary/80 font-medium'
-                        : 'text-text-muted'
+                        ? 'bg-white/20 dark:bg-black/10 text-white dark:text-zinc-900'
+                        : step.isCompleted
+                        ? 'bg-emerald-500 text-white'
+                        : 'bg-zinc-200 dark:bg-zinc-700 text-zinc-600 dark:text-zinc-400'
                     }`}
                   >
-                    {step.sublabel}
-                  </span>
-                </div>
-              </button>
+                    {step.isCompleted ? (
+                      <svg
+                        className="w-3 h-3 stroke-[3]"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <span>{step.number}</span>
+                    )}
+                  </div>
 
-              {/* Adımlar Arası Bağlantı Çizgisi */}
-              {idx < steps.length - 1 && (
-                <div
-                  className={`flex-1 h-[2px] min-w-[8px] sm:min-w-[16px] rounded-full transition-colors duration-300 ${
-                    step.isCompleted
-                      ? 'bg-emerald-500/50'
-                      : step.isActive
-                      ? 'bg-gradient-to-r from-primary/50 to-border'
-                      : 'bg-border/60'
-                  }`}
-                  aria-hidden="true"
-                />
-              )}
-            </React.Fragment>
-          )
-        })}
+                  {/* Adım Başlığı */}
+                  <div className="flex flex-col text-left">
+                    <span className="truncate whitespace-nowrap">
+                      {step.label}
+                    </span>
+                  </div>
+                </button>
+
+                {/* Adımlar Arası İnce Nokta / Çizgi */}
+                {idx < steps.length - 1 && (
+                  <div className="w-2 sm:w-3 h-[1px] bg-zinc-200 dark:bg-zinc-800 shrink-0" aria-hidden="true" />
+                )}
+              </React.Fragment>
+            )
+          })}
+        </div>
       </div>
     </nav>
   )

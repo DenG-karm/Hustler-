@@ -17,7 +17,12 @@ import type {
   AssetSlot,
   RenderData,
   ActiveSessionPayload,
+  ChannelItem,
+  ChannelCreatePayload,
+  ChannelDeleteResponse,
 } from '../store/flowTypes'
+
+export type { ChannelItem, ChannelCreatePayload, ChannelDeleteResponse }
 
 export interface ProxyResponse<T = unknown> {
   status: number
@@ -108,8 +113,13 @@ export interface DiagnosticsResponseData {
 }
 
 export interface FlowIpcClient {
-  runDiscovery(topic: string): Promise<ProxyResponse<DiscoveryResponseData>>
-  generateScript(ideaId: string, topic: string, title: string): Promise<ProxyResponse<ScriptGenerateResponseData>>
+  runDiscovery(topic: string, channelId?: string | null): Promise<ProxyResponse<DiscoveryResponseData>>
+  generateScript(
+    ideaId: string,
+    topic: string,
+    title: string,
+    channelId?: string | null
+  ): Promise<ProxyResponse<ScriptGenerateResponseData>>
   saveScript(
     scriptId: string,
     title: string,
@@ -127,27 +137,46 @@ export interface FlowIpcClient {
   getActiveSession(): Promise<ProxyResponse<SessionResponseData>>
   saveActiveSession(payload: ActiveSessionPayload): Promise<ProxyResponse<SessionResponseData>>
   exportDiagnostics?(format?: 'zip' | 'json'): Promise<ProxyResponse<DiagnosticsResponseData>>
+  listChannels?(): Promise<ProxyResponse<ChannelItem[]>>
+  createChannel?(payload: ChannelCreatePayload): Promise<ProxyResponse<ChannelItem>>
+  getChannelDetail?(channelId: string): Promise<ProxyResponse<ChannelItem>>
+  deleteChannel?(channelId: string): Promise<ProxyResponse<ChannelDeleteResponse>>
   proxyRequest(method: string, route: string, body?: unknown): Promise<ProxyResponse<unknown>>
+}
+
+export interface ChannelIpcClient {
+  listChannels(): Promise<ProxyResponse<ChannelItem[]>>
+  createChannel(payload: ChannelCreatePayload): Promise<ProxyResponse<ChannelItem>>
+  getChannelDetail(channelId: string): Promise<ProxyResponse<ChannelItem>>
+  deleteChannel(channelId: string): Promise<ProxyResponse<ChannelDeleteResponse>>
 }
 
 /**
  * Üretim / Yerel Çalışma Tauri IPC İstemcisi.
- * Doğrudan Tauri IPC güvenlik kalkanı (secureInvoke) üzerinden çağrı yapar.
+ * Doğrudan Tauri IPC güvenlik kalkanı (secureInvoke) üzerinden Sidecar proxy çağrısı yapar.
+ * Sıfır Mock Kuralı: Tarayıcı mock işleyicileri kaldırılmış olup tüm çağrılar Tauri invoke köprüsünden geçer.
  */
-export const tauriIpcClient: FlowIpcClient = {
-  async runDiscovery(topic: string): Promise<ProxyResponse<DiscoveryResponseData>> {
+export const tauriIpcClient: FlowIpcClient & ChannelIpcClient = {
+  async runDiscovery(topic: string, channelId?: string | null): Promise<ProxyResponse<DiscoveryResponseData>> {
     return (await tauriIpcClient.proxyRequest('POST', '/api/v1/discovery/run', {
       topic,
       max_results: 20,
       score_threshold: 30.0,
+      ...(channelId ? { channel_id: channelId } : {}),
     })) as ProxyResponse<DiscoveryResponseData>
   },
 
-  async generateScript(ideaId: string, topic: string, title: string): Promise<ProxyResponse<ScriptGenerateResponseData>> {
+  async generateScript(
+    ideaId: string,
+    topic: string,
+    title: string,
+    channelId?: string | null
+  ): Promise<ProxyResponse<ScriptGenerateResponseData>> {
     return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/script', {
       idea_id: ideaId,
       topic,
       title,
+      ...(channelId ? { channel_id: channelId } : {}),
     })) as ProxyResponse<ScriptGenerateResponseData>
   },
 
@@ -233,8 +262,31 @@ export const tauriIpcClient: FlowIpcClient = {
     )) as ProxyResponse<DiagnosticsResponseData>
   },
 
+  async listChannels(): Promise<ProxyResponse<ChannelItem[]>> {
+    return (await tauriIpcClient.proxyRequest('GET', '/api/v1/channels')) as ProxyResponse<ChannelItem[]>
+  },
+
+  async createChannel(payload: ChannelCreatePayload): Promise<ProxyResponse<ChannelItem>> {
+    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/channels', payload)) as ProxyResponse<ChannelItem>
+  },
+
+  async getChannelDetail(channelId: string): Promise<ProxyResponse<ChannelItem>> {
+    return (await tauriIpcClient.proxyRequest(
+      'GET',
+      `/api/v1/channels/${encodeURIComponent(channelId)}`
+    )) as ProxyResponse<ChannelItem>
+  },
+
+  async deleteChannel(channelId: string): Promise<ProxyResponse<ChannelDeleteResponse>> {
+    return (await tauriIpcClient.proxyRequest(
+      'DELETE',
+      `/api/v1/channels/${encodeURIComponent(channelId)}`
+    )) as ProxyResponse<ChannelDeleteResponse>
+  },
+
   async proxyRequest(method: string, route: string, body?: unknown): Promise<ProxyResponse<unknown>> {
     const validatedRoute = validateProxyRoute(route)
+
     return secureInvoke<ProxyResponse<unknown>>('proxy_request', {
       req: {
         method,

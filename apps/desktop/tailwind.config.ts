@@ -19,6 +19,7 @@ const config: Config = {
           subtle: 'var(--color-border-subtle)',
           DEFAULT: 'var(--color-border-default)',
           strong: 'var(--color-border-strong)',
+          focus: 'var(--color-primary)',
         },
         text: {
           primary: 'var(--color-text-primary)',
@@ -45,6 +46,12 @@ const config: Config = {
           hover: 'var(--color-accent-hover)',
           fg: 'var(--color-accent-fg)',
         },
+        success: {
+          DEFAULT: 'var(--color-success)',
+        },
+        warning: {
+          DEFAULT: 'var(--color-warning)',
+        },
         ring: 'var(--color-focus-ring)',
       },
       spacing: {
@@ -64,6 +71,11 @@ const config: Config = {
       fontFamily: {
         sans: ['var(--font-sans)'],
         mono: ['var(--font-mono)'],
+      },
+      boxShadow: {
+        tactile: 'inset 0 1px 0 0 rgba(255, 255, 255, 0.16), 0 1px 2px 0 rgba(0, 0, 0, 0.35)',
+        panel: 'var(--panel-bevel), 0 2px 8px -2px rgba(0, 0, 0, 0.24)',
+        recessed: 'var(--recessed-shadow)',
       },
     },
   },

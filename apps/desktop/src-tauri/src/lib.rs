@@ -40,6 +40,7 @@ fn is_route_allowed(route: &str) -> bool {
         "/api/v1/system/shutdown",
         "/api/v1/discovery/run",
         "/api/v1/jobs",
+        "/api/v1/channels",
         "/api/v1/pipeline/script",
         "/api/v1/pipeline/script/save",
         "/api/v1/pipeline/audio",
@@ -50,10 +51,13 @@ fn is_route_allowed(route: &str) -> bool {
         "/api/v1/pipeline/session/save",
         "/api/v1/diagnostics/export",
     ];
-    if exact_matches.iter().any(|&r| r == route) {
+    if exact_matches.contains(&route) {
         return true;
     }
-    if route.starts_with("/api/v1/jobs/") || route.starts_with("/api/v1/diagnostics/export") {
+    if route.starts_with("/api/v1/jobs/")
+        || route.starts_with("/api/v1/channels/")
+        || route.starts_with("/api/v1/diagnostics/export")
+    {
         return true;
     }
     false
@@ -397,6 +401,10 @@ pub fn send_graceful_shutdown(port: u16, token: &str) {
 }
 
 fn resolve_sidecar_binary() -> Option<std::path::PathBuf> {
+    if cfg!(debug_assertions) && std::env::var("HUSTLER_FORCE_BUNDLED_SIDECAR").is_err() {
+        return None;
+    }
+
     // 1. Üretim paketi: Mevcut uygulamanın yanında veya binaries klasöründe
     if let Ok(current_exe) = std::env::current_exe() {
         if let Some(parent) = current_exe.parent() {
@@ -414,19 +422,15 @@ fn resolve_sidecar_binary() -> Option<std::path::PathBuf> {
         }
     }
 
-    // 2. Geliştirme modu: src-tauri/binaries dizini
+    // 2. Geliştirme modu yedek: src-tauri/binaries dizini
     let manifest_dir = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let dev_candidates = [
         manifest_dir.join("binaries").join("hustler-sidecar-x86_64-pc-windows-msvc.exe"),
         manifest_dir.join("binaries").join("hustler-sidecar.exe"),
     ];
-    for candidate in dev_candidates {
-        if candidate.exists() {
-            return Some(candidate);
-        }
-    }
-
-    None
+    dev_candidates
+        .into_iter()
+        .find(|candidate| candidate.exists())
 }
 
 fn spawn_sidecar() -> anyhow::Result<(Child, u16, String)> {

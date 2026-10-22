@@ -60,6 +60,7 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
   it('1. Tauri Event System: Asenkron ilerleme SSE/Event mekanizması ile UI\'a aktarılmalı (Sıfır Polling)', async () => {
     // Render adımına başlangıçta geç
     useFlowStore.setState({
+      activeView: 'pipeline',
       currentStep: 'RENDER',
       render: {
         jobId: 'job_resilience_99',
@@ -117,6 +118,7 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
 
   it('2. Hard-Cancel: UI üzerinden İptal butonuna basıldığında tüm hiyerarşiye iptal sinyali gönderilmeli', async () => {
     useFlowStore.setState({
+      activeView: 'pipeline',
       currentStep: 'RENDER',
       render: {
         jobId: 'job_cancel_test_123',
@@ -152,6 +154,7 @@ describe('K-703: Tauri Event System, Hard-Cancel ve Yeniden Bağlanma (Resilienc
 
   it('3. Resilience (Yeniden Bağlanma): Bağlantı koptuğunda Exponential Backoff uyarısı gösterilmeli ve UI kilitlenmemeli', async () => {
     useFlowStore.setState({
+      activeView: 'pipeline',
       currentStep: 'RENDER',
       render: {
         jobId: 'job_resilience_99',

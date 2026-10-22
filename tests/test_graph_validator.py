@@ -12,7 +12,7 @@ def test_valid_chain_passes() -> None:
 
 
 def test_label_consumed_only_by_map_passes() -> None:
-    GraphValidator.validate_graph(["[0:v]null[out]"], ["[out]"])
+    assert GraphValidator.validate_graph(["[0:v]null[out]"], ["[out]"]) is None
 
 
 def test_dangling_label_raises() -> None:
@@ -42,10 +42,10 @@ def test_duplicate_output_label_raises() -> None:
     [([], []), ([], ["0:v"]), (["not a filter line"], [])],
 )
 def test_degenerate_inputs_do_not_crash(lines: list[str], maps: list[str]) -> None:
-    GraphValidator.validate_graph(lines, maps)
+    assert GraphValidator.validate_graph(lines, maps) is None
 
 
 def test_multi_input_filter_consumes_every_label() -> None:
     lines = ["[0:v]null[a]", "[1:v]null[b]", "[a][b]hstack[c]"]
 
-    GraphValidator.validate_graph(lines, ["[c]"])
+    assert GraphValidator.validate_graph(lines, ["[c]"]) is None

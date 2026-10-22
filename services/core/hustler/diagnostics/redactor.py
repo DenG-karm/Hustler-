@@ -11,30 +11,44 @@ import getpass
 import os
 import re
 
-# 1. Bearer Token
+# 1. Bearer Token ("earer" sabit öneki ile CPython SRE fastsearch devrede)
 _BEARER_PATTERN: tuple[re.Pattern[str], str] = (
     re.compile(r"([Bb]earer\s+)[^\s\"'`]+"),
     r"\g<1>[REDACTED]",
 )
 
-# 2. OpenAI ve ElevenLabs API Anahtarları (sk-..., xi-...)
-_KEYS_PATTERN: tuple[re.Pattern[str], str] = (
-    re.compile(r"(?:sk-(?:proj-)?|xi-)[a-zA-Z0-9_\-]{16,}"),
+# 2. OpenAI (sk-...) ve ElevenLabs (xi-...) API Anahtarları (sabit önek ile SIMD fastsearch)
+_SK_KEYS_PATTERN: tuple[re.Pattern[str], str] = (
+    re.compile(r"sk-(?:proj-)?[a-zA-Z0-9_\-]{16,}"),
+    "[REDACTED]",
+)
+_XI_KEYS_PATTERN: tuple[re.Pattern[str], str] = (
+    re.compile(r"xi-[a-zA-Z0-9_\-]{16,}"),
     "[REDACTED]",
 )
 
 # 3. Ortam değişkeni ve yapılandırma anahtar-değer çiftleri
-_ENV_VAR_PATTERN: tuple[re.Pattern[str], str] = (
-    re.compile(
-        r"""(API_KEY|SECRET|TOKEN|PASSWORD|api_key|secret|token|password)\s*([=:]\s*)(["']?)([^"'\s\r\n]+)"""
-    ),
-    r"\1\2\3[REDACTED]",
+_ENV_KEYWORDS: tuple[str, ...] = (
+    "API_KEY",
+    "SECRET",
+    "TOKEN",
+    "PASSWORD",
+    "api_key",
+    "secret",
+    "token",
+    "password",
+)
+_ENV_COMBINED_PATTERN: re.Pattern[str] = re.compile(
+    r"""(API_KEY|SECRET|TOKEN|PASSWORD|api_key|secret|token|password)\s*([=:]\s*)(["']?)([^"'\s\r\n]+)"""
 )
 
-# 4. Kullanıcı dizinleri: Windows (C:\Users\... ve JSON çift ters bölülü C:\\Users\\...), macOS (/Users/...) ve Linux (/home/...)
-# \s hariç tutulmuştur; 'Ad Soyad' gibi boşluklu kullanıcı adları güvenle ve eksiksiz maskelenir.
-_PATH_PATTERN: tuple[re.Pattern[str], str] = (
-    re.compile(r"([Uu]sers(?:\\\\|\\|/)|/home/)[^/\\,\"';:\r\n]+"),
+# 4. Kullanıcı dizinleri: Windows/macOS ("sers" sabit iç-öneki) ve Linux ("/home/" sabit öneki)
+_USERS_PATH_PATTERN: tuple[re.Pattern[str], str] = (
+    re.compile(r"([Uu]sers(?:\\\\|\\|/))[^/\\,\"';:\r\n]+"),
+    r"\g<1><REDACTED>",
+)
+_HOME_PATH_PATTERN: tuple[re.Pattern[str], str] = (
+    re.compile(r"(/home/)[^/\\,\"';:\r\n]+"),
     r"\g<1><REDACTED>",
 )
 
@@ -61,6 +75,21 @@ def _get_dynamic_user_info() -> tuple[str, re.Pattern[str]] | None:
     return None
 
 
+def _redact_user_paths(text: str) -> str:
+    """Kullanıcı dizinlerini ve dinamik kullanıcı adlarını maskeler."""
+    if "sers" in text:
+        text = _USERS_PATH_PATTERN[0].sub(_USERS_PATH_PATTERN[1], text)
+    if "/home/" in text:
+        text = _HOME_PATH_PATTERN[0].sub(_HOME_PATH_PATTERN[1], text)
+
+    user_info = _get_dynamic_user_info()
+    if user_info:
+        current_user, user_pattern = user_info
+        if current_user in text or current_user.lower() in text:
+            text = user_pattern.sub(r"\g<1><REDACTED>\g<2>", text)
+    return text
+
+
 def redact_sensitive_text(raw: str) -> str:
     """
     Metin içindeki API anahtarlarını, yetki belirteçlerini ve kullanıcı dizin yollarını maskeler.
@@ -76,33 +105,16 @@ def redact_sensitive_text(raw: str) -> str:
         text = _BEARER_PATTERN[0].sub(_BEARER_PATTERN[1], text)
 
     # 2. API Anahtarları (sk-..., xi-...)
-    if "sk-" in text or "xi-" in text:
-        text = _KEYS_PATTERN[0].sub(_KEYS_PATTERN[1], text)
+    if "sk-" in text:
+        text = _SK_KEYS_PATTERN[0].sub(_SK_KEYS_PATTERN[1], text)
+    if "xi-" in text:
+        text = _XI_KEYS_PATTERN[0].sub(_XI_KEYS_PATTERN[1], text)
 
-    # 3. Ortam Değişkeni / Yapılandırma Anahtarları
-    if (
-        "KEY" in text
-        or "SECRET" in text
-        or "TOKEN" in text
-        or "PASSWORD" in text
-        or "key" in text
-        or "secret" in text
-        or "token" in text
-        or "password" in text
-    ):
-        text = _ENV_VAR_PATTERN[0].sub(_ENV_VAR_PATTERN[1], text)
+    # 3. Ortam Değişkeni / Yapılandırma Anahtarları (Tek geçişli optimize Regex)
+    if any(kw in text for kw in _ENV_KEYWORDS):
+        text = _ENV_COMBINED_PATTERN.sub(r"\1\2\3[REDACTED]", text)
 
-    # 4. Kullanıcı Dizinleri (Windows, macOS, Linux)
-    if "sers" in text or "/home/" in text:
-        text = _PATH_PATTERN[0].sub(_PATH_PATTERN[1], text)
-
-    # 6. Dinamik Kullanıcı Adı Koruması (Örn: Deniz)
-    user_info = _get_dynamic_user_info()
-    if user_info:
-        current_user, user_pattern = user_info
-        if current_user in text or current_user.lower() in text:
-            text = user_pattern.sub(r"\g<1><REDACTED>\g<2>", text)
-
-    return text
+    # 4. Kullanıcı Dizinleri ve Dinamik İsimler
+    return _redact_user_paths(text)
 
 

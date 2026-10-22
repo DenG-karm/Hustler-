@@ -25,6 +25,8 @@ export const FLOW_STEPS: readonly FlowStep[] = [
   'RENDER',
 ] as const
 
+export type AppView = 'pipeline' | 'channels' | 'library' | 'settings' | 'templates'
+
 export class InvalidStateTransitionError extends Error {
   readonly fromStep: FlowStep
   readonly toStep: FlowStep
@@ -207,6 +209,27 @@ export interface FlowState {
   pollJobStatus: () => Promise<void>
   rehydrateFromBackend: () => Promise<boolean>
   persistSessionToBackend: () => Promise<void>
+
+  // Kanal-Merkezli Mimari (Faz 2/2): Kanal Çalışma Alanı & Akış Köprüsü
+  activeView: AppView
+  channels: ChannelItem[]
+  activeChannelId: string | null
+  flowChannelId: string | null
+  channelIdeas: VideoIdea[]
+  channelResearchQuery: string
+  isChannelsLoading: boolean
+  isChannelResearching: boolean
+  channelLiveStats: Record<string, ChannelLiveStats | null>
+  isLiveStatsLoading: boolean
+  setActiveView: (view: AppView) => void
+  loadChannels: () => Promise<void>
+  createChannel: (payload: ChannelCreatePayload) => Promise<ChannelItem | null>
+  deleteChannel: (id: string) => Promise<void>
+  selectChannel: (id: string | null) => void
+  researchChannelContent: (channelId: string, query: string) => Promise<void>
+  updateChannelSummary: (channelId: string, aiSummary: string) => Promise<void>
+  fetchChannelLiveStats: (channelId: string, refresh?: boolean) => Promise<ChannelLiveStats | null>
+  selectIdeaFromChannelAndStartFlow: (channelId: string, idea: DiscoveryItem | VideoIdea) => void
 }
 
 export function createInitialAssetsData(): AssetsData {
@@ -244,12 +267,14 @@ export function createInitialRenderData(): RenderData {
 export function checkStepValidation(state: FlowState, step: FlowStep): { valid: boolean; reason?: string } {
   switch (step) {
     case 'TOPIC': {
+      if (state.flowChannelId || state.activeChannelId) return { valid: true }
       if (!state.topic || state.topic.trim().length < 3) {
         return { valid: false, reason: 'Konu başlığı en az 3 karakter olmalıdır.' }
       }
       return { valid: true }
     }
     case 'TOP20': {
+      if (state.flowChannelId || state.activeChannelId) return { valid: true }
       if (!state.selectedIdea || !state.selectedIdea.id) {
         return { valid: false, reason: 'Top 20 listesinden bir video fikri seçilmelidir.' }
       }
@@ -310,3 +335,120 @@ export function checkStepValidation(state: FlowState, step: FlowStep): { valid: 
       return { valid: false, reason: 'Bilinmeyen adım.' }
   }
 }
+
+// ---------------------------------------------------------------------------
+// Kanal-Merkezli Mimari (Faz 1/2): Kanal Modelleri
+// ---------------------------------------------------------------------------
+
+export interface ChannelMetrics {
+  total_scripts: number
+  total_research: number
+  avg_viral_score?: number
+  avg_performance_score?: number
+}
+
+export interface RealVideoItem {
+  id: string | null
+  type: 'video' | 'short'
+  title: string
+  url: string | null
+  view_count: number | null
+  duration: number | null
+  published_text?: string | null
+  days_ago?: number | null
+  time_period?: 'month' | 'year' | 'all_time' | null
+}
+
+export interface TrendPoint {
+  index: number
+  id: string | null
+  title: string
+  type: string
+  view_count: number
+  view_count_formatted: string
+  rolling_avg: number
+  rolling_avg_formatted: string
+}
+
+export interface PieSlice {
+  type: string
+  label: string
+  color: string
+  count: number
+  total_views: number
+  total_views_formatted: string
+  percentage: number
+}
+
+export interface LineChartData {
+  points: TrendPoint[]
+  max_val: number
+  min_val: number
+  avg_val: number
+  avg_val_formatted: string
+  trend_direction: 'up' | 'down' | 'stable'
+}
+
+export interface ChannelAnalytics {
+  has_data: boolean
+  line_chart: LineChartData
+  videos_line_chart?: LineChartData
+  shorts_line_chart?: LineChartData
+  pie_chart: {
+    slices: PieSlice[]
+    total_views: number
+    total_views_formatted: string
+  }
+  summary: {
+    median_views: number
+    median_views_formatted: string
+    max_views: number
+    max_views_formatted: string
+    min_views: number
+    total_views: number
+    total_views_formatted: string
+    sample_count: number
+  }
+}
+
+export interface ChannelLiveStats {
+  channel_id: string
+  channel_name: string
+  channel_url: string
+  avatar_url: string | null
+  description: string
+  subscribers: number | null
+  subscribers_formatted: string | null
+  videos: RealVideoItem[]
+  shorts: RealVideoItem[]
+  total_fetched_videos: number
+  total_fetched_shorts: number
+  avg_views_sample: number | null
+  avg_views_formatted: string | null
+  analytics?: ChannelAnalytics
+  is_live: boolean
+  fetched_at: number
+}
+
+export interface ChannelItem {
+  id: string
+  name: string
+  channel_url: string
+  description: string
+  created_at: number
+  avatar_url?: string
+  ai_summary?: string
+  metrics: ChannelMetrics
+}
+
+export interface ChannelCreatePayload {
+  name: string
+  channel_url: string
+  description: string
+}
+
+export interface ChannelDeleteResponse {
+  status: string
+  channel_id: string
+}
+

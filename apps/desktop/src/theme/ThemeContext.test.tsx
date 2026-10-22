@@ -10,20 +10,17 @@ function ThemeTestConsumer() {
       <span data-testid="current-theme">{theme}</span>
       <span data-testid="resolved-theme">{resolvedTheme}</span>
       <button onClick={() => setTheme('light')}>Light Yap</button>
-      <button onClick={() => setTheme('dark')}>Dark Yap</button>
-      <button onClick={() => setTheme('system')}>System Yap</button>
     </div>
   )
 }
 
-describe('Theme Engine (ThemeProvider & useTheme)', () => {
+describe('Theme Engine (Light Theme Only)', () => {
   beforeEach(() => {
     localStorage.clear()
     document.documentElement.className = ''
   })
 
-  it('provides default theme and updates documentElement class on dark theme', async () => {
-    const user = userEvent.setup()
+  it('provides default light theme and does not apply dark class', () => {
     render(
       <ThemeProvider defaultTheme="light">
         <ThemeTestConsumer />
@@ -33,44 +30,31 @@ describe('Theme Engine (ThemeProvider & useTheme)', () => {
     expect(screen.getByTestId('current-theme')).toHaveTextContent('light')
     expect(screen.getByTestId('resolved-theme')).toHaveTextContent('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
-
-    // Switch to dark
-    await user.click(screen.getByRole('button', { name: /dark yap/i }))
-
-    expect(screen.getByTestId('current-theme')).toHaveTextContent('dark')
-    expect(screen.getByTestId('resolved-theme')).toHaveTextContent('dark')
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-    expect(localStorage.getItem('hustler-theme-preference')).toBe('dark')
   })
 
-  it('switches back to light theme and removes dark class', async () => {
+  it('removes dark class if previously present and enforces light mode', () => {
+    document.documentElement.classList.add('dark')
+    render(
+      <ThemeProvider>
+        <ThemeTestConsumer />
+      </ThemeProvider>,
+    )
+
+    expect(screen.getByTestId('resolved-theme')).toHaveTextContent('light')
+    expect(document.documentElement.classList.contains('dark')).toBe(false)
+  })
+
+  it('keeps theme as light when setTheme is called', async () => {
     const user = userEvent.setup()
     render(
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider>
         <ThemeTestConsumer />
       </ThemeProvider>,
     )
 
-    expect(document.documentElement.classList.contains('dark')).toBe(true)
-
-    // Switch to light
     await user.click(screen.getByRole('button', { name: /light yap/i }))
-
     expect(screen.getByTestId('current-theme')).toHaveTextContent('light')
     expect(document.documentElement.classList.contains('dark')).toBe(false)
-    expect(localStorage.getItem('hustler-theme-preference')).toBe('light')
-  })
-
-  it('resolves system theme based on prefers-color-scheme media query', () => {
-    render(
-      <ThemeProvider defaultTheme="system">
-        <ThemeTestConsumer />
-      </ThemeProvider>,
-    )
-
-    expect(screen.getByTestId('current-theme')).toHaveTextContent('system')
-    // In our test setup, matchMedia query with dark returned false -> light
-    expect(screen.getByTestId('resolved-theme')).toHaveTextContent('light')
   })
 
   it('throws an error if useTheme is used outside of ThemeProvider', () => {

@@ -333,7 +333,7 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
       // 1. TOPIC
       store.setTopic('Finansal Özgürlük')
       await store.fetchIdeasForTopic()
-      expect(mockIpc.runDiscovery).toHaveBeenCalledWith('Finansal Özgürlük')
+      expect(mockIpc.runDiscovery).toHaveBeenCalledWith('Finansal Özgürlük', null)
       expect(useFlowStore.getState().ideas).toHaveLength(2)
       store.nextStep()
       expect(useFlowStore.getState().currentStep).toBe('TOP20')
@@ -342,7 +342,7 @@ describe('K-702: Akış Ekranları Katı Durum Makinesi (flowStore)', () => {
       const selected = useFlowStore.getState().ideas[0]
       store.selectIdea(selected)
       await store.generateScriptForIdea()
-      expect(mockIpc.generateScript).toHaveBeenCalledWith('v1', 'Finansal Özgürlük', 'Viral Video 1')
+      expect(mockIpc.generateScript).toHaveBeenCalledWith('v1', 'Finansal Özgürlük', 'Viral Video 1', null)
       store.nextStep()
       expect(useFlowStore.getState().currentStep).toBe('SCRIPT')
 

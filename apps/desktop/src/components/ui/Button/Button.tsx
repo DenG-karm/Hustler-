@@ -13,18 +13,23 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 const variantStyles: Record<ButtonVariant, string> = {
-  primary: 'bg-primary text-primary-fg hover:bg-primary-hover active:opacity-90',
-  secondary: 'bg-secondary text-secondary-fg hover:bg-secondary-hover active:opacity-90',
-  outline: 'border border-border bg-transparent text-text-primary hover:bg-surface-hover active:bg-surface',
-  ghost: 'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface',
-  destructive: 'bg-destructive text-destructive-fg hover:bg-destructive-hover active:opacity-90',
+  primary:
+    'bg-primary text-primary-fg hover:bg-primary-hover shadow-sm active:translate-y-[0.5px] active:opacity-95',
+  secondary:
+    'bg-secondary text-secondary-fg hover:bg-secondary-hover border border-border/70 active:translate-y-[0.5px] active:opacity-90',
+  outline:
+    'border border-border bg-surface/60 text-text-primary hover:bg-surface-hover hover:border-border-strong active:bg-surface',
+  ghost:
+    'bg-transparent text-text-secondary hover:bg-surface-hover hover:text-text-primary active:bg-surface',
+  destructive:
+    'bg-destructive text-destructive-fg hover:bg-destructive-hover shadow-sm active:translate-y-[0.5px] active:opacity-95',
 }
 
 const sizeStyles: Record<ButtonSize, string> = {
-  sm: 'px-sm py-xs text-xs rounded-sm gap-xs',
-  md: 'px-md py-sm text-sm rounded-md gap-sm',
-  lg: 'px-lg py-md text-base rounded-lg gap-md',
-  icon: 'p-sm rounded-md aspect-square justify-center',
+  sm: 'px-2.5 py-1 text-xs rounded-md gap-1.5',
+  md: 'px-3.5 py-1.5 text-sm rounded-md gap-2',
+  lg: 'px-5 py-2.5 text-base rounded-md gap-2.5',
+  icon: 'p-1.5 rounded-md aspect-square justify-center',
 }
 
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
@@ -53,8 +58,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(
         aria-disabled={isDisabled}
         aria-busy={isLoading}
         className={cn(
-          'inline-flex items-center justify-center font-medium transition-colors select-none',
-          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1',
+          'inline-flex items-center justify-center font-medium transition-colors duration-150 select-none cursor-pointer outline-none ring-0 focus:outline-none focus:ring-0 focus-visible:outline-none focus-visible:ring-0',
           'disabled:pointer-events-none disabled:opacity-50',
           variantStyles[variant],
           sizeStyles[size],

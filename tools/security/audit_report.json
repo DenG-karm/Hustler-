@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-17T16:45:28.595922+00:00",
+  "timestamp": "2026-10-22T17:49:58.809180+00:00",
   "gate_passed": true,
   "open_issues": 0,
   "license_violations": 0,
@@ -22,10 +22,10 @@
   },
   "supply_chain_audit": {
     "passed": true,
-    "total_packages_scanned": 513,
-    "python_packages_count": 56,
-    "frontend_packages_count": 180,
-    "rust_packages_count": 277,
+    "total_packages_scanned": 525,
+    "python_packages_count": 61,
+    "frontend_packages_count": 186,
+    "rust_packages_count": 278,
     "license_violations": []
   }
 }

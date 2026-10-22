@@ -53,4 +53,4 @@ def test_every_profile_produces_valid_graph(
 ) -> None:
     lines, out = AudioMixer.build_mix_graph("tts", bg, profile)
 
-    GraphValidator.validate_graph(lines, [f"[{out}]"])
+    assert GraphValidator.validate_graph(lines, [f"[{out}]"]) is None

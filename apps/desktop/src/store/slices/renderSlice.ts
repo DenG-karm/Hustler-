@@ -103,7 +103,7 @@ export const createRenderSlice: StateCreator<
           isLoading: false,
         }))
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false })
@@ -130,13 +130,21 @@ export const createRenderSlice: StateCreator<
       }
 
       const data = resp.body
-      const rawSlots = data.slots ?? createInitialAssetsData().slots
+      const rawSlots = (data.slots ?? createInitialAssetsData().slots) as Array<{
+        slot_id?: string
+        slotId?: string
+        name?: string
+        type?: 'video' | 'image' | 'audio'
+        required?: boolean
+        assigned_path?: string | null
+        assignedPath?: string | null
+      }>
 
-      const slots: AssetSlot[] = rawSlots.map((s: any) => ({
-        slotId: s.slot_id ?? s.slotId,
-        name: s.name,
-        type: s.type,
-        required: s.required ?? true,
+      const slots: AssetSlot[] = rawSlots.map((s) => ({
+        slotId: s.slot_id ?? s.slotId ?? '',
+        name: s.name ?? '',
+        type: s.type ?? 'image',
+        required: typeof s.required === 'boolean' ? s.required : true,
         assignedPath: s.assigned_path ?? s.assignedPath ?? null,
       }))
 
@@ -146,7 +154,7 @@ export const createRenderSlice: StateCreator<
         assets: { slots, allSlotsFilled: allFilled },
         isLoading: false,
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
@@ -182,7 +190,7 @@ export const createRenderSlice: StateCreator<
         },
         isLoading: false,
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
@@ -220,7 +228,7 @@ export const createRenderSlice: StateCreator<
         },
         isLoading: false,
       })
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       if (uiError.mode === 'modal') {
         set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
@@ -249,7 +257,7 @@ export const createRenderSlice: StateCreator<
           error: data.error_message ?? state.render.error,
         },
       }))
-    } catch (err: any) {
+    } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
       set({ errorMessage: uiError.message })
     }

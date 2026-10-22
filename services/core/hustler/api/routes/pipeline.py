@@ -7,18 +7,19 @@ Tüm rotalar Bearer token korumalıdır (verify_token) ve Pydantic v2 sözleşme
 from __future__ import annotations
 
 import asyncio
+from dataclasses import asdict, dataclass, field
 import json
 import math
 import os
 from pathlib import Path
 import struct
-from typing import Any, Optional
+from typing import Annotated, Optional
 import uuid
 import wave
 import zlib
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import Field
 import structlog
 
 from services.core.hustler.api.auth import verify_token
@@ -50,59 +51,64 @@ logger = structlog.get_logger()
 router = APIRouter(dependencies=[Depends(verify_token)], prefix="/pipeline")
 alias_router = APIRouter(dependencies=[Depends(verify_token)])
 
-
-class ScriptRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    idea_id: str = Field(..., min_length=1)
-    topic: str = Field(..., min_length=1)
-    title: str = Field(..., min_length=1)
+NonEmptyStr = Annotated[str, Field(min_length=1)]
 
 
-class AudioRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    script_id: str = Field(..., min_length=1)
-    text: str = Field(..., min_length=1)
-    voice_id: str = Field(default="tr-TR-Standard-A", min_length=1)
+@dataclass
+class ScriptRequest:
+    idea_id: NonEmptyStr
+    topic: NonEmptyStr
+    title: NonEmptyStr
+    # Kanal-Merkezli Mimari (Faz 2/2): üretilen senaryoyu kanala bağlar
+    channel_id: Optional[str] = None
 
 
-class SlotItem(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    slot_id: str = Field(..., min_length=1)
-    name: str = Field(..., min_length=1)
-    type: str = Field(..., min_length=1)
+@dataclass
+class AudioRequest:
+    script_id: NonEmptyStr
+    text: NonEmptyStr
+    voice_id: NonEmptyStr = "tr-TR-Standard-A"
+
+
+@dataclass
+class SlotItem:
+    slot_id: NonEmptyStr
+    name: NonEmptyStr
+    type: NonEmptyStr
     required: bool = True
     assigned_path: str = ""
 
 
-class AssetsRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    script_id: str = Field(..., min_length=1)
-    slots: list[SlotItem] = Field(default_factory=list)
+@dataclass
+class AssetsRequest:
+    script_id: NonEmptyStr
+    slots: list[SlotItem] = field(default_factory=list)
 
 
-class PreviewRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    script_id: str = Field(..., min_length=1)
+@dataclass
+class PreviewRequest:
+    script_id: NonEmptyStr
 
 
-class RenderRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    script_id: str = Field(..., min_length=1)
-    profile: str = Field(default="DRAFT")
+@dataclass
+class RenderRequest:
+    script_id: NonEmptyStr
+    profile: str = "DRAFT"
 
 
-class SaveScriptRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
-    script_id: str = Field(..., min_length=1)
-    title: str = Field(..., min_length=1)
-    full_text: str = Field(..., min_length=1)
-    scenes: list[dict[str, object]] = Field(default_factory=list)
-    claims: list[dict[str, object]] = Field(default_factory=list)
+@dataclass
+class SaveScriptRequest:
+    script_id: NonEmptyStr
+    title: NonEmptyStr
+    full_text: NonEmptyStr
+    scenes: list[dict[str, object]] = field(default_factory=list)
+    claims: list[dict[str, object]] = field(default_factory=list)
     is_approved: bool = False
+    channel_id: Optional[str] = None
 
 
-class SaveSessionRequest(BaseModel):
-    model_config = ConfigDict(extra="ignore")
+@dataclass
+class SaveSessionRequest:
     topic: str
     current_step: str
     checkpoint_step: str
@@ -110,7 +116,7 @@ class SaveSessionRequest(BaseModel):
     id: Optional[str] = None
     session_id: Optional[str] = None
     selected_idea: Optional[dict[str, object]] = None
-    ideas: list[dict[str, object]] = Field(default_factory=list)
+    ideas: list[dict[str, object]] = field(default_factory=list)
     script: Optional[dict[str, object]] = None
     audio: Optional[dict[str, object]] = None
     assets: Optional[dict[str, object]] = None
@@ -132,8 +138,9 @@ class DeterministicLocalLLMPort(LLMPort):
         self.title = title
 
     async def generate_text(self, prompt: str) -> LLMResponse:
+        payload: dict[str, object]
         if "flagged_claims" in prompt or "Moderator" in prompt:
-            payload: Any = {
+            payload = {
                 "is_safe": True,
                 "flagged_claims": [],
                 "risk_level": "LOW",
@@ -329,6 +336,11 @@ async def generate_script(payload: ScriptRequest, request: Request) -> dict[str,
         },
     ]
 
+    if payload.channel_id:
+        await _persist_channel_script(
+            request, script_id, payload.title, full_text, scenes, claims, payload.channel_id
+        )
+
     return {
         "script_id": script_id,
         "title": payload.title,
@@ -338,7 +350,32 @@ async def generate_script(payload: ScriptRequest, request: Request) -> dict[str,
         "claims": claims,
         "moderation_status": moderation_status,
         "is_approved": False,
+        "channel_id": payload.channel_id,
     }
+
+
+async def _persist_channel_script(
+    request: Request,
+    script_id: str,
+    title: str,
+    full_text: str,
+    scenes: list[dict[str, object]],
+    claims: list[dict[str, object]],
+    channel_id: str,
+) -> None:
+    """Kanal bağlamında üretilen senaryoyu channel_id ile kalıcı hale getirir (gerçek metrik)."""
+    try:
+        await _script_repo(request).save(
+            script_id=script_id,
+            title=title,
+            full_text=full_text,
+            scenes=scenes,
+            claims=claims,
+            is_approved=False,
+            channel_id=channel_id,
+        )
+    except Exception as exc:
+        logger.warning("Kanal senaryo bağı yazılamadı", channel_id=channel_id, error=str(exc))
 
 
 @router.post("/script/save")
@@ -352,6 +389,7 @@ async def save_script(payload: SaveScriptRequest, request: Request) -> dict[str,
         scenes=payload.scenes,
         claims=payload.claims,
         is_approved=payload.is_approved,
+        channel_id=payload.channel_id,
     )
 
 
@@ -406,7 +444,15 @@ async def generate_audio(payload: AudioRequest, request: Request) -> dict[str, o
     cached_file = await audio_cache.get_or_fetch(payload.text, payload.voice_id, _fetch_tts)
 
     # K-503: Kelime hizalamasından gerçek .ass altyazı dosyasını üret ve diske kaydet
-    ass_content = AssDocument.generate(word_timings, SubtitleStyle())
+    default_style = SubtitleStyle(
+        font_name="Arial",
+        font_size=90,
+        primary_color="&H00FFFFFF&",
+        highlight_color="&H0000FFFF&",
+        alignment=5,
+        margin_v=50,
+    )
+    ass_content = AssDocument.generate(word_timings, default_style)
     ass_dir = Path("cache_audio")
     ass_dir.mkdir(parents=True, exist_ok=True)
     ass_path = ass_dir / f"{payload.script_id}.ass"
@@ -434,7 +480,7 @@ async def prepare_assets(payload: AssetsRequest) -> dict[str, object]:
         {"slot_id": "slot_bg_audio", "name": "Arka Plan Müziği", "type": "audio", "required": False, "assigned_path": "assets/audio/bg_music.mp3"},
     ]
     slots: list[dict[str, object]] = (
-        [s.model_dump() for s in payload.slots] if payload.slots else default_slots
+        [asdict(s) for s in payload.slots] if payload.slots else default_slots
     )
 
     # Varsayılan görsel/video dosyalarının diskte mevcudiyetini güvenceye al
@@ -642,6 +688,25 @@ def _session_repo(request: Request) -> ProjectSessionRepository:
     return ProjectSessionRepository(db)
 
 
+def _extract_dict(sp: dict[str, object], *keys: str) -> dict[str, object] | None:
+    for k in keys:
+        val = sp.get(k)
+        if isinstance(val, dict):
+            return {str(dk): dv for dk, dv in val.items()}
+    return None
+
+
+def _extract_dict_list(sp: dict[str, object], key: str) -> list[dict[str, object]]:
+    val = sp.get(key)
+    if isinstance(val, list):
+        return [
+            {str(dk): dv for dk, dv in item.items()}
+            for item in val
+            if isinstance(item, dict)
+        ]
+    return []
+
+
 @router.get("/session/active")
 async def get_active_session(request: Request) -> dict[str, object]:
     """Aktif veya kurtarılmış en son oturumu döner (State Rehydration)."""
@@ -658,13 +723,13 @@ async def save_session(payload: SaveSessionRequest, request: Request) -> dict[st
     repo = _session_repo(request)
     sp = payload.state_payload or {}
 
-    selected_idea = payload.selected_idea or (sp.get("selectedIdea") if isinstance(sp.get("selectedIdea"), dict) else None) or (sp.get("selected_idea") if isinstance(sp.get("selected_idea"), dict) else None)
-    ideas = payload.ideas if payload.ideas else (sp.get("ideas") if isinstance(sp.get("ideas"), list) else [])
-    script = payload.script or (sp.get("script") if isinstance(sp.get("script"), dict) else None)
-    audio = payload.audio or (sp.get("audio") if isinstance(sp.get("audio"), dict) else None)
-    assets = payload.assets or (sp.get("assets") if isinstance(sp.get("assets"), dict) else None)
-    preview = payload.preview or (sp.get("preview") if isinstance(sp.get("preview"), dict) else None)
-    render = payload.render or (sp.get("render") if isinstance(sp.get("render"), dict) else None)
+    selected_idea = payload.selected_idea or _extract_dict(sp, "selectedIdea", "selected_idea")
+    ideas = payload.ideas if payload.ideas else _extract_dict_list(sp, "ideas")
+    script = payload.script or _extract_dict(sp, "script")
+    audio = payload.audio or _extract_dict(sp, "audio")
+    assets = payload.assets or _extract_dict(sp, "assets")
+    preview = payload.preview or _extract_dict(sp, "preview")
+    render = payload.render or _extract_dict(sp, "render")
     resolved_session_id = payload.session_id or payload.id
 
     saved = await repo.save_session(

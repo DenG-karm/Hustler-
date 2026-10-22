@@ -7,8 +7,8 @@
  * uygulanarak IPC trafiği kontrol altına alınır.
  */
 
-export interface DebouncedFunction<T extends (...args: any[]) => any> {
-  (...args: Parameters<T>): void
+export interface DebouncedFunction<Args extends unknown[]> {
+  (...args: Args): void
   cancel: () => void
   flush: () => void
   isPending: () => boolean
@@ -25,19 +25,20 @@ export interface DebounceMetrics {
  * Genel amaçlı, minimum gecikme süreli debounce fonksiyonu.
  * Varsayılan gecikme: 400ms (K-704 gereksinimi).
  */
-export function debounce<T extends (...args: any[]) => any>(
-  fn: T,
+export function debounce<Args extends unknown[]>(
+  fn: (...args: Args) => void | Promise<void>,
   delayMs = 400
-): DebouncedFunction<T> {
-  if (delayMs < 400) {
+): DebouncedFunction<Args> {
+  let actualDelay = delayMs
+  if (actualDelay < 400) {
     console.warn(`[Debounce Uyarı] Gecikme süresi (${delayMs}ms) K-704 standartı olan minimum 400ms'nin altındadır. 400ms olarak ayarlandı.`)
-    delayMs = 400
+    actualDelay = 400
   }
 
   let timerId: ReturnType<typeof setTimeout> | null = null
-  let lastArgs: Parameters<T> | null = null
+  let lastArgs: Args | null = null
 
-  const debounced = (...args: Parameters<T>) => {
+  const debounced = (...args: Args) => {
     lastArgs = args
     if (timerId !== null) {
       clearTimeout(timerId)
@@ -48,9 +49,9 @@ export function debounce<T extends (...args: any[]) => any>(
       if (lastArgs !== null) {
         const argsToCall = lastArgs
         lastArgs = null
-        fn(...argsToCall)
+        void fn(...argsToCall)
       }
-    }, delayMs)
+    }, actualDelay)
   }
 
   debounced.cancel = () => {
@@ -67,7 +68,7 @@ export function debounce<T extends (...args: any[]) => any>(
       timerId = null
       const argsToCall = lastArgs
       lastArgs = null
-      fn(...argsToCall)
+      void fn(...argsToCall)
     }
   }
 
@@ -80,16 +81,16 @@ export function debounce<T extends (...args: any[]) => any>(
  * K-704 Senaryo Kayıt IPC Trafik Yöneticisi.
  * Yapılan tuş vuruşlarını ve engellenen gereksiz IPC isteklerini metrik olarak kaydeder ve loglar.
  */
-export function createDebouncedScriptSaver<T extends (...args: any[]) => Promise<any>>(
-  saveFn: T,
+export function createDebouncedScriptSaver<Args extends unknown[]>(
+  saveFn: (...args: Args) => Promise<unknown>,
   delayMs = 400,
   logger: (msg: string) => void = console.log
-): DebouncedFunction<T> & { getMetrics: () => DebounceMetrics; resetMetrics: () => void } {
+): DebouncedFunction<Args> & { getMetrics: () => DebounceMetrics; resetMetrics: () => void } {
   let totalInvocations = 0
   let totalExecutions = 0
   let lastExecutionTimestamp: number | null = null
 
-  const execute = async (...args: Parameters<T>) => {
+  const execute = async (...args: Args) => {
     totalExecutions += 1
     lastExecutionTimestamp = Date.now()
     const suppressed = totalInvocations - totalExecutions
@@ -99,11 +100,11 @@ export function createDebouncedScriptSaver<T extends (...args: any[]) => Promise
     await saveFn(...args)
   }
 
-  const debounced = debounce((...args: Parameters<T>) => {
+  const debounced = debounce((...args: Args) => {
     void execute(...args)
   }, delayMs)
 
-  const wrapped = (...args: Parameters<T>) => {
+  const wrapped = (...args: Args) => {
     totalInvocations += 1
     logger(
       `[IPC Debounce] Tuş vuruşu algılandı (Toplam vuruş: ${totalInvocations}). ${delayMs}ms debounce bekleniyor...`

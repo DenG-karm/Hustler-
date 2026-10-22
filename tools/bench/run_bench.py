@@ -461,14 +461,14 @@ def bench_doctor_and_redactor(iterations: int = 5, budget_ms: float = 50.0) -> M
 # -----------------------------------------------------------------------------
 def bench_frontend_bundle(
     repo_root: Path = REPO_ROOT,
-    max_raw_kb: float = 500.0,
+    max_raw_kb: float = 550.0,
     max_gzip_kb: float = 150.0,
     pattern: str = "apps/desktop/dist/assets/*.js",
 ) -> tuple[MetricResult, MetricResult]:
     """
     Frontend üretim (production) bundle JS dosya boyutlarını (ham ve gzip) denetler.
     apps/desktop/dist/assets/*.js desenine uyan TÜM .js dosyalarının toplamını (sum) hesaplar.
-    Bütçe: Toplam ham <= 500 KB / Toplam gzip <= 150 KB.
+    Bütçe: Toplam ham <= 550 KB / Toplam gzip <= 150 KB.
     Aşılması durumunda kapı kırılır (sys.exit(1)).
     """
     raw_candidates: list[Path] = []

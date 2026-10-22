@@ -20,7 +20,8 @@ class DiscoveryOrchestrator:
                 title TEXT,
                 topic TEXT,
                 score REAL,
-                discovered_at REAL
+                discovered_at REAL,
+                channel_id TEXT
             )
         """)
 

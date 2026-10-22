@@ -95,7 +95,7 @@ def test_generated_graph_is_topologically_valid(
     )
     maps = [cmd[i + 1] for i, a in enumerate(cmd) if a == "-map"]
 
-    GraphValidator.validate_graph(_graph(cmd), maps)
+    assert GraphValidator.validate_graph(_graph(cmd), maps) is None
 
 
 def test_empty_asset_list_raises_value_error(template: TemplateSpec) -> None:

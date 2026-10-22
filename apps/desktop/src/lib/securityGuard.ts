@@ -200,10 +200,13 @@ export const ALLOWED_PROXY_ROUTE_PREFIXES: readonly string[] = [
   '/api/v1/render',
   '/api/v1/pipeline',
   '/api/v1/jobs',
+  '/api/v1/channels',
   '/api/v1/diagnostics',
   '/api/v1/session',
   '/api/v1/system',
 ] as const
+
+export const ALLOWED_PROXY_PREFIXES = ALLOWED_PROXY_ROUTE_PREFIXES
 
 export function isProxyRouteAllowed(route: string): boolean {
   if (!route || typeof route !== 'string') return false

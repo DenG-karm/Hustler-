@@ -9,9 +9,11 @@ import asyncio
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Optional
+import sqlite3
+from typing import Optional
 
 import aiosqlite
+from aiosqlite.context import Result
 import structlog
 
 log = structlog.get_logger()
@@ -37,22 +39,26 @@ class PooledReaderConnection:
         self._db = db
         self._returned = False
 
-    def execute(self, sql: str, parameters: Iterable[Any] = ()) -> Any:
+    def execute(
+        self, sql: str, parameters: Iterable[object] = ()
+    ) -> Result[aiosqlite.Cursor]:
         if self._returned:
             raise ValueError("Connection closed")
         return self._conn.execute(sql, parameters)
 
-    def executemany(self, sql: str, parameters: Iterable[Iterable[Any]]) -> Any:
+    def executemany(
+        self, sql: str, parameters: Iterable[Iterable[object]]
+    ) -> Result[aiosqlite.Cursor]:
         if self._returned:
             raise ValueError("Connection closed")
         return self._conn.executemany(sql, parameters)
 
     @property
-    def row_factory(self) -> Any:
+    def row_factory(self) -> type | None:
         return self._conn.row_factory
 
     @row_factory.setter
-    def row_factory(self, factory: Any) -> None:
+    def row_factory(self, factory: type | None) -> None:
         self._conn.row_factory = factory
 
     async def close(self) -> None:
@@ -98,13 +104,16 @@ class Database:
         self._reader_sem = asyncio.Semaphore(self.reader_pool_size)
         # Veritabanı oluşturulurken (dışarıdan lock almadan) kalıcı ayarlar
         init_conn = aiosqlite.connect(self.db_path)
-        init_conn.daemon = True
+        setattr(init_conn, "daemon", True)
         async with init_conn as conn:
-            await conn.execute("PRAGMA auto_vacuum=INCREMENTAL;")
+            await conn.execute("PRAGMA busy_timeout=5000;")
             await conn.execute("PRAGMA journal_mode=WAL;")
             await conn.execute("PRAGMA synchronous=NORMAL;")
             await conn.execute("PRAGMA foreign_keys=ON;")
-            await conn.execute("PRAGMA busy_timeout=5000;")
+            try:
+                await conn.execute("PRAGMA auto_vacuum=INCREMENTAL;")
+            except sqlite3.OperationalError:
+                pass
 
         self._writer_task = asyncio.create_task(self._writer_loop())
 
@@ -167,13 +176,13 @@ class Database:
                     break
 
             raw_conn = aiosqlite.connect(self.db_path)
-            raw_conn.daemon = True
+            setattr(raw_conn, "daemon", True)
             conn = await raw_conn
             self._all_reader_conns.add(conn)
+            await conn.execute("PRAGMA busy_timeout=5000;")
             await conn.execute("PRAGMA journal_mode=WAL;")
             await conn.execute("PRAGMA synchronous=NORMAL;")
             await conn.execute("PRAGMA foreign_keys=ON;")
-            await conn.execute("PRAGMA busy_timeout=5000;")
             return PooledReaderConnection(conn, self)
         except Exception:
             self._reader_sem.release()
@@ -223,12 +232,12 @@ class Database:
 
     async def _writer_loop(self) -> None:
         raw_writer = aiosqlite.connect(self.db_path)
-        raw_writer.daemon = True
+        setattr(raw_writer, "daemon", True)
         self._writer_conn = await raw_writer
+        await self._writer_conn.execute("PRAGMA busy_timeout=5000;")
         await self._writer_conn.execute("PRAGMA journal_mode=WAL;")
         await self._writer_conn.execute("PRAGMA synchronous=NORMAL;")
         await self._writer_conn.execute("PRAGMA foreign_keys=ON;")
-        await self._writer_conn.execute("PRAGMA busy_timeout=5000;")
 
         log.info("writer_queue_started")
         while True:

@@ -32,7 +32,9 @@ from services.core.hustler.api.routes.pipeline import (
     alias_router as pipeline_alias_router,
 )
 from services.core.hustler.api.routes.diagnostics import router as diagnostics_router
+from services.core.hustler.api.routes.channels import router as channels_router
 from services.core.hustler.storage.cache import YouTubeCache
+from services.core.hustler.storage.channels import ChannelRepository
 from services.core.hustler.storage.jobs import JobRepository
 from services.core.hustler.storage.scripts import ScriptRepository
 from services.core.hustler.storage.sessions import ProjectSessionRepository
@@ -111,11 +113,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if recovered_count > 0:
         log.warn("sessions_recovered_on_startup", count=recovered_count)
 
+    channel_repo = ChannelRepository(db)
+    await channel_repo.init_table()
+
     app.state.db = db
     app.state.cache = cache
     app.state.job_repo = job_repo
     app.state.script_repo = script_repo
     app.state.session_repo = session_repo
+    app.state.channel_repo = channel_repo
 
     from services.core.hustler.tasks.scheduler import maintenance_loop
     maint_task = asyncio.create_task(
@@ -153,6 +159,7 @@ app.include_router(jobs_router, prefix="/api/v1")
 app.include_router(pipeline_router, prefix="/api/v1")
 app.include_router(pipeline_alias_router, prefix="/api/v1")
 app.include_router(diagnostics_router, prefix="/api/v1")
+app.include_router(channels_router, prefix="/api/v1")
 
 # ---------------------------------------------------------------------------
 # RFC 7807 / RFC 9457 Problem Details hata işleyicileri
