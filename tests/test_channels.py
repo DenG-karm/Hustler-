@@ -363,3 +363,19 @@ def test_channel_analytics_pandas_numpy() -> None:
     assert short_line["trend_direction"] in ("up", "down", "stable")
 
 
+def test_infer_channel_niche_query_from_real_videos() -> None:
+    from services.core.hustler.services.channel_stats import infer_channel_niche_query
+
+    videos: list[dict[str, object]] = [
+        {"title": "Kuantum Bilgisayarlar ve Yapay Zeka Geleceği", "view_count": 500000},
+        {"title": "Kuantum Fiziği Neden Her Şeyi Değiştiriyor?", "view_count": 320000},
+    ]
+    shorts: list[dict[str, object]] = [
+        {"title": "Yapay Zeka ve Kuantum Çipleri", "view_count": 850000},
+    ]
+    q = infer_channel_niche_query("Bilim Kanalı", "Kuantum ve yapay zeka", videos, shorts)
+    assert "kuantum" in q
+    assert "yapay" in q or "zeka" in q
+
+
+

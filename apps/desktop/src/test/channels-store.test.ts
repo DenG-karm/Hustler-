@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { useFlowStore } from '../store/flowStore'
 import { setIpcClient, type FlowIpcClient, type ChannelItem } from '../lib/ipc'
 import type { DiscoveryItem } from '../store/flowTypes'
+import { deriveGlobalViralPrototypes } from '../components/channels/globalPrototypes'
 
 describe('Zustand Channel Slice ve Akış Köprüsü Testleri', () => {
   const mockChannels: ChannelItem[] = [
@@ -166,5 +167,41 @@ describe('Zustand Channel Slice ve Akış Köprüsü Testleri', () => {
     )
     expect(stats?.subscribers_formatted).toBe('522.00M')
     expect(useFlowStore.getState().channelLiveStats['chn_101']?.subscribers_formatted).toBe('522.00M')
+  })
+
+  it('deriveGlobalViralPrototypes sahte şablon döndürmemeli, yalnızca gerçek YouTube verilerini dönüştürmelidir', () => {
+    // Canlı veri ve arama yokken boş dizi dönmeli (sahte kart olmamalı)
+    const empty = deriveGlobalViralPrototypes('Test Kanal', 'Bilim', 'https://youtube.com/@test', [], null)
+    expect(empty).toEqual([])
+
+    // Gerçek canlı veriler verildiğinde yalnızca onları dönüştürmeli
+    const realProtos = deriveGlobalViralPrototypes('Test Kanal', 'Bilim', 'https://youtube.com/@test', [], {
+      channel_id: 'chn_101',
+      channel_name: 'Test Kanal',
+      channel_url: 'https://youtube.com/@test',
+      avatar_url: null,
+      description: 'Bilim',
+      subscribers: 1000,
+      subscribers_formatted: '1.0K',
+      videos: [
+        { id: 'v_real_1', type: 'video', title: 'Gerçek Kanal Videosu', url: 'https://www.youtube.com/watch?v=v_real_1', view_count: 45000, duration: 300 },
+      ],
+      shorts: [],
+      niche_benchmarks: [
+        { video_id: 'bm_real_1', title: 'Gerçek Niş Videosu', view_count: 120000, duration: 40, duration_text: '0:40', format: 'short', channel_name: 'Rakip Kanal', score: 88 },
+      ],
+      total_fetched_videos: 1,
+      total_fetched_shorts: 0,
+      avg_views_sample: 45000,
+      avg_views_formatted: '45.0K',
+      is_live: true,
+      fetched_at: Date.now(),
+    })
+
+    expect(realProtos).toHaveLength(2)
+    expect(realProtos[0].id).toBe('bm_real_1')
+    expect(realProtos[0].globalViewsFormatted).toBe('120.0K İzlenme')
+    expect(realProtos[1].id).toBe('v_real_1')
+    expect(realProtos[1].globalViewsFormatted).toBe('45.0K İzlenme')
   })
 })

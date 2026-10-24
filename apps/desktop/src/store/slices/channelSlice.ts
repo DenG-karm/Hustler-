@@ -62,10 +62,15 @@ function isFailed(resp: ProxyResponse<unknown> | undefined): boolean {
 export function mapDiscoveryItemsToIdeas(items: DiscoveryItem[], topic: string): VideoIdea[] {
   return items.map((item, idx) => ({
     id: item.video_id ?? item.id ?? `idea_${idx + 1}`,
-    title: item.title || `Fikir #${idx + 1}: ${topic}`,
-    hook: item.hook ?? item.description ?? `Dikkat çeken kanca #${idx + 1}`,
-    score: typeof item.score === 'number' ? item.score : 85 - idx * 2,
-    viewCount: item.view_count ?? 150000,
+    title: item.title || `${topic} #${idx + 1}`,
+    hook: item.hook ?? item.description ?? item.title ?? topic,
+    score: typeof item.score === 'number' ? item.score : 85,
+    viewCount: item.view_count ?? 0,
+    duration: item.duration,
+    durationText: item.duration_text,
+    format: item.format,
+    channelName: item.channel_name,
+    url: item.url,
   }))
 }
 
@@ -97,9 +102,15 @@ export const createChannelSlice: StateCreator<FlowState, [], [], ChannelSlice> =
         return
       }
       const rawChannels = Array.isArray(resp.body) ? resp.body : []
+      let savedMap: Record<string, string> = {}
+      try {
+        savedMap = JSON.parse(localStorage.getItem('hustler_ai_summaries_v1') || '{}') as Record<string, string>
+      } catch {
+        /* ignore */
+      }
       const channels = rawChannels.map((ch: ChannelItem) => ({
         ...ch,
-        ai_summary: ch.ai_summary || generateDefaultAiSummary(ch.name, ch.description, ch.channel_url),
+        ai_summary: ch.ai_summary || savedMap[ch.id] || generateDefaultAiSummary(ch.name, ch.description, ch.channel_url),
       }))
       const { activeChannelId } = get()
       const stillExists = activeChannelId ? channels.some((c) => c.id === activeChannelId) : true
@@ -163,12 +174,9 @@ export const createChannelSlice: StateCreator<FlowState, [], [], ChannelSlice> =
       ),
     }))
     try {
-      const client = getIpcClient()
-      if (client.proxyRequest) {
-        await client.proxyRequest('PATCH', `/channels/${channelId}/summary`, {
-          ai_summary: aiSummary,
-        })
-      }
+      const savedMap = JSON.parse(localStorage.getItem('hustler_ai_summaries_v1') || '{}') as Record<string, string>
+      savedMap[channelId] = aiSummary
+      localStorage.setItem('hustler_ai_summaries_v1', JSON.stringify(savedMap))
       get().addToast({
         title: 'AI Algısı Güncellendi',
         message: 'Kanalın yapay zeka içerik ve niş profili başarıyla kaydedildi.',

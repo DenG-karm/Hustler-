@@ -7,7 +7,7 @@ from services.core.hustler.adapters.youtube import YouTubeClient
 from services.core.hustler.api.auth import verify_token
 from services.core.hustler.db import Database
 from services.core.hustler.discovery.canary import CanaryStatus, run_ytdlp_canary_async
-from services.core.hustler.discovery.service import fallback_discovery
+from services.core.hustler.discovery.service import fallback_discovery, run_ytdlp_topic_discovery
 from services.core.hustler.services.discovery import DiscoveryOrchestrator
 from services.core.hustler.storage.channels import ChannelRepository
 
@@ -138,8 +138,9 @@ async def run_discovery(payload: DiscoveryRunRequest, request: Request) -> Any:
     if api_key:
         response = await _run_discovery_core(payload, db, cache, api_key)
     else:
-        # Kanal araştırması anahtarsız çevrimdışı modda da kırılmaz hatta devam eder (K-806)
-        response = await fallback_discovery(db=db, topic=payload.topic)
+        # YOUTUBE_API_KEY olmadığında yt-dlp üzerinden gerçek YouTube araması yapar;
+        # çıkarıcı/ağ başarısız olursa kırılmaz kurtarma hattına (fallback_discovery) düşer.
+        response = await run_ytdlp_topic_discovery(db=db, topic=payload.topic, max_results=payload.max_results)
 
     if payload.channel_id:
         return await _link_results_to_channel(db, payload.channel_id, payload.topic, response)

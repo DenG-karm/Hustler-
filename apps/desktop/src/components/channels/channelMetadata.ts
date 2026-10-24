@@ -40,14 +40,33 @@ export function resolveChannelAvatar(url: string, name: string): ChannelAvatarDa
 /**
  * Kanal için yapay zeka algısı ve stratejik profil özeti taslağı üretir.
  */
-export function generateDefaultAiSummary(name: string, description: string, url: string): string {
+export function generateDefaultAiSummary(
+  name: string,
+  description: string,
+  url: string,
+  liveStats?: ChannelLiveStats | null
+): string {
   const n = (name || 'Kanal').trim()
-  const d = (description || '').trim() || 'Dikey kurgu.'
   const h = resolveChannelAvatar(url, name).handle || n
-  return `[HEDEF]: Shorts (${d})\n[TON]: Dinamik kanca açılışı\n[STRATEJİ]: %85+ tutunma, ${n} (${h}).`
+  if (liveStats) {
+    const subs = liveStats.subscribers_formatted || 'Bilinmiyor'
+    const avg = liveStats.avg_views_formatted || 'Bilinmiyor'
+    const vCount = (liveStats.videos || []).length
+    const sCount = (liveStats.shorts || []).length
+    const niche = liveStats.niche_query || description || 'Genel'
+    const topItem = [...(liveStats.shorts || []), ...(liveStats.videos || [])].sort(
+      (a, b) => (b.view_count ?? 0) - (a.view_count ?? 0)
+    )[0]
+    const topStr = topItem
+      ? `${topItem.title} (${formatCount(topItem.view_count)} izlenme)`
+      : 'Henüz içerik yok'
+    return `[NİŞ]: ${niche}\n[METRİKLER]: ${subs} abone | Ort. ${avg} izlenme (${vCount} Video / ${sCount} Shorts)\n[EN GÜÇLÜ İÇERİK]: ${topStr}\n[STRATEJİ]: ${n} (${h}) kanalının en yüksek izlenen kurgu ritmini 9:16 dikey formatta ölçeklendir.`
+  }
+  const d = (description || '').trim() || 'İçerik analizi bekleniyor'
+  return `[KANAL]: ${n} (${h})\n[NİŞ]: ${d}\n[DURUM]: Canlı YouTube verileri çekildiğinde gerçek metrik ve strateji analizi güncellenir.`
 }
 
-import type { ChannelAnalytics, RealVideoItem, TrendPoint, PieSlice, LineChartData } from '../../store/flowTypes'
+import type { ChannelAnalytics, ChannelLiveStats, RealVideoItem, TrendPoint, PieSlice, LineChartData } from '../../store/flowTypes'
 
 function buildLineData(
   items: { id?: string | null; title?: string; type: 'video' | 'short'; views: number }[]
@@ -137,7 +156,7 @@ export function deriveFallbackAnalytics(
     slices.push({
       type: 'short',
       label: 'Dikey Shorts',
-      color: '#F43F5E',
+      color: '#06B6D4',
       count: shorts.length,
       total_views: sSum,
       total_views_formatted: formatCount(sSum),

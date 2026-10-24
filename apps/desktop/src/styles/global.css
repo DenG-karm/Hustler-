@@ -46,6 +46,7 @@
 
     /* Yüzey Işık & Doku Değişkenleri */
     --grid-dot-color: hsl(240 6% 10% / 0.055);
+    --grid-line-color: hsl(240 6% 10% / 0.045);
     --panel-bevel: inset 0 1px 0 0 hsl(0 0% 100% / 0.9);
     --recessed-shadow: inset 0 1px 2px 0 hsl(240 10% 10% / 0.06);
 
@@ -113,6 +114,7 @@
 
     /* Yüzey Işık & Doku Değişkenleri */
     --grid-dot-color: hsl(0 0% 100% / 0.035);
+    --grid-line-color: hsl(0 0% 100% / 0.035);
     --panel-bevel: inset 0 1px 0 0 hsl(0 0% 100% / 0.04);
     --recessed-shadow: inset 0 1px 2px 0 hsl(0 0% 0% / 0.35);
 
@@ -171,6 +173,14 @@
   .studio-grid-bg {
     background-image: radial-gradient(var(--grid-dot-color) 1px, transparent 1px);
     background-size: 20px 20px;
+  }
+
+  /* Mimari / Şema Çalışma Alanı İnce Çizgili Izgara Zemini */
+  .studio-grid-lines {
+    background-size: 28px 28px;
+    background-image:
+      linear-gradient(to right, var(--grid-line-color) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--grid-line-color) 1px, transparent 1px);
   }
 
   /* Linear/Arc Yumuşak Panel Yüzeyi */

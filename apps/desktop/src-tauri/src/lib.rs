@@ -49,6 +49,8 @@ fn is_route_allowed(route: &str) -> bool {
         "/api/v1/pipeline/render",
         "/api/v1/pipeline/session/active",
         "/api/v1/pipeline/session/save",
+        "/api/v1/pipeline/chat",
+        "/api/v1/assistant/chat",
         "/api/v1/diagnostics/export",
     ];
     if exact_matches.contains(&route) {

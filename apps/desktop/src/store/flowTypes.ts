@@ -50,6 +50,11 @@ export interface DiscoveryItem {
   score?: number
   view_count?: number
   topic?: string
+  duration?: number
+  duration_text?: string
+  format?: 'short' | 'video'
+  channel_name?: string
+  url?: string
 }
 
 export interface VideoIdea {
@@ -58,6 +63,11 @@ export interface VideoIdea {
   hook: string
   score: number
   viewCount?: number
+  duration?: number
+  durationText?: string
+  format?: 'short' | 'video'
+  channelName?: string
+  url?: string
 }
 
 export interface ScriptScene {
@@ -421,6 +431,8 @@ export interface ChannelLiveStats {
   subscribers_formatted: string | null
   videos: RealVideoItem[]
   shorts: RealVideoItem[]
+  niche_query?: string
+  niche_benchmarks?: DiscoveryItem[]
   total_fetched_videos: number
   total_fetched_shorts: number
   avg_views_sample: number | null

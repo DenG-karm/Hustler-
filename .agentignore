@@ -1,0 +1,22 @@
+# Build & Dependency Artifacts (Token Killers)
+node_modules/
+dist/
+build/
+.venv/
+__pycache__/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+apps/desktop/src-tauri/target/
+
+# Large Lockfiles & Generated Reports
+pnpm-lock.yaml
+uv.lock
+Cargo.lock
+tools/security/audit_report.json
+*.db
+*.db-wal
+*.db-shm
+*.png
+*.jpg
+*.mp4

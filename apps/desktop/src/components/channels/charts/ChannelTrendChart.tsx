@@ -7,51 +7,27 @@ export interface ChannelTrendChartProps {
   variant?: 'video' | 'short' | 'all'
   title?: string
   subtitle?: string
-  colorTheme?: 'blue' | 'rose' | 'emerald' | 'indigo'
+  colorTheme?: 'blue' | 'cyan' | 'rose' | 'emerald' | 'indigo'
+}
+
+const ICON_PATHS: Record<string, string> = {
+  cyan: 'M13 10V3L4 14h7v7l9-11h-7z',
+  rose: 'M13 10V3L4 14h7v7l9-11h-7z',
+  blue: 'M3 17l6-6 4 4 8-8M21 12V7h-5',
+  emerald: 'M4 19v-7h4v7H4zm6 0V9h4v10h-4zm6 0V4h4v15h-4z',
 }
 
 const TrendThemeIcon = ({
   theme,
   className = 'w-3.5 h-3.5',
 }: {
-  theme: 'rose' | 'blue' | 'emerald' | 'indigo'
+  theme: 'rose' | 'blue' | 'cyan' | 'emerald' | 'indigo'
   className?: string
-}) => {
-  if (theme === 'rose') {
-    return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-      </svg>
-    )
-  }
-  if (theme === 'blue') {
-    return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.5 4.5 7.5-7.5M21 8.25V3m0 0h-5.25" />
-      </svg>
-    )
-  }
-  if (theme === 'emerald') {
-    return (
-      <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z"
-        />
-      </svg>
-    )
-  }
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
-      />
-    </svg>
-  )
-}
+}) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d={ICON_PATHS[theme] || 'M15 10l5-3v10l-5-3M4 6h11v12H4z'} />
+  </svg>
+)
 
 export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
   analytics,
@@ -92,35 +68,13 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
     'Pandas & NumPy ile hesaplanan 3-içerik hareketli ortalama (Rolling Avg)'
 
   const themeColors = {
-    rose: {
-      primary: '#F43F5E',
-      secondary: '#FDA4AF',
-      gradientStop: '#F43F5E',
-      badgeBg: 'bg-rose-500/10 text-rose-600 dark:text-rose-400',
-      circleFill: 'fill-rose-500',
-    },
-    blue: {
-      primary: '#2563EB',
-      secondary: '#93C5FD',
-      gradientStop: '#3B82F6',
-      badgeBg: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-      circleFill: 'fill-blue-600',
-    },
-    emerald: {
-      primary: '#059669',
-      secondary: '#6EE7B7',
-      gradientStop: '#10B981',
-      badgeBg: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
-      circleFill: 'fill-emerald-600',
-    },
-    indigo: {
-      primary: '#4F46E5',
-      secondary: '#A5B4FC',
-      gradientStop: '#6366F1',
-      badgeBg: 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400',
-      circleFill: 'fill-indigo-600',
-    },
+    cyan: ['#0891B2', '#67E8F9', '#06B6D4', 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400', 'fill-cyan-600'],
+    rose: ['#F43F5E', '#FDA4AF', '#F43F5E', 'bg-rose-500/10 text-rose-600 dark:text-rose-400', 'fill-rose-500'],
+    blue: ['#2563EB', '#93C5FD', '#3B82F6', 'bg-blue-500/10 text-blue-600 dark:text-blue-400', 'fill-blue-600'],
+    emerald: ['#059669', '#6EE7B7', '#10B981', 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400', 'fill-emerald-600'],
+    indigo: ['#4F46E5', '#A5B4FC', '#6366F1', 'bg-indigo-500/10 text-indigo-600 dark:text-indigo-400', 'fill-indigo-600'],
   }[colorTheme]
+  const [primary, secondary, gradientStop, badgeBg, circleFill] = themeColors
 
   if (!lineData || points.length === 0) {
     return (
@@ -173,7 +127,7 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
       {/* Üst Başlık & Trend Rozeti */}
       <div className="flex items-center justify-between border-b border-[#F3F4F6] dark:border-zinc-800 pb-3">
         <div className="flex items-center gap-2.5">
-          <div className={`w-7 h-7 rounded-lg ${themeColors.badgeBg} flex items-center justify-center`}>
+          <div className={`w-7 h-7 rounded-lg ${badgeBg} flex items-center justify-center`}>
             <TrendThemeIcon theme={colorTheme} className="w-3.5 h-3.5" />
           </div>
           <div>
@@ -187,29 +141,16 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
         </div>
 
         <div className="flex items-center gap-2">
-          {lineData.trend_direction === 'up' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1">
-              <svg className="w-3 h-3 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-              </svg>
-              Yükselen Trend
-            </span>
-          )}
-          {lineData.trend_direction === 'down' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border border-rose-200 dark:border-rose-800 flex items-center gap-1">
-              <svg className="w-3 h-3 stroke-[2.5]" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 4.5l15 15m0 0V8.25m0 11.25H8.25" />
-              </svg>
-              Düşüş Eğilimi
-            </span>
-          )}
-          {lineData.trend_direction === 'stable' && (
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700">
-              Dengeli Trend
-            </span>
-          )}
-          <span className="text-[10px] font-mono text-zinc-400 hidden sm:inline">
-            Zirve: {lineData.max_val ? lineData.points.find((p) => p.view_count === lineData.max_val)?.view_count_formatted || '0' : '0'}
+          <span
+            className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${
+              lineData.trend_direction === 'up'
+                ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border-emerald-200 dark:border-emerald-800'
+                : lineData.trend_direction === 'down'
+                ? 'bg-rose-50 text-rose-700 dark:bg-rose-950/60 dark:text-rose-300 border-rose-200 dark:border-rose-800'
+                : 'bg-zinc-100 text-zinc-700 dark:bg-zinc-800 dark:text-zinc-300 border-zinc-200 dark:border-zinc-700'
+            }`}
+          >
+            {lineData.trend_direction === 'up' ? '↗ Yükselen Trend' : lineData.trend_direction === 'down' ? '↘ Düşüş Eğilimi' : 'Dengeli Trend'}
           </span>
         </div>
       </div>
@@ -222,8 +163,8 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
         >
           <defs>
             <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={themeColors.gradientStop} stopOpacity="0.25" />
-              <stop offset="100%" stopColor={themeColors.gradientStop} stopOpacity="0.0" />
+              <stop offset="0%" stopColor={gradientStop} stopOpacity="0.25" />
+              <stop offset="100%" stopColor={gradientStop} stopOpacity="0.0" />
             </linearGradient>
           </defs>
 
@@ -269,7 +210,7 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
           <path
             d={rollingD}
             fill="none"
-            stroke={themeColors.secondary}
+            stroke={secondary}
             strokeWidth="1.5"
             strokeDasharray="4 3"
             className="opacity-80 dark:opacity-60"
@@ -279,7 +220,7 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
           <path
             d={pathD}
             fill="none"
-            stroke={themeColors.primary}
+            stroke={primary}
             strokeWidth="2.5"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -297,7 +238,7 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
                   cx={cx}
                   cy={cy}
                   r={isHovered ? 6 : 4}
-                  className={`transition-all duration-150 cursor-pointer ${themeColors.circleFill} stroke-white dark:stroke-zinc-900`}
+                  className={`transition-all duration-150 cursor-pointer ${circleFill} stroke-white dark:stroke-zinc-900`}
                   strokeWidth="2"
                   onMouseEnter={() => setActivePoint(p)}
                   onMouseLeave={() => setActivePoint(null)}
@@ -348,13 +289,13 @@ export const ChannelTrendChart: FC<ChannelTrendChartProps> = ({
       <div className="flex items-center justify-between pt-2 border-t border-[#F3F4F6] dark:border-zinc-800 text-[11px] text-zinc-500">
         <div className="flex items-center gap-4">
           <span className="flex items-center gap-1.5">
-            <span className="w-2.5 h-0.5 rounded" style={{ backgroundColor: themeColors.primary }} />
+            <span className="w-2.5 h-0.5 rounded" style={{ backgroundColor: primary }} />
             <span>Gerçek İzlenme</span>
           </span>
           <span className="flex items-center gap-1.5">
             <span
               className="w-2.5 h-0.5 border-b border-dashed"
-              style={{ borderColor: themeColors.secondary, backgroundColor: themeColors.secondary }}
+              style={{ borderColor: secondary, backgroundColor: secondary }}
             />
             <span>3'lü Hareketli Ort.</span>
           </span>

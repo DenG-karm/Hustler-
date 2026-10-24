@@ -125,7 +125,7 @@ async def delete_channel(
 async def get_channel_live_stats(
     channel_id: str, request: Request, refresh: bool = False
 ) -> dict[str, object]:
-    """Kanalın gerçek YouTube abone, video, Shorts ve canlı istatistiklerini getirir."""
+    """Kanalın gerçek YouTube abone, video, Shorts, niş kıyaslamaları ve canlı istatistiklerini getirir."""
     repo = _repo(request)
     channel = await repo.get_by_id(channel_id)
     if channel is None:
@@ -134,6 +134,15 @@ async def get_channel_live_stats(
             detail=f"Kanal bulunamadı: {channel_id}",
         )
     live_data = await fetch_channel_live_stats(channel.channel_url, force_refresh=refresh)
+    raw_bench = live_data.get("niche_benchmarks")
+    niche_q = str(live_data.get("niche_query") or channel.name)
+    if isinstance(raw_bench, list) and raw_bench:
+        bench_items = [it for it in raw_bench if isinstance(it, dict)]
+        if bench_items:
+            try:
+                await repo.record_research(channel.id, niche_q, bench_items)
+            except Exception:
+                pass
     sqlite_metrics = await repo.get_metrics(channel.id)
 
     return {

@@ -765,3 +765,226 @@ async def alias_generate_audio(payload: AudioRequest, request: Request) -> dict[
     return await generate_audio(payload, request)
 
 
+# ---------------------------------------------------------------------------
+# Hustler AI Asistan — Çekirdek Persona, Sistem Bilgisi ve Gemini/Groq Hattı
+# ---------------------------------------------------------------------------
+HUSTLER_SYSTEM_KNOWLEDGE = """KİMLİK VE ÇEKİRDEK PERSONA:
+Sen Hustler AI'sın. Yıllarını video kurgu (edit), izleyici tutma (retention) mühendisliği ve sosyal medya (YouTube, Shorts, TikTok, Reels) piyasalarında geçirmiş kıdemli bir pazar analisti ve baş editörsün. Bugüne kadar sayısız kanalın algoritmayı kırıp patlamasını, milyonlarca izlenmeye ulaşmasını ve yüksek gelir üretmesini sağladın.
+
+DAVRANIŞ VE ÜSLUP KURALLARI (KESİN):
+1. SIFIR YILDIZ KULLANIMI: Yanıtlarında ASLA yıldız karakteri (*) veya çift yıldız (**) kullanma. Kalınlaştırma, maddeleme veya vurgu için kesinlikle * koyma. Maddeleme gerekiyorsa tire (-) veya rakam (1., 2.) kullan.
+2. TAM PROFESYONELLİK VE CİDDİYET: Gereksiz samimiyetten, yapay yakınlıktan, laubali hitaplardan ("dostum", "hocam", "kardeşim", "patron" vb.) ve anlamsız dolgu cümlelerinden kesinlikle kaçın. Yalnızca kurumsal, ağırbaşlı, soğukkanlı ve üst düzey profesyonel bir dil kullan.
+3. SIFIR BOŞ ÖVGÜ, SAF GERÇEKÇİLİK: Asla "harika soru", "mükemmel fikir", "çok iyi düşünmüşsün" gibi yapay ve gereksiz övgüler kullanma. Yalnızca gerçeğe, veriye ve piyasanın somut kriterlerine odaklan. Zayıf bir fikir veya kurgu görürsen neden tutmayacağını profesyonelce açıkla ve doğrusunu göster.
+4. PAZAR VE HEDEF ODAKLILIK: Sosyal medya izleyicisinin ne istediğini, ilk 3 saniyede (hook) neden kaydırdığını, hangi kurgu ritminin (pacing) ve hangi nişin gelir ürettiğini çok iyi bilirsin. Her analizini izlenme, elde tutma (retention) ve gelir potansiyeline göre yap.
+5. İŞTEN KAÇMAYAN ÜRETİM ORTAĞI: Kullanıcının en iyi işi çıkartması için doğrudan sorumluluk al. Sadece teorik tavsiye verme; doğrudan kullanılabilir kanca (hook) cümleleri, kurgu kesim noktaları, senaryo revizeleri ve net aksiyon planı çıkar.
+
+HUSTLER STÜDYOSU MİMARİSİ VE İŞLEYİŞİ:
+- Amaç: YouTube ve Shorts / TikTok (1080x1920, 9:16 dikey format, 30 FPS) için uçtan uca viral içerik keşfi, senaryo yazımı, seslendirme, görsel sahne kurgusu ve donanım hızlandırmalı FFmpeg video render stüdyosudur.
+- Kanal Stüdyosu (Channels Ekranı - 4 Sekmeli Mimari):
+  - Sol Panel: Kanal profili, niş tespiti, AI strateji kimliği ve canlı YouTube istatistikleri (yt-dlp ile abone, izlenme, video/Shorts ortalaması).
+  - Sekme 1 (Fikir ve Viral Prototipleme): Nişteki global viral referanslar, kanca analizleri ve kanal için hazır prototip kurgular. "Bu Prototiple Başla" butonuyla doğrudan üretim hattına geçilir.
+  - Sekme 2 (Performans ve Trendler): Pandas/NumPy ile hesaplanan izlenme trend eğimi (slope), hareketli ortalama grafiği ve Shorts/Video format dağılımı.
+  - Sekme 3 (İçerik Tabloları ve Arşiv): Uzun videolar, Shorts tabloları ve SQLite doğrulama metrikleri.
+  - Sekme 4 (Shorts Şablonları): 9:16 dikey kurgu şablonları ve önizleme oynatıcısı.
+- 6 Adımlı Otonom Üretim Hattı (Pipeline):
+  1. Konu ve Keşif (Discovery): Konuya göre YouTube API ve yt-dlp kanaryası ile viral skoru en yüksek Top 20 fikir puanlanır.
+  2. Senaryo (Script): Seçilen fikirden 3 perdeli Shorts senaryosu (Kanca/Hook, Gövde/Body, Çağrı/CTA), görsel sahne istemleri (VisualPromptCompiler) ve iddia doğrulaması (ClaimMarker) üretilir.
+  3. Ses ve Altyazı (Audio): ElevenLabs TTS veya yerel PCM motoru + SHA-256 ses önbelleği ile ses üretilir; kelime hizalamalı dinamik .ass altyazı oluşturulur.
+  4. Görsel Varlıklar (Assets): 9:16 güvenli bölge (SafeZone) ve SlotValidator kurtarma zinciri ile video/görsel/müzik slotları doğrulanır.
+  5. Önizleme (Preview): FFmpeg DRAFT profilinde (540x960) hızlı önizleme derlenir.
+  6. Final Render: FFmpeg FINAL profilinde (1080x1920) NVENC/AMF/libx264 ile render alınır ve SSE üzerinden canlı takip edilir."""
+
+
+@dataclass
+class ChatTurn:
+    role: str
+    text: str
+
+
+@dataclass
+class AssistantChatRequest:
+    message: NonEmptyStr
+    history: list[ChatTurn] = field(default_factory=list)
+    active_view: str = "channels"
+    channel_id: Optional[str] = None
+    current_topic: Optional[str] = None
+    current_step: Optional[str] = None
+
+
+def _resolve_env_key(var_name: str) -> str:
+    val = os.environ.get(var_name, "").strip()
+    if val:
+        return val
+    repo_env = Path(__file__).resolve().parents[4] / ".env"
+    if not repo_env.is_file():
+        return ""
+    for raw_line in repo_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw_line.strip()
+        if line.startswith(f"{var_name}="):
+            return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return ""
+
+
+def _resolve_chat_llm(request: Request) -> Optional[LLMPort]:
+    configured: Optional[LLMPort] = getattr(request.app.state, "llm_port", None)
+    if isinstance(configured, LLMPort):
+        return configured
+    cached: Optional[LLMPort] = getattr(request.app.state, "chat_llm_port", None)
+    if isinstance(cached, LLMPort):
+        return cached
+    gemini_key = _resolve_env_key("GEMINI_API_KEY")
+    groq_key = _resolve_env_key("GROQ_API_KEY")
+    if groq_key and not os.environ.get("GROQ_API_KEY"):
+        os.environ["GROQ_API_KEY"] = groq_key
+    if not gemini_key and not groq_key:
+        return None
+    port = LLMPort(api_key=gemini_key, max_tokens=500_000)
+    request.app.state.chat_llm_port = port
+    return port
+
+
+async def _fetch_recent_db_items(request: Request) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    db = getattr(request.app.state, "db", None)
+    if db is None or not hasattr(db, "get_reader"):
+        return [], []
+    scripts: list[dict[str, object]] = []
+    discoveries: list[dict[str, object]] = []
+    reader = await db.get_reader()
+    try:
+        async with reader.execute(
+            "SELECT title, is_approved, channel_id FROM scripts ORDER BY updated_at DESC LIMIT 5;"
+        ) as cur:
+            for r in await cur.fetchall():
+                scripts.append({"title": str(r[0]), "approved": bool(r[1]), "channel_id": str(r[2] or "")})
+        async with reader.execute(
+            "SELECT title, topic, ROUND(COALESCE(score, 0.0), 1) FROM discovery_videos ORDER BY score DESC LIMIT 5;"
+        ) as cur:
+            for r in await cur.fetchall():
+                discoveries.append({"title": str(r[0]), "topic": str(r[1]), "score": float(str(r[2] or 0.0))})
+    except Exception:
+        pass
+    finally:
+        await reader.close()
+    return scripts, discoveries
+
+
+async def _collect_system_snapshot(request: Request, channel_id: Optional[str]) -> dict[str, object]:
+    from services.core.hustler.storage.channels import ChannelRepository
+
+    db = getattr(request.app.state, "db", None)
+    channels_info: list[dict[str, object]] = []
+    total_scripts = 0
+    total_research = 0
+    if db is not None and hasattr(db, "get_reader"):
+        try:
+            pairs = await ChannelRepository(db).list_all_with_metrics()
+            for ch, m in pairs:
+                s_cnt = int(m.get("total_scripts", 0))
+                r_cnt = int(m.get("total_research", 0))
+                total_scripts += s_cnt
+                total_research += r_cnt
+                channels_info.append({
+                    "id": ch.id,
+                    "name": ch.name,
+                    "url": ch.channel_url,
+                    "description": ch.description,
+                    "total_scripts": s_cnt,
+                    "total_research": r_cnt,
+                    "avg_viral_score": float(m.get("avg_viral_score", 0.0)),
+                })
+        except Exception:
+            pass
+    scripts, discoveries = await _fetch_recent_db_items(request)
+    return {
+        "total_channels": len(channels_info),
+        "total_scripts": total_scripts,
+        "total_research": total_research,
+        "selected_channel_id": channel_id,
+        "channels": channels_info[:8],
+        "recent_scripts": scripts,
+        "top_discoveries": discoveries,
+    }
+
+
+def _sanitize_assistant_reply(text: str) -> str:
+    """Yanıt içerisindeki tüm yıldız (*) karakterlerini temizler ve düz metin disiplinini korur."""
+    cleaned = text.replace("**", "").replace("*", "")
+    lines = [line.rstrip() for line in cleaned.splitlines()]
+    return "\n".join(lines).strip()
+
+
+def _build_assistant_prompt(payload: AssistantChatRequest, snapshot: dict[str, object]) -> str:
+    history_lines = [
+        f"{'Kullanıcı' if h.role == 'user' else 'Hustler AI'}: {h.text}"
+        for h in payload.history[-6:]
+    ]
+    history_block = "\n".join(history_lines) if history_lines else "Henüz önceki mesaj yok."
+    ui_context = (
+        f"Aktif Sekme: {payload.active_view} | Seçili Kanal ID: {payload.channel_id or 'Yok'} | "
+        f"Aktif Konu: {payload.current_topic or 'Yok'} | Pipeline Adımı: {payload.current_step or 'Başlangıç'}"
+    )
+    snapshot_json = json.dumps(snapshot, ensure_ascii=False)
+    return (
+        f"{HUSTLER_SYSTEM_KNOWLEDGE}\n\n"
+        f"=== CANLI SİSTEM VE VERİTABANI DURUMU ===\n{ui_context}\nVeritabanı Özeti: {snapshot_json}\n\n"
+        f"=== SOHBET GEÇMİŞİ ===\n{history_block}\n\n"
+        f"Kullanıcı: {payload.message}\n"
+        "Hustler AI (Yıldız (*) karakteri kullanmadan, sıfır boş övgü ve sıfır laubali samimiyetle, tamamen profesyonel, ciddi ve pazar verisine odaklı kıdemli editör/analist yanıtı):"
+    )
+
+
+def _build_local_assistant_reply(payload: AssistantChatRequest, snapshot: dict[str, object]) -> str:
+    ch_count = int(str(snapshot.get("total_channels", 0)))
+    sc_count = int(str(snapshot.get("total_scripts", 0)))
+    rs_count = int(str(snapshot.get("total_research", 0)))
+    channels = snapshot.get("channels")
+    ch_names = (
+        ", ".join(str(c.get("name", "")) for c in channels if isinstance(c, dict))
+        if isinstance(channels, list) and channels
+        else "kayıtlı kanal bulunmuyor"
+    )
+    return (
+        f"Sistem Durum Raporu ({payload.active_view} görünümü): Veritabanında {ch_count} kanal ({ch_names}), "
+        f"{sc_count} senaryo ve {rs_count} viral keşif kaydı mevcuttur. "
+        "Üretim akışını başlatmak için sol panelden ilgili kanalı seçiniz ve Fikir ve Viral Prototipleme sekmesindeki "
+        "yüksek skorlu referanslardan birini 6 adımlı üretim hattına (Keşif -> Senaryo -> Ses -> Görsel -> Önizleme -> Final Render) aktarınız."
+    )
+
+
+@router.post("/chat")
+async def assistant_chat(payload: AssistantChatRequest, request: Request) -> dict[str, object]:
+    """Hustler AI sohbet ve canlı sistem analizi uç noktası (Gemini 2.5 Flash / Groq / Yerel Analizör)."""
+    snapshot = await _collect_system_snapshot(request, payload.channel_id)
+    prompt = _build_assistant_prompt(payload, snapshot)
+    llm = _resolve_chat_llm(request)
+    provider = "hustler-local-analyzer"
+    reply = ""
+
+    if llm is not None:
+        try:
+            res = await llm.generate_text(prompt)
+            reply = _sanitize_assistant_reply(res.text)
+            provider = "gemini-2.5-flash" if llm.api_key else "groq-llama3"
+        except Exception as exc:
+            logger.warning("Hustler AI harici model çağrısı yedek analizöre geçti", error=str(exc))
+
+    if not reply:
+        reply = _sanitize_assistant_reply(_build_local_assistant_reply(payload, snapshot))
+
+    return {
+        "reply": reply,
+        "provider": provider,
+        "system_summary": {
+            "total_channels": snapshot.get("total_channels", 0),
+            "total_scripts": snapshot.get("total_scripts", 0),
+            "total_research": snapshot.get("total_research", 0),
+        },
+    }
+
+
+@alias_router.post("/assistant/chat")
+async def alias_assistant_chat(payload: AssistantChatRequest, request: Request) -> dict[str, object]:
+    return await assistant_chat(payload, request)
+
+
+

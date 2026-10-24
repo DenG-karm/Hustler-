@@ -1,20 +1,14 @@
-import { useState, useEffect, lazy, Suspense } from 'react'
+import { useState, useEffect } from 'react'
 import { FlowContainer } from './components/flow/FlowContainer'
 import { ErrorModal } from './components/ui/ErrorModal'
 import { ToastContainer } from './components/ui/ToastContainer'
 import { StatusBar } from './components/ui/StatusBar/StatusBar'
 import { ColdStartSplash } from './components/ui/ColdStartSplash'
 import { HustlerAiWidget } from './components/assistant/HustlerAiWidget'
+import { ChannelsScreen } from './components/channels/ChannelsScreen'
+import { TemplateManager } from './components/templates/TemplateManager'
 import { useFlowStore } from './store/flowStore'
 import { useSupervisorStore } from './store/supervisorStore'
-
-// Faz F9: React.lazy ile Dinamik Yükleme
-const TemplateManager = lazy(() =>
-  import('./components/templates/TemplateManager').then((m) => ({ default: m.TemplateManager }))
-)
-const ChannelsScreen = lazy(() =>
-  import('./components/channels/ChannelsScreen').then((m) => ({ default: m.ChannelsScreen }))
-)
 
 
 export function App() {
@@ -63,7 +57,7 @@ export function App() {
       <main className="flex-1 flex flex-col h-full overflow-hidden">
         {/* Üst Stüdyo Kontrol Çubuğu (Top Deck) */}
         <header className="h-16 flex items-center justify-between px-6 border-b border-[#EAECEF] dark:border-zinc-800 bg-white dark:bg-zinc-900 shrink-0 relative select-none">
-          {/* Sol: Hamburger İkonu & Breadcrumb */}
+          {/* Sol: Breadcrumb */}
           <div className="flex items-center gap-3 text-xs">
             <button
               type="button"
@@ -71,22 +65,7 @@ export function App() {
                 setActiveView('channels')
                 selectChannel(null)
               }}
-              className="p-1.5 -ml-1 text-[#4B5563] hover:text-[#111827] dark:text-zinc-400 dark:hover:text-zinc-100 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-              title="Kanallara Dön (Ana Sayfa)"
-              aria-label="Kanallara Dön (Ana Sayfa)"
-            >
-              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6.75h16.5M3.75 12h16.5m-16.5 5.25h16.5" />
-              </svg>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveView('channels')
-                selectChannel(null)
-              }}
-              className="flex items-center gap-1.5 text-xs cursor-pointer select-none bg-transparent border-0 p-0"
+              className="flex items-center gap-1.5 text-xs cursor-pointer select-none bg-transparent border-0 p-0 hover:opacity-80 transition-opacity"
             >
               <span className="font-normal text-[#9CA3AF]">Workspace</span>
               <span className="text-[#D1D5DB] dark:text-zinc-600">/</span>
@@ -228,15 +207,11 @@ export function App() {
               </div>
             ) : activeTab === 'templates' ? (
               <div className="flex-1 overflow-y-auto bg-[#F8F9FA] dark:bg-zinc-950">
-                <Suspense fallback={<div className="p-xl text-center text-xs font-mono text-text-muted">ŞABLON MODÜLÜ YÜKLENİYOR...</div>}>
-                  <TemplateManager />
-                </Suspense>
+                <TemplateManager />
               </div>
             ) : activeTab === 'channels' ? (
               <div className="flex-1 overflow-hidden">
-                <Suspense fallback={<div className="p-xl text-center text-xs font-mono text-text-muted">KANAL ÇALIŞMA ALANI YÜKLENİYOR...</div>}>
-                  <ChannelsScreen />
-                </Suspense>
+                <ChannelsScreen />
               </div>
             ) : activeTab === 'library' ? (
               <div className="flex-1 overflow-y-auto p-6 bg-[#F8F9FA] dark:bg-zinc-950">

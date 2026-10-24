@@ -175,7 +175,7 @@ def compute_channel_analytics(
     slices = []
     color_map = {
         "video": {"color": "#3B82F6", "label": "Yatay Video", "bg": "bg-blue-500"},
-        "short": {"color": "#F43F5E", "label": "Dikey Shorts", "bg": "bg-rose-500"},
+        "short": {"color": "#06B6D4", "label": "Dikey Shorts", "bg": "bg-cyan-500"},
     }
 
     for _, row in grouped.iterrows():

@@ -7,8 +7,11 @@ K-806: yt-dlp bozulması durumunda sıfır-çöküş (Zero-Crash) kurtarma hatt�
 
 from __future__ import annotations
 
+import asyncio
 import json
+import math
 import structlog
+import yt_dlp  # type: ignore[import-untyped]
 
 from services.core.hustler.db import Database
 
@@ -25,6 +28,90 @@ FALLBACK_TEMPLATES: list[tuple[str, str, float]] = [
     ("Neden Herkes {topic} Konuşuyor?", "İşte arkasındaki gizli mekanizma.", 79.0),
     ("{topic} ile Başarılı Olmanın 5 Altın Kuralı", "Uzmanların uyguladığı yöntemler.", 74.0),
 ]
+
+
+def _format_duration_sec(dur: int | float | None) -> tuple[str, str]:
+    if not isinstance(dur, (int, float)) or dur <= 0:
+        return "0:45", "short"
+    sec = int(dur)
+    fmt = "short" if sec <= 65 else "video"
+    return f"{sec // 60}:{sec % 60:02d}", fmt
+
+
+def _score_from_views(views: int) -> float:
+    if views <= 0:
+        return 60.0
+    raw = 50.0 + math.log10(max(1, views)) * 7.2
+    return round(min(99.0, max(55.0, raw)), 1)
+
+
+def _search_youtube_ytdlp_sync(topic: str, max_results: int = 12) -> list[dict[str, object]]:
+    """yt-dlp ytsearch kullanarak konuyla ilgili gerçek YouTube videolarını ve üstverilerini çeker."""
+    clean_topic = topic.strip()
+    if not clean_topic:
+        return []
+    limit = max(1, min(25, max_results))
+    opts = {
+        "extract_flat": True,
+        "quiet": True,
+        "skip_download": True,
+        "no_warnings": True,
+        "socket_timeout": 8,
+    }
+    items: list[dict[str, object]] = []
+    try:
+        with yt_dlp.YoutubeDL(opts) as ydl:
+            info = ydl.extract_info(f"ytsearch{limit}:{clean_topic}", download=False) or {}
+            for entry in info.get("entries", []) or []:
+                if not isinstance(entry, dict):
+                    continue
+                vid = entry.get("id")
+                title = entry.get("title")
+                if not (isinstance(vid, str) and vid and isinstance(title, str) and title):
+                    continue
+                vc_raw = entry.get("view_count")
+                views = int(vc_raw) if isinstance(vc_raw, (int, float)) else 0
+                dur_raw = entry.get("duration")
+                dur_sec = int(dur_raw) if isinstance(dur_raw, (int, float)) else 0
+                dur_text, v_format = _format_duration_sec(dur_sec)
+                channel_name = str(entry.get("channel") or entry.get("uploader") or "YouTube")
+                url_prefix = "shorts/" if v_format == "short" else "watch?v="
+                score = _score_from_views(views)
+                items.append({
+                    "video_id": vid,
+                    "id": vid,
+                    "title": title,
+                    "hook": f"{channel_name} • {dur_text} ({'Shorts 9:16' if v_format == 'short' else 'Video 16:9'})",
+                    "score": score,
+                    "topic": clean_topic,
+                    "view_count": views,
+                    "duration": dur_sec,
+                    "duration_text": dur_text,
+                    "format": v_format,
+                    "channel_name": channel_name,
+                    "url": f"https://www.youtube.com/{url_prefix}{vid}",
+                })
+    except Exception as exc:
+        logger.warning("ytdlp_live_search_failed", topic=clean_topic, error=str(exc))
+    items.sort(key=lambda x: int(str(x.get("view_count") or 0)), reverse=True)
+    return items
+
+
+async def run_ytdlp_topic_discovery(db: Database, topic: str, max_results: int = 12) -> dict[str, object]:
+    """Gerçek yt-dlp YouTube araması çalıştırır; yalnızca ağ/çıkarıcı tamamen başarısızsa fallback_discovery'ye geçer."""
+    live_items = await asyncio.to_thread(_search_youtube_ytdlp_sync, topic, max_results)
+    if not live_items:
+        return await fallback_discovery(db=db, topic=topic)
+    max_sc = max((float(str(it.get("score") or 0.0)) for it in live_items), default=0.0)
+    return {
+        "results": live_items,
+        "fetched": len(live_items),
+        "discarded": 0,
+        "inserted": len(live_items),
+        "max_score": max_sc,
+        "degraded": False,
+        "warning": None,
+    }
 
 
 def generate_deterministic_fallback(topic: str) -> list[dict[str, object]]:

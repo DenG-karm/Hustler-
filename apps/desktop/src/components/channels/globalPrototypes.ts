@@ -1,3 +1,6 @@
+import type { ChannelLiveStats, DiscoveryItem, RealVideoItem, VideoIdea } from '../../store/flowTypes'
+import { formatCount } from './channelMetadata'
+
 export interface GlobalViralPrototype {
   id: string
   format: 'short' | 'video'
@@ -13,81 +16,131 @@ export interface GlobalViralPrototype {
   categoryLabel: string
 }
 
-const ytUrl = (q: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`
+const fmtDuration = (sec: number | null | undefined, isShort: boolean): string => {
+  if (!sec || sec <= 0) return isShort ? '0:45' : '-'
+  const s = Math.round(sec)
+  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
 
-const p = (
-  id: string,
-  format: 'short' | 'video',
-  globalTitle: string,
-  q: string,
-  views: string,
-  ret: string,
-  dur: string,
-  hookAn: string,
-  pTitle: string,
-  pHook: string,
-  score: number,
-  cat: string
-): GlobalViralPrototype => ({
-  id,
-  format,
-  globalTitle,
-  globalUrl: ytUrl(q),
-  globalViewsFormatted: views,
-  retentionBadge: ret,
-  durationText: dur,
-  hookAnalysis: hookAn,
-  prototypeTitle: pTitle,
-  prototypeHook: pHook,
-  viralScore: score,
-  categoryLabel: cat,
-})
+const calcScore = (views: number): number => {
+  if (views <= 0) return 60
+  return Math.min(99, Math.max(55, Math.round(50 + Math.log10(views) * 7.2)))
+}
+
+function fromIdea(idea: VideoIdea, channelName: string): GlobalViralPrototype {
+  const isShort = idea.format ? idea.format === 'short' : (idea.duration ?? 45) <= 65
+  const views = idea.viewCount ?? 0
+  const srcChannel = idea.channelName || 'YouTube'
+  const url =
+    idea.url ||
+    (idea.id && !idea.id.startsWith('fallback_') && !idea.id.startsWith('idea_')
+      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${idea.id}`
+      : `https://www.youtube.com/results?search_query=${encodeURIComponent(idea.title)}`)
+
+  return {
+    id: idea.id,
+    format: isShort ? 'short' : 'video',
+    globalTitle: idea.title,
+    globalUrl: url,
+    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Yeni / Veri Yok',
+    retentionBadge: srcChannel,
+    durationText: idea.durationText || fmtDuration(idea.duration, isShort),
+    hookAnalysis: `Gerçek YouTube Verisi (${srcChannel}): ${formatCount(views)} izlenme alan doğrulanmış içerik.`,
+    prototypeTitle: `${channelName}: ${idea.title}`,
+    prototypeHook: idea.hook || idea.title,
+    viralScore: Math.round(idea.score || calcScore(views)),
+    categoryLabel: 'Canlı Niş Taraması',
+  }
+}
+
+function fromChannelVideo(vid: RealVideoItem, channelName: string): GlobalViralPrototype {
+  const isShort = vid.type === 'short'
+  const views = vid.view_count ?? 0
+  const score = calcScore(views)
+  const url =
+    vid.url ||
+    (vid.id
+      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${vid.id}`
+      : `https://www.youtube.com/results?search_query=${encodeURIComponent(vid.title)}`)
+
+  return {
+    id: vid.id || `ch_${vid.title.slice(0, 12)}`,
+    format: isShort ? 'short' : 'video',
+    globalTitle: vid.title,
+    globalUrl: url,
+    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Bilinmiyor',
+    retentionBadge: vid.published_text || 'Kanal İçeriği',
+    durationText: fmtDuration(vid.duration, isShort),
+    hookAnalysis: `${channelName} kanalının kendi gerçek içeriği (${formatCount(views)} izlenme).`,
+    prototypeTitle: vid.title,
+    prototypeHook: `${vid.title} — Kanalın en yüksek etkileşimli kurgu yapısını devam ettir.`,
+    viralScore: score,
+    categoryLabel: 'Kanalın Gerçek İçeriği',
+  }
+}
+
+function fromBenchmarkItem(item: DiscoveryItem, channelName: string): GlobalViralPrototype {
+  const vid = item.video_id || item.id || ''
+  const isShort = item.format ? item.format === 'short' : (item.duration ?? 45) <= 65
+  const views = item.view_count ?? 0
+  const srcChannel = item.channel_name || 'YouTube Niş'
+  const url =
+    item.url ||
+    (vid
+      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${vid}`
+      : `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}`)
+
+  return {
+    id: vid || `bm_${item.title.slice(0, 12)}`,
+    format: isShort ? 'short' : 'video',
+    globalTitle: item.title,
+    globalUrl: url,
+    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Bilinmiyor',
+    retentionBadge: srcChannel,
+    durationText: item.duration_text || fmtDuration(item.duration, isShort),
+    hookAnalysis: `Niş Rakip Analizi (${srcChannel}): Bu başlık ve süre (${item.duration_text || fmtDuration(item.duration, isShort)}) nişte ${formatCount(views)} izlenmeye ulaştı.`,
+    prototypeTitle: `${channelName}: ${item.title}`,
+    prototypeHook: item.hook || item.title,
+    viralScore: Math.round(item.score || calcScore(views)),
+    categoryLabel: 'Otomatik Niş Taraması',
+  }
+}
 
 export function deriveGlobalViralPrototypes(
   channelName: string,
-  channelDescription: string,
+  _channelDescription: string,
   _channelUrl: string,
-  customIdeas?: { id: string; title: string; hook: string; score: number }[]
+  customIdeas?: VideoIdea[],
+  liveStats?: ChannelLiveStats | null
 ): GlobalViralPrototype[] {
   if (customIdeas && customIdeas.length > 0) {
-    return customIdeas.map((idea, idx) => {
-      const isShort = idx % 2 === 0
-      const v = ((idx * 0.9) % 3 + 1.8).toFixed(1)
-      return p(
-        idea.id || `custom-${idx}`,
-        isShort ? 'short' : 'video',
-        idea.title,
-        idea.title,
-        `${v}M İzlenme`,
-        isShort ? '%89 Tutunma' : '%68 Ortalama',
-        isShort ? '0:45' : '13:20',
-        idea.hook,
-        idea.title,
-        idea.hook,
-        idea.score || 94,
-        'Özel Niş Analizi'
-      )
-    })
+    return customIdeas.map((idea) => fromIdea(idea, channelName))
   }
 
-  const t = `${channelName} ${channelDescription}`.toLowerCase()
+  if (!liveStats) return []
 
-  if (t.includes('bilim') || t.includes('fizik') || t.includes('teknoloji') || t.includes('ai') || t.includes('uzay')) {
-    return [
-      p('sci-s1', 'short', 'Quantum Computing Will Break Modern Security', 'quantum computing chips shorts', '5.2M İzlenme', '%91 Tutunma', '0:42', 'Ters Köşe Kanca: Klasik çiplerin gelecekte neden yetersiz kalacağını ilk 3 saniyede açıklar.', `${channelName}: Kuantum Çipleri Normal Bilgisayarları Nasıl Geçecek?`, 'Kullandığınız işlemcinin güçlü olduğunu düşünüyorsanız, kuantum fiziğinin bu testine bakın.', 98, 'Viral Kanca'),
-      p('sci-v1', 'video', 'James Webb Telescope Just Broke Cosmology Rules', 'james webb telescope mystery', '2.8M İzlenme', '%72 İzleme', '16:40', '3-Perde Belgesel Formatı: Standart modelin sınırları ve yeni derin uzay teleskop verileri.', `${channelName}: James Webb Standart Kozmolojiyi Nasıl Sarsıyor?`, 'Gökbilimciler bu fotoğrafa ilk baktıklarında ölçüm hatası sandılar; fakat bulgu çok daha büyüktü.', 93, 'Belgesel Kurgu'),
-    ]
+  const results: GlobalViralPrototype[] = []
+  const seenIds = new Set<string>()
+
+  const benchmarks = liveStats.niche_benchmarks || []
+  for (const bm of benchmarks) {
+    const proto = fromBenchmarkItem(bm, channelName)
+    if (!seenIds.has(proto.id)) {
+      seenIds.add(proto.id)
+      results.push(proto)
+    }
   }
 
-  if (t.includes('para') || t.includes('finans') || t.includes('borsa') || t.includes('yatırım') || t.includes('girişim')) {
-    return [
-      p('fin-s1', 'short', 'The Brutal Truth About Morning Routines and Wealth', 'wealth habits morning routine shorts', '6.7M İzlenme', '%92 Tutunma', '0:39', 'Ezber Bozan Kanca: Yaygın klişelerin aksine sermaye birikiminin temel matematiği.', `${channelName}: Zenginlerin Sabah Rutinleri Hakkında 3 Büyük Yanılgı`, 'Sabah 5’te kalkmak tek başına zengin etmez; asıl farkı yaratan tek sermaye kuralı var.', 97, 'Viral Kanca'),
-      p('fin-v1', 'video', 'How The Modern Financial System Actually Moves Money', 'how money works financial system', '3.4M İzlenme', '%74 İzleme', '18:50', 'Vaka İncelemesi: Borç döngüleri, faiz mekanizmaları ve küresel varlık transferleri.', `${channelName}: Küresel Para Sistemi ve Görünmeyen Finansal Çarklar`, 'Cüzdanınızdaki paranın alım gücü nasıl şekilleniyor? Merkez bankalarının perde arkası.', 94, 'Derin Analiz'),
-    ]
+  const ownVideos = [...(liveStats.shorts || []), ...(liveStats.videos || [])].sort(
+    (a, b) => (b.view_count ?? 0) - (a.view_count ?? 0)
+  )
+  for (const v of ownVideos.slice(0, 8)) {
+    const proto = fromChannelVideo(v, channelName)
+    if (!seenIds.has(proto.id)) {
+      seenIds.add(proto.id)
+      results.push(proto)
+    }
   }
 
-  return [
-    p('gen-s1', 'short', 'The Most Effective Psychological Tactic in History', 'psychology persuasion tricks story', '7.8M İzlenme', '%95 Tutunma', '0:44', 'Merak Kancası: Tarihsel bir olayı beklenmedik psikolojik sonuçla harmanlar.', `${channelName}: Tarihte Kaydedilen En Zekice Psikolojik Hamle`, 'Bu taktik tek hamlede koca bir topluluğu etkiledi; yöntem tamamen algı yönetimiydi.', 99, 'Viral Kanca'),
-    p('gen-v1', 'video', 'The Unsolved Mystery of Ancient Megaliths', 'ancient civilization engineering mystery', '3.6M İzlenme', '%76 İzleme', '17:20', 'Sürükleyici Anlatı: Arkeolojik keşiflerin mühendislik modellemeleriyle incelenmesi.', `${channelName}: Antik Mühendisliğin Bugün Bile Açıklanamayan 3 Sırrı`, 'Binlerce yıl önce inşa edilen bu yapılar modern yöntemlerle bile zor tekrarlanıyor.', 94, 'Belgesel Kurgu'),
-  ]
+  return results
 }

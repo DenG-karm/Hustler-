@@ -1,6 +1,7 @@
-import { useState, useMemo, useEffect, type FC, type FormEvent } from 'react'
+import { useState, useMemo, useEffect, useRef, type FC, type FormEvent } from 'react'
 import { useFlowStore } from '../../store/flowStore'
 import type { RealVideoItem } from '../../store/flowTypes'
+import { toSafeAssetUrl, secureInvoke } from '../../lib/securityGuard'
 import { DraggableChannelCard, type Position } from './DraggableChannelCard'
 import { ChannelTrendChart } from './charts/ChannelTrendChart'
 import { ChannelDistributionChart } from './charts/ChannelDistributionChart'
@@ -11,26 +12,23 @@ import {
   deriveFallbackAnalytics,
 } from './channelMetadata'
 import { deriveGlobalViralPrototypes } from './globalPrototypes'
+import { getIpcClient } from '../../lib/ipc'
 
 const SpinIcon = ({ className = 'w-3.5 h-3.5' }: { className?: string }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M16 9h5v-.001M3 20v-5m0 0h5m-5 0l3 3a8 8 0 0014-4M4 10a8 8 0 0114-4l3 3m0-5v5" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0114.6-3.6L20 7M20 15a9 9 0 01-14.6 3.6L4 17" />
   </svg>
 )
 
 const YtBadge = () => (
   <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M19.6 3.2c-3.6-.3-11.6-.3-15.2 0C.5 3.5.05 5.8 0 12c.05 6.2.5 8.5 4.4 8.8 3.6.3 11.6.3 15.2 0 3.9-.3 4.4-2.6 4.4-8.8-.03-6.2-.5-8.5-4.4-8.8zM9 16V8l8 4-8 4z" />
+    <path d="M9 16V8l8 4-8 4z" />
   </svg>
 )
 
 const FilmIcon = () => (
   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      d="M15.75 10.5l4.72-4.72a.75.75 0 011.28.53v11.38a.75.75 0 01-1.28.53l-4.72-4.72M4.5 18.75h9a2.25 2.25 0 002.25-2.25v-9a2.25 2.25 0 00-2.25-2.25h-9A2.25 2.25 0 002.25 7.5v9a2.25 2.25 0 002.25 2.25z"
-    />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l5-3v10l-5-3M4 6h11v12H4z" />
   </svg>
 )
 
@@ -42,24 +40,34 @@ const BoltIcon = () => (
 
 const TrendUpIcon = () => (
   <svg className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.5 4.5 7.5-7.5M21 8.25V3m0 0h-5.25" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8M21 12V7h-5" />
   </svg>
 )
 
 const ArrowRightIcon = () => (
   <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7-7 7M21 12H3" />
   </svg>
 )
 
 const CARD_CLS = 'p-6 rounded-2xl border border-[#E5E7EB] dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs'
+const card3dStyle = (isHovered: boolean) => ({
+  transform: isHovered
+    ? 'perspective(1200px) rotateY(0deg) rotateX(0deg) translateY(-8px) scale(1.02)'
+    : 'perspective(1200px) rotateY(-8deg) rotateX(4deg) translateZ(0)',
+  transformStyle: 'preserve-3d' as const,
+  transition: 'transform 0.35s cubic-bezier(0.16,1,0.3,1),box-shadow 0.35s ease,border-color 0.35s ease',
+  boxShadow: isHovered
+    ? '0 20px 35px -10px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.12)'
+    : '0 15px 25px -8px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.06)',
+})
 
 const VideoPerformanceTable: FC<{
   title: string
   subtitle: string
   countLabel: string
   badgeText: string
-  badgeColor: 'blue' | 'rose'
+  badgeColor: 'blue' | 'cyan'
   videos: RealVideoItem[]
   isLoading: boolean
   emptyMessage: string
@@ -71,7 +79,7 @@ const VideoPerformanceTable: FC<{
           className={`w-7 h-7 rounded-lg ${
             badgeColor === 'blue'
               ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-              : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+              : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
           } flex items-center justify-center`}
         >
           {badgeColor === 'blue' ? <FilmIcon /> : <BoltIcon />}
@@ -86,7 +94,7 @@ const VideoPerformanceTable: FC<{
         className={`text-xs px-3 py-1 rounded-full font-mono font-medium ${
           badgeColor === 'blue'
             ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60'
-            : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400 border-rose-200 dark:border-rose-800/60'
+            : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/60'
         } border self-start sm:self-auto`}
       >
         {countLabel}
@@ -124,7 +132,7 @@ const VideoPerformanceTable: FC<{
                     className={`px-2 py-0.5 rounded text-[10px] font-bold border font-sans ${
                       badgeColor === 'blue'
                         ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-                        : 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                        : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
                     }`}
                   >
                     {badgeText}
@@ -145,7 +153,11 @@ const VideoPerformanceTable: FC<{
                       href={vid.url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-blue-600 dark:text-blue-400 hover:underline font-semibold text-[11px]"
+                      className={`hover:underline font-semibold text-[11px] ${
+                        badgeColor === 'blue'
+                          ? 'text-blue-600 dark:text-blue-400'
+                          : 'text-cyan-600 dark:text-cyan-400'
+                      }`}
                     >
                       İzle ↗
                     </a>
@@ -162,10 +174,156 @@ const VideoPerformanceTable: FC<{
   </div>
 )
 
+export interface ChannelShortsTemplate {
+  id: string
+  channelId: string
+  title: string
+  filePath: string
+  format: '9:16'
+  addedAt: number
+}
+
+const ShortsTemplateCard: FC<{
+  template: ChannelShortsTemplate
+  onSelect: (tpl: ChannelShortsTemplate) => void
+  onDelete: (id: string) => void
+}> = ({ template, onSelect, onDelete }) => {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+    if (videoRef.current) {
+      videoRef.current
+        .play()
+        .then(() => setIsPlaying(true))
+        .catch(() => {})
+    }
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+    if (videoRef.current) {
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+      setIsPlaying(false)
+    }
+  }
+
+  return (
+    <div
+      onClick={() => onSelect(template)}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={card3dStyle(isHovered)}
+      className="relative w-48 sm:w-52 aspect-[9/16] shrink-0 rounded-2xl overflow-hidden bg-black border border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-400 cursor-pointer group select-none transition-colors"
+    >
+      <video
+        ref={videoRef}
+        src={toSafeAssetUrl(template.filePath)}
+        className="w-full h-full object-cover"
+        muted
+        loop
+        playsInline
+        preload="metadata"
+      />
+
+      {/* Üst Rozet & Silme Butonu */}
+      <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between z-10">
+        <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-[10px] font-mono font-bold text-cyan-400 border border-cyan-500/30">
+          9:16 SHORTS
+        </span>
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation()
+            onDelete(template.id)
+          }}
+          className="w-6 h-6 rounded-full bg-black/75 backdrop-blur-xs text-zinc-400 hover:text-white hover:bg-black border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+          title="Şablonu Kaldır"
+          aria-label="Şablonu Kaldır"
+        >
+          ✕
+        </button>
+      </div>
+
+      {/* Ortadaki Play Simgesi (Mouse üzerinde değilken) */}
+      {!isPlaying && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-xs border border-white/20 flex items-center justify-center text-white/90 shadow-md text-sm">
+            ▶
+          </div>
+        </div>
+      )}
+
+      {/* Alt Karartma ve Başlık */}
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-10 pointer-events-none">
+        <h5 className="text-xs font-bold text-white truncate drop-shadow-xs leading-tight">
+          {template.title}
+        </h5>
+        <p className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
+          {template.filePath.split(/[\\/]/).pop()}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+const AddShortsTemplateCard: FC<{
+  onClick: () => void
+  disabled?: boolean
+}> = ({ onClick, disabled }) => {
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={card3dStyle(isHovered)}
+      className={`relative w-48 sm:w-52 aspect-[9/16] shrink-0 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-4 cursor-pointer group select-none focus:outline-none transition-all ${
+        isHovered
+          ? 'border-zinc-400 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100 ring-1 ring-zinc-300 dark:ring-zinc-700'
+          : 'border-zinc-300 dark:border-zinc-800 bg-zinc-100/40 dark:bg-zinc-950/40 text-zinc-400'
+      }`}
+      title="Yeni Shorts Şablonu Yükle"
+      aria-label="Yeni Shorts Şablonu Yükle"
+    >
+      <div
+        className={`w-13 h-13 rounded-full border flex items-center justify-center transition-all duration-300 text-2xl font-light ${
+          isHovered
+            ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border-zinc-400 dark:border-zinc-500 scale-110 shadow-md'
+            : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 shadow-xs'
+        }`}
+      >
+        +
+      </div>
+      <span
+        className={`text-xs font-bold font-mono tracking-wider mt-4 transition-colors ${
+          isHovered ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-300'
+        }`}
+      >
+        + ŞABLON EKLE
+      </span>
+      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-1">
+        9:16 Shorts (MP4/MOV)
+      </span>
+    </button>
+  )
+}
+
+const TAB_BLUE = 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/40 dark:bg-blue-950/20'
+const TAB_CYAN = 'border-cyan-600 text-cyan-600 dark:border-cyan-400 dark:text-cyan-400 bg-cyan-50/40 dark:bg-cyan-950/20'
+const INPUT_CLS = 'w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#4B5563]'
+
 const WORKSPACE_TABS = [
-  { id: 'prototypes', label: 'Fikir & Viral Prototipleme', act: 'border-purple-600 text-purple-600 dark:border-purple-400 dark:text-purple-400 bg-purple-50/40 dark:bg-purple-950/20', bAct: 'bg-purple-600 text-white' },
-  { id: 'analytics', label: 'Performans & Trendler', act: 'border-emerald-600 text-emerald-600 dark:border-emerald-400 dark:text-emerald-400 bg-emerald-50/40 dark:bg-emerald-950/20', bAct: 'bg-emerald-600 text-white' },
-  { id: 'tables', label: 'İçerik Tabloları & Arşiv', act: 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/40 dark:bg-blue-950/20', bAct: 'bg-blue-600 text-white' },
+  { id: 'prototypes', label: 'Fikir & Viral Prototipleme', act: TAB_BLUE, bAct: 'bg-blue-600 text-white' },
+  { id: 'analytics', label: 'Performans & Trendler', act: TAB_CYAN, bAct: 'bg-cyan-600 text-white' },
+  { id: 'tables', label: 'İçerik Tabloları & Arşiv', act: TAB_BLUE, bAct: 'bg-blue-600 text-white' },
+  { id: 'templates', label: 'Shorts Şablonları', act: TAB_CYAN, bAct: 'bg-cyan-600 text-white' },
 ] as const
 
 const TimeFilterBar: FC<{
@@ -217,40 +375,98 @@ const TimeFilterBar: FC<{
 )
 
 export const ChannelsScreen: FC = () => {
-  const channels = useFlowStore((s) => s.channels)
-  const activeChannelId = useFlowStore((s) => s.activeChannelId)
-  const isChannelsLoading = useFlowStore((s) => s.isChannelsLoading)
-  const isChannelResearching = useFlowStore((s) => s.isChannelResearching)
-  const channelIdeas = useFlowStore((s) => s.channelIdeas)
-  const channelLiveStats = useFlowStore((s) => s.channelLiveStats)
-  const isLiveStatsLoading = useFlowStore((s) => s.isLiveStatsLoading)
-  const selectChannel = useFlowStore((s) => s.selectChannel)
-  const createChannel = useFlowStore((s) => s.createChannel)
-  const deleteChannel = useFlowStore((s) => s.deleteChannel)
-  const updateChannelSummary = useFlowStore((s) => s.updateChannelSummary)
-  const fetchChannelLiveStats = useFlowStore((s) => s.fetchChannelLiveStats)
-  const researchChannelContent = useFlowStore((s) => s.researchChannelContent)
-  const selectIdeaFromChannelAndStartFlow = useFlowStore(
-    (s) => s.selectIdeaFromChannelAndStartFlow
-  )
+  const {
+    channels,
+    activeChannelId,
+    isChannelsLoading,
+    isChannelResearching,
+    channelIdeas,
+    channelLiveStats,
+    isLiveStatsLoading,
+    selectChannel,
+    createChannel,
+    deleteChannel,
+    updateChannelSummary,
+    fetchChannelLiveStats,
+    researchChannelContent,
+    selectIdeaFromChannelAndStartFlow,
+  } = useFlowStore()
 
   const [isCreating, setIsCreating] = useState(false)
   const [name, setName] = useState('')
   const [channelUrl, setChannelUrl] = useState('')
   const [description, setDescription] = useState('')
   const [query, setQuery] = useState('')
-
-  // Sürüklenebilir kartların serbest boşluktaki (x, y) konumları
   const [positions, setPositions] = useState<Record<string, Position>>({})
-
-  // Kanal Detay Masası Durumları (AI Algı Düzenleme & Avatar & Zaman Filtresi)
   const [isEditingAiSummary, setIsEditingAiSummary] = useState(false)
   const [summaryInput, setSummaryInput] = useState('')
   const [deskImgFailed, setDeskImgFailed] = useState(false)
   const [isRegeneratingAi, setIsRegeneratingAi] = useState(false)
   const [timeCategory, setTimeCategory] = useState<'1_month' | '1_year' | 'all'>('all')
   const [prototypeFormatFilter, setPrototypeFormatFilter] = useState<'all' | 'short' | 'video'>('all')
-  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'prototypes' | 'analytics' | 'tables'>('prototypes')
+  const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'prototypes' | 'analytics' | 'tables' | 'templates'>('prototypes')
+
+  const TPL_KEY = 'hustler_channel_shorts_templates_v2'
+  const [channelShortsTemplates, setChannelShortsTemplates] = useState<Record<string, ChannelShortsTemplate[]>>(() => {
+    try {
+      const raw = localStorage.getItem(TPL_KEY)
+      return raw ? (JSON.parse(raw) as Record<string, ChannelShortsTemplate[]>) : {}
+    } catch {
+      return {}
+    }
+  })
+  const [isPickingFile, setIsPickingFile] = useState(false)
+  const [selectedShortsTemplate, setSelectedShortsTemplate] = useState<ChannelShortsTemplate | null>(null)
+
+  const saveTemplates = (updated: Record<string, ChannelShortsTemplate[]>) => {
+    setChannelShortsTemplates(updated)
+    try {
+      localStorage.setItem(TPL_KEY, JSON.stringify(updated))
+    } catch {
+      // ignore
+    }
+  }
+
+  const handlePickShortsTemplate = async () => {
+    if (!activeChannel) return
+    setIsPickingFile(true)
+    try {
+      const selected = await secureInvoke<string | null>('plugin:dialog|open', {
+        options: {
+          title: '9:16 Shorts Şablon Videosu Seçin',
+          filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'webm', 'mkv'] }],
+          multiple: false,
+          directory: false,
+        },
+      })
+      if (!selected || typeof selected !== 'string') return
+      const rawFileName = selected.split(/[\\/]/).pop() || 'Shorts_Sablonu.mp4'
+      const newTemplate: ChannelShortsTemplate = {
+        id: `tpl_${Date.now()}`,
+        channelId: activeChannel.id,
+        title: rawFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '),
+        filePath: selected,
+        format: '9:16',
+        addedAt: Date.now(),
+      }
+      saveTemplates({
+        ...channelShortsTemplates,
+        [activeChannel.id]: [newTemplate, ...(channelShortsTemplates[activeChannel.id] || [])],
+      })
+    } catch {
+      // ignore
+    } finally {
+      setIsPickingFile(false)
+    }
+  }
+
+  const handleDeleteShortsTemplate = (tplId: string) => {
+    if (!activeChannel) return
+    saveTemplates({
+      ...channelShortsTemplates,
+      [activeChannel.id]: (channelShortsTemplates[activeChannel.id] || []).filter((t) => t.id !== tplId),
+    })
+  }
 
   // İlk yüklemede kartların boşluktaki başlangıç konumlarını belirle
   const initialPositions = useMemo(() => {
@@ -277,9 +493,18 @@ export const ChannelsScreen: FC = () => {
   // Aktif kanal değiştiğinde AI özetini senkronize et ve gerekirse canlı istatistikleri çek
   useEffect(() => {
     if (activeChannel) {
+      const hasCustom =
+        activeChannel.ai_summary &&
+        !activeChannel.ai_summary.includes('İçerik analizi bekleniyor')
       setSummaryInput(
-        activeChannel.ai_summary ||
-          generateDefaultAiSummary(activeChannel.name, activeChannel.description, activeChannel.channel_url)
+        hasCustom
+          ? activeChannel.ai_summary || ''
+          : generateDefaultAiSummary(
+              activeChannel.name,
+              activeChannel.description,
+              activeChannel.channel_url,
+              liveStats
+            )
       )
       setDeskImgFailed(false)
       setIsEditingAiSummary(false)
@@ -288,7 +513,7 @@ export const ChannelsScreen: FC = () => {
         void fetchChannelLiveStats(activeChannel.id)
       }
     }
-  }, [activeChannel?.id, activeChannel?.ai_summary])
+  }, [activeChannel?.id, activeChannel?.ai_summary, liveStats])
 
   const handleCreateSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -323,12 +548,35 @@ export const ChannelsScreen: FC = () => {
   const handleRegenerateAi = async () => {
     if (!activeChannel) return
     setIsRegeneratingAi(true)
-    setTimeout(async () => {
-      const refreshed = generateDefaultAiSummary(activeChannel.name, activeChannel.description, activeChannel.channel_url)
+    const fallback = generateDefaultAiSummary(
+      activeChannel.name,
+      activeChannel.description,
+      activeChannel.channel_url,
+      liveStats
+    )
+    try {
+      const topTitles = [...(liveStats?.shorts || []), ...(liveStats?.videos || [])]
+        .sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0))
+        .slice(0, 4)
+        .map((v) => `${v.title} (${formatCount(v.view_count)})`)
+        .join(', ')
+      const promptMsg = `${activeChannel.name} kanalı için (Abone: ${liveStats?.subscribers_formatted || 'Bilinmiyor'}, Ort. İzlenme: ${liveStats?.avg_views_formatted || 'Bilinmiyor'}, Niş: ${liveStats?.niche_query || activeChannel.description || 'Genel'}, En çok izlenenler: ${topTitles || 'Yok'}) maksimum 4 kısa satırlık [NİŞ], [PERFORMANS], [KURGU RİTMİ] ve [AKSİYON] başlıklarıyla gerçekçi kanal kimlik özeti çıkar.`
+      const res = await getIpcClient().proxyRequest('POST', '/api/v1/pipeline/chat', {
+        message: promptMsg,
+        history: [],
+        active_view: 'channels',
+        channel_id: activeChannel.id,
+      })
+      const body = (res?.body ?? {}) as { reply?: string }
+      const refreshed = body.reply?.replace(/\*/g, '').trim() || fallback
       setSummaryInput(refreshed)
       await updateChannelSummary(activeChannel.id, refreshed)
+    } catch {
+      setSummaryInput(fallback)
+      await updateChannelSummary(activeChannel.id, fallback)
+    } finally {
       setIsRegeneratingAi(false)
-    }, 500)
+    }
   }
 
   // Canlı YouTube Video ve Shorts Listesi (Ham & Genişletilmiş Veri Kümeleri)
@@ -372,9 +620,10 @@ export const ChannelsScreen: FC = () => {
       activeChannel.name,
       activeChannel.description || '',
       activeChannel.channel_url,
-      channelIdeas
+      channelIdeas,
+      liveStats
     )
-  }, [activeChannel?.name, activeChannel?.description, activeChannel?.channel_url, channelIdeas])
+  }, [activeChannel?.name, activeChannel?.description, activeChannel?.channel_url, channelIdeas, liveStats])
 
   const filteredPrototypes = useMemo(() => {
     if (prototypeFormatFilter === 'all') return prototypes
@@ -422,7 +671,7 @@ export const ChannelsScreen: FC = () => {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="örn. Bilim & Gelecek Shorts"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#4B5563]"
+                className={INPUT_CLS}
               />
             </div>
 
@@ -436,7 +685,7 @@ export const ChannelsScreen: FC = () => {
                 value={channelUrl}
                 onChange={(e) => setChannelUrl(e.target.value)}
                 placeholder="örn. https://youtube.com/@bilimgelecek"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#4B5563]"
+                className={INPUT_CLS}
               />
             </div>
 
@@ -449,7 +698,7 @@ export const ChannelsScreen: FC = () => {
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="örn. Popüler bilim, astrofizik ve teknoloji odaklı dikey video kurguları"
-                className="w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#4B5563] resize-none"
+                className={`${INPUT_CLS} resize-none`}
               />
             </div>
           </div>
@@ -527,7 +776,15 @@ export const ChannelsScreen: FC = () => {
           <div className="flex items-center border-b border-zinc-200 dark:border-zinc-800 gap-2 overflow-x-auto">
             {WORKSPACE_TABS.map((tab) => {
               const isActive = activeWorkspaceTab === tab.id
-              const count = tab.id === 'prototypes' ? prototypes.length : tab.id === 'tables' ? totalContent : 'Canlı'
+              const tplCount = (activeChannel && channelShortsTemplates[activeChannel.id]) ? channelShortsTemplates[activeChannel.id].length : 0
+              const count =
+                tab.id === 'prototypes'
+                  ? prototypes.length
+                  : tab.id === 'tables'
+                  ? totalContent
+                  : tab.id === 'templates'
+                  ? tplCount
+                  : 'Canlı'
               return (
                 <button
                   key={tab.id}
@@ -583,11 +840,8 @@ export const ChannelsScreen: FC = () => {
                     <h2 className="text-base sm:text-lg font-bold tracking-tight text-[#111827] dark:text-zinc-100 truncate">
                       {liveStats?.channel_name || activeChannel.name}
                     </h2>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800">
-                      <svg className="w-2.5 h-2.5 stroke-[3]" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      </svg>
-                      Doğrulanmış Kanal
+                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
+                      ✓ Doğrulanmış Kanal
                     </span>
                     <a
                       href={activeChannel.channel_url}
@@ -631,7 +885,7 @@ export const ChannelsScreen: FC = () => {
                   </div>
                   <div className="w-full h-2 rounded-full overflow-hidden bg-zinc-200 dark:bg-zinc-700 flex">
                     <div style={{ width: `${videoRatio}%` }} className="bg-blue-600" />
-                    <div style={{ width: `${shortsRatio}%` }} className="bg-rose-500" />
+                    <div style={{ width: `${shortsRatio}%` }} className="bg-cyan-500" />
                   </div>
                 </div>
 
@@ -639,7 +893,7 @@ export const ChannelsScreen: FC = () => {
                 <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 text-[11px] space-y-1">
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-600 dark:text-zinc-400 font-medium">YouTube:</span>
-                    <span className="font-semibold text-emerald-600 dark:text-emerald-400 font-mono text-[10px]">Bağlandı (Doğrulandı)</span>
+                    <span className="font-semibold text-cyan-600 dark:text-cyan-400 font-mono text-[10px]">Bağlandı (Doğrulandı)</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-zinc-500">TikTok / IG:</span>
@@ -652,10 +906,8 @@ export const ChannelsScreen: FC = () => {
               <div className={`${CARD_CLS} space-y-3`}>
                 <div className="flex items-center justify-between pb-2.5 border-b border-[#F3F4F6] dark:border-zinc-800">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
-                      </svg>
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                      <BoltIcon />
                     </div>
                     <div>
                       <h3 className="text-xs font-bold text-[#111827] dark:text-zinc-100 tracking-tight">
@@ -733,10 +985,8 @@ export const ChannelsScreen: FC = () => {
                   {/* Üst Başlık & Durum Rozetleri */}
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#F3F4F6] dark:border-zinc-800">
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center shrink-0">
-                        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 21a9.004 9.004 0 008.716-6.747M12 21a9.004 9.004 0 01-8.716-6.747M12 21c2.485 0 4.5-4.03 4.5-9S14.485 3 12 3m0 18c-2.485 0-4.5-4.03-4.5-9S9.515 3 12 3m0 0a8.997 8.997 0 017.843 4.582M12 3a8.997 8.997 0 00-7.843 4.582m15.686 0A11.953 11.953 0 0112 10.5c-2.998 0-5.74-1.1-7.843-2.918m15.686 0A8.959 8.959 0 0121 12c0 .778-.099 1.533-.284 2.253m0 0A17.919 17.919 0 0112 16.5c-3.162 0-6.133-.815-8.716-2.247m0 0A9.015 9.015 0 013 12c0-1.605.42-3.113 1.157-4.418" />
-                        </svg>
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
+                        <BoltIcon />
                       </div>
                       <div>
                         <h3 className="text-base font-bold text-[#111827] dark:text-zinc-100 tracking-tight">
@@ -749,8 +999,8 @@ export const ChannelsScreen: FC = () => {
                     </div>
 
                     <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-700 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center gap-1.5 font-semibold">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 flex items-center gap-1.5 font-semibold">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
                         BENCHMARK AKTİF
                       </span>
                       <span className="text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
@@ -763,50 +1013,25 @@ export const ChannelsScreen: FC = () => {
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     {/* Format Filtre Sekmeleri */}
                     <div className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/80 self-start">
-                      <button
-                        type="button"
-                        onClick={() => setPrototypeFormatFilter('all')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-                          prototypeFormatFilter === 'all'
-                            ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs border border-zinc-200/60 dark:border-zinc-700'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                        }`}
-                      >
-                        <span>Tümü</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300">
-                          {prototypes.length}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPrototypeFormatFilter('short')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-                          prototypeFormatFilter === 'short'
-                            ? 'bg-white dark:bg-zinc-900 text-rose-600 dark:text-rose-400 shadow-xs border border-rose-200/60 dark:border-rose-900/40'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                        }`}
-                      >
-                        <span>Dikey Shorts (9:16)</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
-                          {shortsPrototypesCount}
-                        </span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setPrototypeFormatFilter('video')}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-                          prototypeFormatFilter === 'video'
-                            ? 'bg-white dark:bg-zinc-900 text-blue-600 dark:text-blue-400 shadow-xs border border-blue-200/60 dark:border-blue-900/40'
-                            : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
-                        }`}
-                      >
-                        <span>Yatay Video (16:9)</span>
-                        <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
-                          {videosPrototypesCount}
-                        </span>
-                      </button>
+                      {([
+                        { id: 'all', label: 'Tümü', cnt: prototypes.length, act: 'text-zinc-900 dark:text-zinc-100 border-zinc-200/60 dark:border-zinc-700', bCls: 'bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300' },
+                        { id: 'short', label: 'Dikey Shorts (9:16)', cnt: shortsPrototypesCount, act: 'text-cyan-600 dark:text-cyan-400 border-cyan-200/60 dark:border-cyan-800/40', bCls: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400' },
+                        { id: 'video', label: 'Yatay Video (16:9)', cnt: videosPrototypesCount, act: 'text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40', bCls: 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400' },
+                      ] as const).map((f) => (
+                        <button
+                          key={f.id}
+                          type="button"
+                          onClick={() => setPrototypeFormatFilter(f.id)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
+                            prototypeFormatFilter === f.id
+                              ? `bg-white dark:bg-zinc-900 shadow-xs border ${f.act}`
+                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                          }`}
+                        >
+                          <span>{f.label}</span>
+                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${f.bCls}`}>{f.cnt}</span>
+                        </button>
+                      ))}
                     </div>
 
                     {/* Sağ: Kompakt Niş Konu Analiz Formu */}
@@ -819,9 +1044,7 @@ export const ChannelsScreen: FC = () => {
                           placeholder="Alt niş konusu filtrele / derin analiz..."
                           className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#F9FAFB] dark:bg-zinc-800/80 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#111827] focus:bg-white dark:focus:bg-zinc-800"
                         />
-                        <svg className="w-3.5 h-3.5 text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
-                        </svg>
+                        <span className="text-xs text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">⌕</span>
                       </div>
 
                       <button
@@ -857,14 +1080,21 @@ export const ChannelsScreen: FC = () => {
 
                   {/* Ferah Yatay Stüdyo Benchmark Kartları */}
                   <div className="space-y-4 pt-1">
-                    {filteredPrototypes.map((proto) => {
+                    {filteredPrototypes.length === 0 ? (
+                      <div className="p-8 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
+                        {isLiveStatsLoading || isChannelResearching
+                          ? 'Gerçek YouTube niş ve kanal verileri taranıyor...'
+                          : 'Henüz gerçek içerik verisi bulunamadı. Üstteki arama kutusundan konu taraması başlatın veya Canlı Verileri Yenile butonuna tıklayın.'}
+                      </div>
+                    ) : (
+                      filteredPrototypes.map((proto) => {
                       const isShort = proto.format === 'short'
                       return (
                         <div
                           key={proto.id}
                           className={`p-5 rounded-2xl border transition-all duration-200 space-y-3.5 ${
                             isShort
-                              ? 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-rose-400 dark:hover:border-rose-600/60 shadow-xs'
+                              ? 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-cyan-400 dark:hover:border-cyan-600/60 shadow-xs'
                               : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-400 dark:hover:border-blue-600/60 shadow-xs'
                           }`}
                         >
@@ -875,7 +1105,7 @@ export const ChannelsScreen: FC = () => {
                                 <span
                                   className={`px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${
                                     isShort
-                                      ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/20'
+                                      ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
                                       : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                                   }`}
                                 >
@@ -899,7 +1129,9 @@ export const ChannelsScreen: FC = () => {
                                 href={proto.globalUrl}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline inline-flex items-center gap-0.5 font-mono"
+                                className={`text-xs font-semibold ${
+                                  isShort ? 'text-cyan-600 dark:text-cyan-400' : 'text-blue-600 dark:text-blue-400'
+                                } hover:underline inline-flex items-center gap-0.5 font-mono`}
                                 title="YouTube üzerinde global referans içeriği aç"
                               >
                                 <span>YouTube Referansı</span>
@@ -914,7 +1146,7 @@ export const ChannelsScreen: FC = () => {
                                 <span>•</span>
                                 <span>{proto.durationText}</span>
                                 <span>•</span>
-                                <span className="text-emerald-600 dark:text-emerald-400 font-medium">{proto.retentionBadge}</span>
+                                <span className="text-cyan-600 dark:text-cyan-400 font-medium">{proto.retentionBadge}</span>
                               </div>
                             </div>
                           </div>
@@ -932,8 +1164,8 @@ export const ChannelsScreen: FC = () => {
                             </div>
 
                             {/* Sağ: Kanalınız İçin Prototip Kurgu */}
-                            <div className="p-3.5 rounded-xl bg-purple-50/50 dark:bg-purple-950/20 border border-purple-200/60 dark:border-purple-800/40 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-purple-600 dark:text-purple-400">
+                            <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 space-y-1.5">
+                              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
                                 <span>Kanalınız İçin Prototip Kurgu</span>
                                 <span className="text-zinc-400 font-normal lowercase font-sans">hazır kurgu</span>
                               </div>
@@ -969,7 +1201,8 @@ export const ChannelsScreen: FC = () => {
                           </div>
                         </div>
                       )
-                    })}
+                    })
+                    )}
                   </div>
                 </div>
               )}
@@ -982,44 +1215,17 @@ export const ChannelsScreen: FC = () => {
 
               {/* Örneklem Performans Metrikleri Grid'i (3 Kolon) */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {/* Örneklem Ortalama İzlenme */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 space-y-1 shadow-2xs">
-                  <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider block">
-                    Ort. Video İzlenme
-                  </span>
-                  <span className="text-2xl font-bold font-mono text-zinc-900 dark:text-zinc-100 block">
-                    {liveStats?.avg_views_formatted || (isLiveStatsLoading ? '...' : 'Veri Yok')}
-                  </span>
-                  <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-medium block">
-                    {allVideos.length > 0 ? `${allVideos.length} Gerçek İçerik İncelendi` : 'Canlı Veri Bekleniyor'}
-                  </span>
-                </div>
-
-                {/* Taranan Videolar */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 space-y-1 shadow-2xs">
-                  <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider block">
-                    İncelenen Videolar
-                  </span>
-                  <span className="text-2xl font-bold font-mono text-blue-600 dark:text-blue-400 block">
-                    {totalVideosCount} Video
-                  </span>
-                  <span className="text-[10px] text-zinc-400 font-medium block">
-                    Uzun Format Kurgular
-                  </span>
-                </div>
-
-                {/* Taranan Shorts */}
-                <div className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 space-y-1 shadow-2xs">
-                  <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider block">
-                    İncelenen Shorts
-                  </span>
-                  <span className="text-2xl font-bold font-mono text-rose-600 dark:text-rose-400 block">
-                    {totalShortsCount} Shorts
-                  </span>
-                  <span className="text-[10px] text-zinc-400 font-medium block">
-                    Dikey 9:16 Kurgular
-                  </span>
-                </div>
+                {[
+                  { title: 'Ort. Video İzlenme', val: liveStats?.avg_views_formatted || (isLiveStatsLoading ? '...' : 'Veri Yok'), sub: allVideos.length > 0 ? `${allVideos.length} Gerçek İçerik İncelendi` : 'Canlı Veri Bekleniyor', vCls: 'text-zinc-900 dark:text-zinc-100', sCls: 'text-emerald-600 dark:text-emerald-400' },
+                  { title: 'İncelenen Videolar', val: `${totalVideosCount} Video`, sub: 'Uzun Format Kurgular', vCls: 'text-blue-600 dark:text-blue-400', sCls: 'text-zinc-400' },
+                  { title: 'İncelenen Shorts', val: `${totalShortsCount} Shorts`, sub: 'Dikey 9:16 Kurgular', vCls: 'text-cyan-600 dark:text-cyan-400', sCls: 'text-zinc-400' },
+                ].map((m) => (
+                  <div key={m.title} className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 space-y-1 shadow-2xs">
+                    <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider block">{m.title}</span>
+                    <span className={`text-2xl font-bold font-mono block ${m.vCls}`}>{m.val}</span>
+                    <span className={`text-[10px] font-medium block ${m.sCls}`}>{m.sub}</span>
+                  </div>
+                ))}
               </div>
 
               {/* Analitik Grafikler (2 Ayrı Çizgi Grafiği + Daire Grafiği) */}
@@ -1040,7 +1246,7 @@ export const ChannelsScreen: FC = () => {
                     analytics={effectiveAnalytics}
                     title="Shorts İzlenme Trendi"
                     subtitle="3-içerik hareketli ortalama (Rolling Avg)"
-                    colorTheme="rose"
+                    colorTheme="cyan"
                   />
                 </div>
 
@@ -1074,7 +1280,7 @@ export const ChannelsScreen: FC = () => {
                 subtitle="YouTube üzerinden taranan herkese açık 9:16 Shorts dikey videoları."
                 countLabel={`${filteredShortVideos.length} Shorts Listelendi`}
                 badgeText="SHORTS"
-                badgeColor="rose"
+                badgeColor="cyan"
                 videos={filteredShortVideos}
                 isLoading={isLiveStatsLoading}
                 emptyMessage="Bu zaman aralığında Shorts bulunamadı."
@@ -1103,25 +1309,25 @@ export const ChannelsScreen: FC = () => {
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono text-xs">
                       {[
-                        { label: 'YouTube Resmi Abone', val: liveStats?.subscribers_formatted || 'Bilinmiyor', src: 'YouTube API', isLive: true },
-                        { label: 'Taranan Gerçek Video', val: `${totalVideosCount} Video`, src: 'YouTube /videos', isLive: true },
-                        { label: 'Taranan Gerçek Shorts', val: `${totalShortsCount} Shorts`, src: 'YouTube /shorts', isLive: true },
-                        { label: 'Örneklem Ort. İzlenme', val: liveStats?.avg_views_formatted || 'Hesaplanmadı', src: 'YouTube Ortalama', isLive: true },
-                        { label: 'Yerel Üretilen Senaryolar', val: `${activeChannel.metrics.total_scripts} Senaryo`, src: 'SQLite scripts', isLive: false, valCls: 'text-emerald-600 dark:text-emerald-400' },
-                        { label: 'Kanal Araştırma Havuzu', val: `${activeChannel.metrics.total_research} Fikir`, src: 'SQLite discovery', isLive: false },
-                        { label: 'Sistem Viral Puanı', val: `${activeChannel.metrics.avg_viral_score ?? 0} / 100`, src: 'AI Algoritma', isLive: false, valCls: 'text-amber-600 dark:text-amber-400' },
-                      ].map((row, idx) => (
+                        ['YouTube Resmi Abone', liveStats?.subscribers_formatted || 'Bilinmiyor', 'YouTube API', 1, ''],
+                        ['Taranan Gerçek Video', `${totalVideosCount} Video`, 'YouTube /videos', 1, ''],
+                        ['Taranan Gerçek Shorts', `${totalShortsCount} Shorts`, 'YouTube /shorts', 1, ''],
+                        ['Örneklem Ort. İzlenme', liveStats?.avg_views_formatted || 'Hesaplanmadı', 'YouTube Ortalama', 1, ''],
+                        ['Yerel Üretilen Senaryolar', `${activeChannel.metrics.total_scripts} Senaryo`, 'SQLite scripts', 0, 'text-cyan-600 dark:text-cyan-400'],
+                        ['Kanal Araştırma Havuzu', `${activeChannel.metrics.total_research} Fikir`, 'SQLite discovery', 0, ''],
+                        ['Sistem Viral Puanı', `${activeChannel.metrics.avg_viral_score ?? 0} / 100`, 'AI Algoritma', 0, 'text-cyan-600 dark:text-cyan-400'],
+                      ].map(([label, val, src, isLive, valCls], idx) => (
                         <tr key={idx} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
-                          <td className="py-3 px-3 font-sans font-medium text-zinc-900 dark:text-zinc-100">{row.label}</td>
-                          <td className={`py-3 px-3 font-bold ${row.valCls || 'text-zinc-900 dark:text-zinc-100'}`}>{row.val}</td>
-                          <td className="py-3 px-3 font-sans text-zinc-500">{row.src}</td>
+                          <td className="py-3 px-3 font-sans font-medium text-zinc-900 dark:text-zinc-100">{label}</td>
+                          <td className={`py-3 px-3 font-bold ${valCls || 'text-zinc-900 dark:text-zinc-100'}`}>{val}</td>
+                          <td className="py-3 px-3 font-sans text-zinc-500">{src}</td>
                           <td className="py-3 px-3 text-right">
                             <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border font-sans ${
-                              row.isLive
-                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20'
+                              isLive
+                                ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
                                 : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
                             }`}>
-                              {row.isLive ? 'Canlı Doğrulandı' : 'SQLite Bütünlüğü'}
+                              {isLive ? 'Canlı Doğrulandı' : 'SQLite Bütünlüğü'}
                             </span>
                           </td>
                         </tr>
@@ -1130,6 +1336,106 @@ export const ChannelsScreen: FC = () => {
                   </table>
                 </div>
               </div>
+            </div>
+          )}
+
+          {/* SEKME 4: KANAL SHORTS ŞABLONLARI (TIKTOK / REELS TARZI 9:16 VİDEO GRİD'İ) */}
+          {activeWorkspaceTab === 'templates' && (
+            <div className="space-y-4" data-testid="channel-templates-panel">
+              <div className="flex items-center justify-between pb-3 border-b border-[#F3F4F6] dark:border-zinc-800">
+                <div>
+                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight flex items-center gap-2">
+                    <span>Shorts Kurgu Şablonları</span>
+                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold border border-cyan-500/20">
+                      {((activeChannel && channelShortsTemplates[activeChannel.id]) || []).length} Şablon
+                    </span>
+                  </h4>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    3D derinlikli 9:16 video şablonları. Fare ile üzerine gelindiğinde otomatik oynatılır, tıklandığında kurgu detayına girilir.
+                  </p>
+                </div>
+              </div>
+
+              {/* 3D Yatay Açılı Monokrom Şablon Vitrini: Şablonlar ve Sağında Her Zaman Duran (+) Ekle Kartı */}
+              <div className="flex flex-wrap items-center gap-7 p-4 min-h-[380px] overflow-x-auto" style={{ perspective: '1400px' }}>
+                {((activeChannel && channelShortsTemplates[activeChannel.id]) || []).map((tpl) => (
+                  <ShortsTemplateCard
+                    key={tpl.id}
+                    template={tpl}
+                    onSelect={(t) => setSelectedShortsTemplate(t)}
+                    onDelete={(id) => handleDeleteShortsTemplate(id)}
+                  />
+                ))}
+
+                {/* Eğer hiç şablon yoksa tek başına durur; şablon varsa en son eklenen şablonun sağında yer alır */}
+                <AddShortsTemplateCard
+                  onClick={handlePickShortsTemplate}
+                  disabled={isPickingFile}
+                />
+              </div>
+
+              {/* Tıklanan Şablonun İçerisine Girildiğinde Açılan Kurgu ve Oynatıcı Paneli */}
+              {selectedShortsTemplate && (
+                <div
+                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs"
+                  onClick={() => setSelectedShortsTemplate(null)}
+                >
+                  <div
+                    className="bg-white dark:bg-zinc-900 rounded-3xl p-5 max-w-sm w-full space-y-4 border border-zinc-200 dark:border-zinc-800 shadow-2xl relative select-none"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+                      <div className="min-w-0 pr-2">
+                        <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 block uppercase tracking-wider">
+                          Shorts Şablon İnceleme
+                        </span>
+                        <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
+                          {selectedShortsTemplate.title}
+                        </h4>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedShortsTemplate(null)}
+                        className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1 text-xs cursor-pointer"
+                        title="Kapat"
+                      >
+                        ✕
+                      </button>
+                    </div>
+
+                    <div className="relative aspect-[9/16] w-full rounded-2xl overflow-hidden bg-black ring-1 ring-zinc-800 shadow-inner">
+                      <video
+                        src={toSafeAssetUrl(selectedShortsTemplate.filePath)}
+                        className="w-full h-full object-cover"
+                        controls
+                        autoPlay
+                        playsInline
+                        loop
+                      />
+                    </div>
+
+                    <div className="space-y-1 text-xs">
+                      <p className="font-mono text-[10.5px] text-zinc-400 truncate" title={selectedShortsTemplate.filePath}>
+                        {selectedShortsTemplate.filePath}
+                      </p>
+                      <span className="inline-flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400 text-[11px] font-semibold font-mono">
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
+                        Kurgu ve Ritim Analizine Hazır (9:16)
+                      </span>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedShortsTemplate(null)
+                      }}
+                      className="w-full py-2.5 rounded-xl text-xs font-bold bg-black dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-xs transition-all cursor-pointer"
+                    >
+                      Bu Şablonla İçerik ve Ses Kurgusu Başlat →
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
             </div>
@@ -1142,7 +1448,7 @@ export const ChannelsScreen: FC = () => {
   // 3. Durum: Henüz Hiç Kanal Yok (Tam Prototip: Create First Channel)
   if (channels.length === 0) {
     return (
-      <div className="flex-1 flex flex-col h-full overflow-hidden p-6 justify-center items-center">
+      <div className="flex-1 flex flex-col h-full overflow-hidden p-6 justify-center items-center studio-grid-lines">
         {isChannelsLoading ? (
           <div className="text-xs font-mono text-zinc-400">KANALLAR YÜKLENİYOR...</div>
         ) : (
@@ -1150,12 +1456,10 @@ export const ChannelsScreen: FC = () => {
             <button
               type="button"
               onClick={() => setIsCreating(true)}
-              className="w-32 h-32 rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 hover:bg-white/90 dark:hover:bg-zinc-800 flex items-center justify-center transition-all cursor-pointer group shadow-xs"
+              className="w-32 h-32 rounded-full border-2 border-dashed border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 hover:bg-white/90 dark:hover:bg-zinc-800 flex items-center justify-center transition-all cursor-pointer group shadow-xs text-4xl font-light text-zinc-500"
               aria-label="Create first channel"
             >
-              <svg className="w-10 h-10 text-zinc-600 dark:text-zinc-400 group-hover:text-zinc-900 transition-colors" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.25">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
-              </svg>
+              +
             </button>
             <h2 className="text-[26px] font-bold text-zinc-800 dark:text-zinc-100 mt-6 tracking-tight">Create first channel</h2>
             <p className="text-sm text-zinc-500 max-w-sm mt-2 leading-relaxed">
@@ -1170,7 +1474,7 @@ export const ChannelsScreen: FC = () => {
   // 4. Durum: Kanallar Var — Boşlukta Sürüklenebilir ve Taşınabilir Kutucuklar (Canvas)
   return (
     <div
-      className="flex-1 w-full h-full relative overflow-auto select-none p-6"
+      className="flex-1 w-full h-full relative overflow-auto select-none p-6 studio-grid-lines"
       data-testid="channels-canvas"
     >
       {/* Sol Üst Bilgi: Kanallar Başlığı ve Sayacı */}

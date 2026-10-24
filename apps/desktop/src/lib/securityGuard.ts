@@ -199,6 +199,7 @@ export const ALLOWED_PROXY_ROUTE_PREFIXES: readonly string[] = [
   '/api/v1/audio',
   '/api/v1/render',
   '/api/v1/pipeline',
+  '/api/v1/assistant',
   '/api/v1/jobs',
   '/api/v1/channels',
   '/api/v1/diagnostics',

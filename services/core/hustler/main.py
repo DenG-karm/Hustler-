@@ -39,8 +39,32 @@ from services.core.hustler.storage.jobs import JobRepository
 from services.core.hustler.storage.scripts import ScriptRepository
 from services.core.hustler.storage.sessions import ProjectSessionRepository
 from services.core.hustler.infrastructure.event_broker import EventBroker
+from services.core.hustler.infrastructure.llm_port import LLMPort
 
 log = structlog.get_logger()
+
+
+def _load_dotenv_if_needed() -> None:
+    """Üretim/sidecar çalışmasında kök .env dosyasındaki API anahtarlarını yükler."""
+    if os.environ.get("PYTEST_CURRENT_TEST"):
+        return
+    repo_env = Path(__file__).resolve().parents[3] / ".env"
+    if not repo_env.is_file():
+        return
+    for raw_line in repo_env.read_text(encoding="utf-8", errors="ignore").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        os.environ.setdefault(k.strip(), v.strip().strip('"').strip("'"))
+
+
+def _init_llm_port(app: FastAPI) -> None:
+    """GEMINI_API_KEY veya GROQ_API_KEY mevcutsa app.state.llm_port adaptörünü başlatır."""
+    _load_dotenv_if_needed()
+    api_key = os.environ.get("GEMINI_API_KEY", "").strip()
+    if api_key or os.environ.get("GROQ_API_KEY", "").strip():
+        app.state.llm_port = LLMPort(api_key=api_key, max_tokens=500_000)
 
 # ---------------------------------------------------------------------------
 # Session token — tek kaynak, sadece bu process'te yaşar
@@ -122,6 +146,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.script_repo = script_repo
     app.state.session_repo = session_repo
     app.state.channel_repo = channel_repo
+    _init_llm_port(app)
 
     from services.core.hustler.tasks.scheduler import maintenance_loop
     maint_task = asyncio.create_task(
