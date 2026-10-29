@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+import json
 import sqlite3
 import time
 from typing import Optional
@@ -15,6 +16,42 @@ logger = structlog.get_logger()
 
 # Kanal-Merkezli Mimari (Faz 2/2): channel_id ile kanala bağlanan tablolar
 CHANNEL_LINKED_TABLES: tuple[str, ...] = ("scripts", "discovery_videos")
+
+
+@dataclass
+class ChannelTemplate:
+    id: str
+    channel_id: str
+    title: str
+    base_video_path: str
+    duration_sec: float = 15.0
+    slots: list[dict[str, object]] = field(default_factory=list)
+    narration_script: str = ""
+    subtitle_cues: list[dict[str, object]] = field(default_factory=list)
+    voice_id: str = "21m00Tcm4TlvDq8ikWAM"
+    audio_path: str = ""
+    ass_path: str = ""
+    rendered_output_path: str = ""
+    created_at: float = 0.0
+    updated_at: float = 0.0
+
+    def to_dict(self) -> dict[str, object]:
+        return {
+            "id": self.id,
+            "channel_id": self.channel_id,
+            "title": self.title,
+            "base_video_path": self.base_video_path,
+            "duration_sec": self.duration_sec,
+            "slots": list(self.slots),
+            "narration_script": self.narration_script,
+            "subtitle_cues": list(self.subtitle_cues),
+            "voice_id": self.voice_id,
+            "audio_path": self.audio_path,
+            "ass_path": self.ass_path,
+            "rendered_output_path": self.rendered_output_path,
+            "created_at": self.created_at,
+            "updated_at": self.updated_at,
+        }
 
 
 def _empty_metrics() -> dict[str, int | float]:
@@ -146,6 +183,30 @@ class ChannelRepository:
             )
         except sqlite3.OperationalError:
             pass
+
+        await self.db.execute_write(
+            """
+            CREATE TABLE IF NOT EXISTS channel_templates (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                title TEXT NOT NULL,
+                base_video_path TEXT NOT NULL,
+                duration_sec REAL NOT NULL DEFAULT 15.0,
+                slots_json TEXT NOT NULL DEFAULT '[]',
+                narration_script TEXT NOT NULL DEFAULT '',
+                subtitle_cues_json TEXT NOT NULL DEFAULT '[]',
+                voice_id TEXT NOT NULL DEFAULT '21m00Tcm4TlvDq8ikWAM',
+                audio_path TEXT NOT NULL DEFAULT '',
+                ass_path TEXT NOT NULL DEFAULT '',
+                rendered_output_path TEXT NOT NULL DEFAULT '',
+                created_at REAL NOT NULL,
+                updated_at REAL NOT NULL
+            );
+            """
+        )
+        await self.db.execute_write(
+            "CREATE INDEX IF NOT EXISTS idx_templates_channel ON channel_templates(channel_id, created_at DESC);"
+        )
 
     async def create(
         self,
@@ -354,7 +415,187 @@ class ChannelRepository:
                 pass
 
         await self.db.execute_write(
+            "DELETE FROM channel_templates WHERE channel_id = ?;",
+            (channel_id,),
+        )
+        await self.db.execute_write(
             "DELETE FROM channels WHERE id = ?;",
             (channel_id,),
+        )
+        return True
+
+    @staticmethod
+    def _row_to_template(r: Sequence[object]) -> ChannelTemplate:
+        try:
+            slots_raw = json.loads(str(r[5] or "[]"))
+            slots = [s for s in slots_raw if isinstance(s, dict)] if isinstance(slots_raw, list) else []
+        except Exception:
+            slots = []
+        try:
+            cues_raw = json.loads(str(r[7] or "[]"))
+            cues = [c for c in cues_raw if isinstance(c, dict)] if isinstance(cues_raw, list) else []
+        except Exception:
+            cues = []
+        return ChannelTemplate(
+            id=str(r[0]),
+            channel_id=str(r[1]),
+            title=str(r[2]),
+            base_video_path=str(r[3]),
+            duration_sec=float(str(r[4]) if r[4] is not None else 15.0),
+            slots=slots,
+            narration_script=str(r[6] or ""),
+            subtitle_cues=cues,
+            voice_id=str(r[8] or "21m00Tcm4TlvDq8ikWAM"),
+            audio_path=str(r[9] or ""),
+            ass_path=str(r[10] or ""),
+            rendered_output_path=str(r[11] or ""),
+            created_at=float(str(r[12]) if r[12] is not None else 0.0),
+            updated_at=float(str(r[13]) if r[13] is not None else 0.0),
+        )
+
+    @staticmethod
+    def _pick(val: Optional[str], fallback: str) -> str:
+        return val if val is not None else fallback
+
+    async def create_template(
+        self,
+        channel_id: str,
+        title: str,
+        base_video_path: str,
+        duration_sec: float = 15.0,
+        slots: Optional[list[dict[str, object]]] = None,
+        narration_script: str = "",
+        voice_id: str = "21m00Tcm4TlvDq8ikWAM",
+        template_id: Optional[str] = None,
+    ) -> ChannelTemplate:
+        tid = template_id or f"tpl_{uuid.uuid4().hex[:10]}"
+        now = time.time()
+        clean_slots = slots or []
+        await self.db.execute_write(
+            """
+            INSERT INTO channel_templates (
+                id, channel_id, title, base_video_path, duration_sec,
+                slots_json, narration_script, subtitle_cues_json, voice_id,
+                audio_path, ass_path, rendered_output_path, created_at, updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, '[]', ?, '', '', '', ?, ?);
+            """,
+            (
+                tid,
+                channel_id,
+                title,
+                base_video_path,
+                duration_sec,
+                json.dumps(clean_slots, ensure_ascii=False),
+                narration_script,
+                voice_id,
+                now,
+                now,
+            ),
+        )
+        return ChannelTemplate(
+            id=tid,
+            channel_id=channel_id,
+            title=title,
+            base_video_path=base_video_path,
+            duration_sec=duration_sec,
+            slots=clean_slots,
+            narration_script=narration_script,
+            voice_id=voice_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+    async def list_templates(self, channel_id: str) -> list[ChannelTemplate]:
+        reader = await self.db.get_reader()
+        try:
+            async with reader.execute(
+                """
+                SELECT id, channel_id, title, base_video_path, duration_sec,
+                       slots_json, narration_script, subtitle_cues_json, voice_id,
+                       audio_path, ass_path, rendered_output_path, created_at, updated_at
+                FROM channel_templates
+                WHERE channel_id = ?
+                ORDER BY created_at DESC, rowid DESC;
+                """,
+                (channel_id,),
+            ) as cursor:
+                rows = await cursor.fetchall()
+        except sqlite3.OperationalError:
+            return []
+        finally:
+            await reader.close()
+        return [self._row_to_template(r) for r in rows]
+
+    async def get_template(self, channel_id: str, template_id: str) -> Optional[ChannelTemplate]:
+        reader = await self.db.get_reader()
+        try:
+            async with reader.execute(
+                """
+                SELECT id, channel_id, title, base_video_path, duration_sec,
+                       slots_json, narration_script, subtitle_cues_json, voice_id,
+                       audio_path, ass_path, rendered_output_path, created_at, updated_at
+                FROM channel_templates
+                WHERE id = ? AND channel_id = ?;
+                """,
+                (template_id, channel_id),
+            ) as cursor:
+                row = await cursor.fetchone()
+        except sqlite3.OperationalError:
+            return None
+        finally:
+            await reader.close()
+        return self._row_to_template(row) if row else None
+
+    async def update_template(
+        self,
+        channel_id: str,
+        template_id: str,
+        *,
+        title: Optional[str] = None,
+        duration_sec: Optional[float] = None,
+        slots: Optional[list[dict[str, object]]] = None,
+        narration_script: Optional[str] = None,
+        subtitle_cues: Optional[list[dict[str, object]]] = None,
+        voice_id: Optional[str] = None,
+        audio_path: Optional[str] = None,
+        ass_path: Optional[str] = None,
+        rendered_output_path: Optional[str] = None,
+    ) -> Optional[ChannelTemplate]:
+        ex = await self.get_template(channel_id, template_id)
+        if ex is None:
+            return None
+        now = time.time()
+        await self.db.execute_write(
+            """
+            UPDATE channel_templates
+            SET title = ?, duration_sec = ?, slots_json = ?, narration_script = ?,
+                subtitle_cues_json = ?, voice_id = ?, audio_path = ?, ass_path = ?,
+                rendered_output_path = ?, updated_at = ?
+            WHERE id = ? AND channel_id = ?;
+            """,
+            (
+                self._pick(title, ex.title),
+                duration_sec if duration_sec is not None else ex.duration_sec,
+                json.dumps(slots if slots is not None else ex.slots, ensure_ascii=False),
+                self._pick(narration_script, ex.narration_script),
+                json.dumps(subtitle_cues if subtitle_cues is not None else ex.subtitle_cues, ensure_ascii=False),
+                self._pick(voice_id, ex.voice_id),
+                self._pick(audio_path, ex.audio_path),
+                self._pick(ass_path, ex.ass_path),
+                self._pick(rendered_output_path, ex.rendered_output_path),
+                now,
+                template_id,
+                channel_id,
+            ),
+        )
+        return await self.get_template(channel_id, template_id)
+
+    async def delete_template(self, channel_id: str, template_id: str) -> bool:
+        existing = await self.get_template(channel_id, template_id)
+        if existing is None:
+            return False
+        await self.db.execute_write(
+            "DELETE FROM channel_templates WHERE id = ? AND channel_id = ?;",
+            (template_id, channel_id),
         )
         return True

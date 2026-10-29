@@ -1,5 +1,5 @@
 {
-  "timestamp": "2026-10-24T15:41:16.119681+00:00",
+  "timestamp": "2026-10-29T17:23:31.870095+00:00",
   "platform": "Windows 11",
   "python_version": "3.12.10",
   "all_passed": true,
@@ -7,73 +7,73 @@
     {
       "name": "Filtergraph AST Derleme Süresi",
       "metric_type": "p95",
-      "measured_ms": 1.51,
+      "measured_ms": 1.13,
       "budget_ms": 15.0,
       "passed": true,
       "unit": "ms",
-      "min_ms": 0.207,
-      "max_ms": 2.14,
-      "p95_ms": 1.51,
+      "min_ms": 0.135,
+      "max_ms": 1.195,
+      "p95_ms": 1.13,
       "details": {
-        "avg_ms": 0.816
+        "avg_ms": 0.308
       }
     },
     {
       "name": "SQLite Tek-Yazıcı Kuyruğu (Yazma)",
       "metric_type": "avg",
-      "measured_ms": 0.868,
+      "measured_ms": 0.28,
       "budget_ms": 5.0,
       "passed": true,
       "unit": "ms",
-      "min_ms": 0.133,
-      "max_ms": 2.96,
-      "p95_ms": 2.527,
+      "min_ms": 0.13,
+      "max_ms": 0.959,
+      "p95_ms": 0.622,
       "details": {}
     },
     {
       "name": "SQLite Okuma Gecikmesi (Okuma)",
       "metric_type": "avg",
-      "measured_ms": 0.335,
+      "measured_ms": 0.184,
       "budget_ms": 2.0,
       "passed": true,
       "unit": "ms",
-      "min_ms": 0.136,
-      "max_ms": 1.895,
-      "p95_ms": 1.061,
+      "min_ms": 0.137,
+      "max_ms": 0.515,
+      "p95_ms": 0.339,
       "details": {}
     },
     {
       "name": "Pydantic Kontrat Doğrulama Hızı",
       "metric_type": "avg",
-      "measured_ms": 0.079,
+      "measured_ms": 0.072,
       "budget_ms": 5.0,
       "passed": true,
       "unit": "ms",
       "min_ms": 0.05,
-      "max_ms": 0.758,
-      "p95_ms": 0.307,
+      "max_ms": 0.329,
+      "p95_ms": 0.137,
       "details": {
-        "p95_ms": 0.307
+        "p95_ms": 0.137
       }
     },
     {
       "name": "Doctor & Redactor Hızı (1 MB)",
       "metric_type": "avg",
-      "measured_ms": 22.511,
+      "measured_ms": 23.697,
       "budget_ms": 50.0,
       "passed": true,
       "unit": "ms",
-      "min_ms": 22.478,
-      "max_ms": 92.587,
-      "p95_ms": 92.587,
+      "min_ms": 22.668,
+      "max_ms": 29.188,
+      "p95_ms": 29.188,
       "details": {
-        "p95_ms": 92.587
+        "p95_ms": 29.188
       }
     },
     {
       "name": "Frontend JS Bundle (Ham / Uncompressed)",
       "metric_type": "size",
-      "measured_ms": 547.27,
+      "measured_ms": 547.46,
       "budget_ms": 550.0,
       "passed": true,
       "unit": "KB",
@@ -81,23 +81,23 @@
       "max_ms": 0.0,
       "p95_ms": 0.0,
       "details": {
-        "bytes": 560402.0,
+        "bytes": 560604.0,
         "file_count": 1.0
       }
     },
     {
       "name": "Frontend JS Bundle (Gzip)",
       "metric_type": "size",
-      "measured_ms": 149.95,
-      "budget_ms": 150.0,
+      "measured_ms": 152.07,
+      "budget_ms": 155.0,
       "passed": true,
       "unit": "KB",
       "min_ms": 0.0,
       "max_ms": 0.0,
       "p95_ms": 0.0,
       "details": {
-        "bytes": 153544.0,
-        "compression_ratio": 3.65,
+        "bytes": 155723.0,
+        "compression_ratio": 3.6,
         "file_count": 1.0
       }
     }

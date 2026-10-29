@@ -1,5 +1,6 @@
 import React from 'react'
 import { useFlowStore } from '../../store/flowStore'
+import { AppIcon } from './AppIcon'
 
 /**
  * Toast Bildirim Konteyneri (K-703)
@@ -54,7 +55,7 @@ export const ToastContainer: React.FC = () => {
                 aria-label="Kapat"
                 data-testid={`toast-close-${toast.id}`}
               >
-                ✕
+                <AppIcon name="close" className="w-3 h-3" />
               </button>
             </div>
           </div>

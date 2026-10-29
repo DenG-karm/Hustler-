@@ -155,11 +155,7 @@ export const createChannelSlice: StateCreator<FlowState, [], [], ChannelSlice> =
         activeChannelId: created.id,
       }))
       void get().fetchChannelLiveStats(created.id, true)
-      get().addToast({
-        title: 'Kanal Oluşturuldu',
-        message: `"${created.name}" kanalı çalışma alanına eklendi.`,
-        code: 'CHANNEL_CREATED',
-      })
+      get().addToast({ title: 'Kanal Oluşturuldu', message: `"${created.name}" eklendi.`, code: 'CHANNEL_CREATED' })
       return created
     } catch (err: unknown) {
       surfaceError(set, err)
@@ -168,23 +164,13 @@ export const createChannelSlice: StateCreator<FlowState, [], [], ChannelSlice> =
   },
 
   updateChannelSummary: async (channelId: string, aiSummary: string) => {
-    set((s) => ({
-      channels: s.channels.map((c) =>
-        c.id === channelId ? { ...c, ai_summary: aiSummary } : c
-      ),
-    }))
+    set((s) => ({ channels: s.channels.map((c) => (c.id === channelId ? { ...c, ai_summary: aiSummary } : c)) }))
     try {
       const savedMap = JSON.parse(localStorage.getItem('hustler_ai_summaries_v1') || '{}') as Record<string, string>
       savedMap[channelId] = aiSummary
       localStorage.setItem('hustler_ai_summaries_v1', JSON.stringify(savedMap))
-      get().addToast({
-        title: 'AI Algısı Güncellendi',
-        message: 'Kanalın yapay zeka içerik ve niş profili başarıyla kaydedildi.',
-        code: 'CHANNEL_SUMMARY_UPDATED',
-      })
-    } catch {
-      // Sessiz hata toleransı
-    }
+      get().addToast({ title: 'AI Algısı Güncellendi', message: 'Kanal profili kaydedildi.', code: 'CHANNEL_SUMMARY_UPDATED' })
+    } catch { /* ignore */ }
   },
 
   deleteChannel: async (id: string) => {

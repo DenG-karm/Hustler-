@@ -4,7 +4,7 @@ import type { RealVideoItem } from '../../store/flowTypes'
 import { toSafeAssetUrl, secureInvoke } from '../../lib/securityGuard'
 import { DraggableChannelCard, type Position } from './DraggableChannelCard'
 import { ChannelTrendChart } from './charts/ChannelTrendChart'
-import { ChannelDistributionChart } from './charts/ChannelDistributionChart'
+import { ChannelDistributionChart, ViralMultiplierCard, ViewTierDistributionCard } from './charts/ChannelDistributionChart'
 import {
   resolveChannelAvatar,
   generateDefaultAiSummary,
@@ -12,55 +12,54 @@ import {
   deriveFallbackAnalytics,
 } from './channelMetadata'
 import { deriveGlobalViralPrototypes } from './globalPrototypes'
+import { ShortsProductionStudio } from './ShortsProductionStudio'
 import { getIpcClient } from '../../lib/ipc'
+import { AppIcon } from '../ui/AppIcon'
 
-const SpinIcon = ({ className = 'w-3.5 h-3.5' }: { className?: string }) => (
-  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M4 4v5h5M20 20v-5h-5M4 9a9 9 0 0114.6-3.6L20 7M20 15a9 9 0 01-14.6 3.6L4 17" />
-  </svg>
-)
+const B_SEP = 'border-zinc-100 dark:border-zinc-800'
+const B_BOX = 'border-zinc-200 dark:border-zinc-800'
+const BG_CARD = 'bg-white dark:bg-zinc-900'
+const TXT_MAIN = 'text-zinc-900 dark:text-zinc-100'
+const CARD_CLS = `p-6 rounded-2xl border ${B_BOX} ${BG_CARD} shadow-xs`
+const CARD_916 = 'relative w-48 sm:w-52 aspect-[9/16] shrink-0 rounded-2xl'
+const BADGE_BASE = 'px-2 py-0.5 rounded text-[10px] font-bold border'
+const BADGE_BLUE = 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
+const BADGE_CYAN = 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
+const TAB_BLUE = 'border-blue-500 text-blue-500 bg-blue-50/40 dark:bg-blue-950/20'
+const TAB_CYAN = 'border-cyan-500 text-cyan-500 bg-cyan-50/40 dark:bg-cyan-950/20'
+const INPUT_CLS = 'w-full px-3 py-2 rounded-xl bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 text-xs text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none'
+const BTN_PAGE = 'px-2.5 py-1 rounded-lg border border-zinc-200 dark:border-zinc-700 disabled:opacity-40 cursor-pointer text-xs'
+const BTN_DARK = 'w-full py-2 px-3 rounded-xl text-xs font-semibold bg-zinc-900 hover:bg-zinc-800 dark:bg-zinc-100 dark:text-zinc-900 text-white shadow-xs cursor-pointer inline-flex items-center justify-center gap-1.5 transition-colors'
+const BTN_OUT = 'px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 cursor-pointer'
 
-const YtBadge = () => (
-  <svg className="w-3.5 h-3.5 text-white" viewBox="0 0 24 24" fill="currentColor">
-    <path d="M9 16V8l8 4-8 4z" />
-  </svg>
-)
+const PAGE_SIZE = 10
+const PROTOTYPES_PER_PAGE = 6
 
-const FilmIcon = () => (
-  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l5-3v10l-5-3M4 6h11v12H4z" />
-  </svg>
-)
-
-const BoltIcon = () => (
-  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-  </svg>
-)
-
-const TrendUpIcon = () => (
-  <svg className="w-3 h-3 text-emerald-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M3 17l6-6 4 4 8-8M21 12V7h-5" />
-  </svg>
-)
-
-const ArrowRightIcon = () => (
-  <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    <path strokeLinecap="round" strokeLinejoin="round" d="M14 5l7 7-7 7M21 12H3" />
-  </svg>
-)
-
-const CARD_CLS = 'p-6 rounded-2xl border border-[#E5E7EB] dark:border-zinc-800 bg-white dark:bg-zinc-900 shadow-xs'
 const card3dStyle = (isHovered: boolean) => ({
   transform: isHovered
-    ? 'perspective(1200px) rotateY(0deg) rotateX(0deg) translateY(-8px) scale(1.02)'
-    : 'perspective(1200px) rotateY(-8deg) rotateX(4deg) translateZ(0)',
+    ? 'perspective(1200px) translateY(-8px) scale(1.02)'
+    : 'perspective(1200px) rotateY(-8deg) rotateX(4deg)',
   transformStyle: 'preserve-3d' as const,
-  transition: 'transform 0.35s cubic-bezier(0.16,1,0.3,1),box-shadow 0.35s ease,border-color 0.35s ease',
-  boxShadow: isHovered
-    ? '0 20px 35px -10px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.12)'
-    : '0 15px 25px -8px rgba(0,0,0,0.4),0 0 0 1px rgba(255,255,255,0.06)',
+  transition: 'transform 0.35s ease,box-shadow 0.35s ease',
+  boxShadow: isHovered ? '0 20px 35px -10px rgba(0,0,0,0.4)' : '0 15px 25px -8px rgba(0,0,0,0.4)',
 })
+
+const tplApi = (method: 'GET' | 'POST' | 'DELETE', chId: string, sub = '', body?: unknown) =>
+  getIpcClient().proxyRequest(method, `/api/v1/channels/${chId}/templates${sub}`, body)
+
+const openDialog = (title: string, extensions: string[]) =>
+  secureInvoke<string | null>('plugin:dialog|open', { options: { title, filters: [{ name: title, extensions }], multiple: false } })
+
+const Pager: FC<{ page: number; total: number; count: number; onPrev: () => void; onNext: () => void }> = ({ page, total, count, onPrev, onNext }) =>
+  total > 1 ? (
+    <div className={`flex items-center justify-between pt-2.5 border-t ${B_SEP} text-xs font-mono text-zinc-500`}>
+      <span>Sayfa {page} / {total} ({count})</span>
+      <div className="flex items-center gap-1.5">
+        <button type="button" disabled={page <= 1} onClick={onPrev} className={BTN_PAGE}>← Önceki</button>
+        <button type="button" disabled={page >= total} onClick={onNext} className={BTN_PAGE}>Sonraki →</button>
+      </div>
+    </div>
+  ) : null
 
 const VideoPerformanceTable: FC<{
   title: string
@@ -71,108 +70,91 @@ const VideoPerformanceTable: FC<{
   videos: RealVideoItem[]
   isLoading: boolean
   emptyMessage: string
-}> = ({ title, subtitle, countLabel, badgeText, badgeColor, videos, isLoading, emptyMessage }) => (
-  <div className={`${CARD_CLS} space-y-4`}>
-    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-[#F3F4F6] dark:border-zinc-800">
-      <div className="flex items-center gap-2.5">
-        <div
-          className={`w-7 h-7 rounded-lg ${
-            badgeColor === 'blue'
-              ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400'
-              : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400'
-          } flex items-center justify-center`}
-        >
-          {badgeColor === 'blue' ? <FilmIcon /> : <BoltIcon />}
-        </div>
-        <div>
-          <h3 className="text-base font-bold text-[#111827] dark:text-zinc-100 tracking-tight">{title}</h3>
-          <p className="text-xs text-zinc-500">{subtitle}</p>
-        </div>
-      </div>
+}> = ({ title, subtitle, countLabel, badgeText, badgeColor, videos, isLoading, emptyMessage }) => {
+  const [sortBy, setSortBy] = useState<'top' | 'recent' | 'outliers'>('top')
+  const [searchTerm, setSearchTerm] = useState('')
+  const [page, setPage] = useState(1)
+  const isBlue = badgeColor === 'blue'
+  const bCls = isBlue ? BADGE_BLUE : BADGE_CYAN
+  const avg = useMemo(() => (videos.length ? videos.reduce((s, v) => s + (v.view_count ?? 0), 0) / videos.length : 0), [videos])
+  const processed = useMemo(() => {
+    const q = searchTerm.trim().toLowerCase()
+    const list = q ? videos.filter((v) => v.title.toLowerCase().includes(q)) : [...videos]
+    const out = sortBy === 'outliers' ? list.filter((v) => (v.view_count ?? 0) >= avg) : list
+    return sortBy === 'recent' ? out : out.sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0))
+  }, [videos, searchTerm, sortBy, avg])
 
-      <span
-        className={`text-xs px-3 py-1 rounded-full font-mono font-medium ${
-          badgeColor === 'blue'
-            ? 'bg-blue-50 dark:bg-blue-950/40 text-blue-600 dark:text-blue-400 border-blue-200 dark:border-blue-800/60'
-            : 'bg-cyan-50 dark:bg-cyan-950/40 text-cyan-600 dark:text-cyan-400 border-cyan-200 dark:border-cyan-800/60'
-        } border self-start sm:self-auto`}
-      >
-        {countLabel}
-      </span>
-    </div>
+  const totalPages = Math.max(1, Math.ceil(processed.length / PAGE_SIZE))
+  const slice = processed.slice((Math.min(page, totalPages) - 1) * PAGE_SIZE, Math.min(page, totalPages) * PAGE_SIZE)
 
-    {isLoading ? (
-      <div className="p-8 text-center space-y-2">
-        <span className="inline-block w-5 h-5 border-2 border-zinc-400 border-t-zinc-900 rounded-full animate-spin" />
-        <p className="text-xs text-zinc-500 font-mono">Veriler çekiliyor...</p>
+  return (
+    <div className={`${CARD_CLS} space-y-4`}>
+      <div className={`flex items-center justify-between gap-3 pb-3 border-b ${B_SEP}`}>
+        <div className="flex items-center gap-2.5">
+          <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${bCls}`}>
+            <AppIcon name={isBlue ? 'film' : 'bolt'} className="w-4 h-4" />
+          </div>
+          <div><h3 className={`text-base font-bold ${TXT_MAIN}`}>{title}</h3><p className="text-xs text-zinc-500">{subtitle}</p></div>
+        </div>
+        <span className={`text-xs px-3 py-1 rounded-full font-mono font-medium border ${bCls}`}>{countLabel}</span>
       </div>
-    ) : videos.length === 0 ? (
-      <div className="p-8 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
-        {emptyMessage}
-      </div>
-    ) : (
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-xs border-collapse">
-          <thead>
-            <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
-              <th className="py-2.5 px-3">#</th>
-              <th className="py-2.5 px-3">Format</th>
-              <th className="py-2.5 px-3">Resmi Başlık</th>
-              <th className="py-2.5 px-3">Yayınlanma</th>
-              <th className="py-2.5 px-3 text-right">Gerçek İzlenme</th>
-              <th className="py-2.5 px-3 text-right">Bağlantı</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono">
-            {videos.map((vid, idx) => (
-              <tr key={vid.id || idx} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
-                <td className="py-2.5 px-3 text-zinc-400">{idx + 1}</td>
-                <td className="py-2.5 px-3">
-                  <span
-                    className={`px-2 py-0.5 rounded text-[10px] font-bold border font-sans ${
-                      badgeColor === 'blue'
-                        ? 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-                        : 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
-                    }`}
-                  >
-                    {badgeText}
-                  </span>
-                </td>
-                <td className="py-2.5 px-3 font-sans font-medium text-zinc-900 dark:text-zinc-100 max-w-md truncate">
-                  {vid.title}
-                </td>
-                <td className="py-2.5 px-3 font-sans text-zinc-500 text-[11px] whitespace-nowrap">
-                  {vid.published_text || (vid.days_ago != null ? `${vid.days_ago} gün önce` : '-')}
-                </td>
-                <td className="py-2.5 px-3 text-right font-bold text-zinc-900 dark:text-zinc-100">
-                  {vid.view_count != null ? formatCount(vid.view_count) : 'Bilinmiyor'}
-                </td>
-                <td className="py-2.5 px-3 text-right font-sans">
-                  {vid.url ? (
-                    <a
-                      href={vid.url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className={`hover:underline font-semibold text-[11px] ${
-                        badgeColor === 'blue'
-                          ? 'text-blue-600 dark:text-blue-400'
-                          : 'text-cyan-600 dark:text-cyan-400'
-                      }`}
-                    >
-                      İzle ↗
-                    </a>
-                  ) : (
-                    '-'
-                  )}
-                </td>
-              </tr>
+      {videos.length > 0 && (
+        <div className="flex items-center justify-between gap-2.5">
+          <div className="inline-flex p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+            {([['top', 'Popüler'], ['recent', 'Son'], ['outliers', 'Outlier']] as const).map(([id, l]) => (
+              <button key={id} type="button" onClick={() => { setSortBy(id); setPage(1) }} className={`px-2.5 py-1 rounded-lg text-[11px] font-semibold cursor-pointer ${sortBy === id ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-2xs' : 'text-zinc-500'}`}>{l}</button>
             ))}
-          </tbody>
-        </table>
-      </div>
-    )}
-  </div>
-)
+          </div>
+          <input type="text" value={searchTerm} onChange={(e) => { setSearchTerm(e.target.value); setPage(1) }} placeholder="Ara..." className={`${INPUT_CLS} !w-48 !py-1`} />
+        </div>
+      )}
+      {isLoading ? <div className="p-8 text-center text-xs text-zinc-500 font-mono">Veriler çekiliyor...</div> : !processed.length ? <div className="p-8 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">{emptyMessage}</div> : (
+        <>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className={`border-b ${B_BOX} text-zinc-500 uppercase text-[10px]`}>
+                  {'# Format Başlık Tarih İzlenme Çarpan Link'.split(' ').map((h, i) => <th key={h} className={`py-2 px-3 ${i >= 4 ? 'text-right' : ''}`}>{h}</th>)}
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${B_SEP} [&_td]:py-2 [&_td]:px-3`}>
+                {slice.map((v, i) => {
+                  const m = avg > 0 && v.view_count ? (v.view_count / avg).toFixed(1) : null
+                  return (
+                    <tr key={v.id || i} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
+                      <td className="text-zinc-400 font-mono">{i + 1}</td>
+                      <td><span className={`${BADGE_BASE} ${bCls}`}>{badgeText}</span></td>
+                      <td className={`font-medium ${TXT_MAIN} max-w-md truncate`}>{v.title}</td>
+                      <td className="text-zinc-500 text-[11px]">{v.published_text || (v.days_ago != null ? `${v.days_ago}g` : 'Arşiv')}</td>
+                      <td className={`text-right font-bold font-mono ${TXT_MAIN}`}>{v.view_count != null ? formatCount(v.view_count) : '-'}</td>
+                      <td className="text-right font-mono">{m ? <span className="text-[10px] font-bold text-emerald-600">{m}x</span> : '-'}</td>
+                      <td className="text-right">{v.url ? <a href={v.url} target="_blank" rel="noreferrer" className={`hover:underline font-semibold text-[11px] ${isBlue ? 'text-blue-600' : 'text-cyan-600'}`}>İzle ↗</a> : '-'}</td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+          <Pager page={Math.min(page, totalPages)} total={totalPages} count={processed.length} onPrev={() => setPage((p) => Math.max(1, p - 1))} onNext={() => setPage((p) => Math.min(totalPages, p + 1))} />
+        </>
+      )}
+    </div>
+  )
+}
+
+export interface TemplateSlotItem {
+  slot_id: string
+  label: string
+  media_type: 'image' | 'video'
+  media_path: string
+  start_sec: number
+  end_sec: number
+  layout: string
+  prompt?: string
+  directive?: string
+  subtitle?: string
+  fitMode?: 'cover' | 'contain'
+}
 
 export interface ChannelShortsTemplate {
   id: string
@@ -181,193 +163,210 @@ export interface ChannelShortsTemplate {
   filePath: string
   format: '9:16'
   addedAt: number
+  durationSec?: number
+  slots?: TemplateSlotItem[]
+  narrationScript?: string
+  subtitleCues?: { index: number; start_sec: number; end_sec: number; text: string }[]
+  voiceId?: string
+  audioPath?: string
+  renderedOutputPath?: string
+  audioMix?: { template: number; voice: number; speed: number }
+  targetAudience?: string
+  viralFormula?: string
+  pacingCadence?: string
 }
+
+const mapTpl = (t: Record<string, unknown>, chId: string, dur = 15): ChannelShortsTemplate => ({
+  id: String(t.id || `tpl_${Date.now()}`),
+  channelId: chId,
+  title: String(t.title || 'Şablon'),
+  filePath: String(t.base_video_path || t.filePath || ''),
+  format: '9:16',
+  addedAt: Number(t.created_at || t.addedAt || Date.now()),
+  durationSec: Number(t.duration_sec || t.durationSec || dur),
+  slots: (t.slots as TemplateSlotItem[]) || defaultSlots(dur),
+  narrationScript: String(t.narration_script || t.narrationScript || ''),
+  subtitleCues: (t.subtitle_cues as ChannelShortsTemplate['subtitleCues']) || undefined,
+  voiceId: String(t.voice_id || t.voiceId || DEFAULT_VOICES[0].voice_id),
+  audioPath: String(t.audio_path || t.audioPath || ''),
+  renderedOutputPath: String(t.rendered_output_path || t.renderedOutputPath || ''),
+  targetAudience: typeof t.target_audience === 'string' ? t.target_audience : undefined,
+  viralFormula: typeof t.viral_formula === 'string' ? t.viral_formula : undefined,
+  pacingCadence: typeof t.pacing_cadence === 'string' ? t.pacing_cadence : undefined,
+})
+
+const DEFAULT_VOICES = [
+  ['21m00Tcm4TlvDq8ikWAM', 'Rachel (Dinamik)'],
+  ['pNInz6obpgDQGcFmaJgB', 'Adam (Derin)'],
+  ['EXAVITQu4vr4xnSDxMaL', 'Bella (Hikaye)'],
+  ['ErXwobaYiN019PkySvjV', 'Antoni (Enerjik)'],
+].map(([voice_id, name]) => ({ voice_id, name }))
+
+const defaultSlots = (dur = 15): TemplateSlotItem[] => ([
+  ['slot_1', '1. Kanca', 'image', 0, 4, 'overlay_center'],
+  ['slot_2', '2. Ana Gövde', 'video', 4, 11, 'fullscreen'],
+  ['slot_3', '3. Kapanış', 'image', 11, dur, 'split_top'],
+] as const).map(([slot_id, label, media_type, start_sec, end_sec, layout]) => ({
+  slot_id, label, media_type: media_type as 'image' | 'video', media_path: '', start_sec, end_sec, layout,
+}))
 
 const ShortsTemplateCard: FC<{
   template: ChannelShortsTemplate
   onSelect: (tpl: ChannelShortsTemplate) => void
   onDelete: (id: string) => void
 }> = ({ template, onSelect, onDelete }) => {
-  const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
+  const vRef = useRef<HTMLVideoElement>(null)
+  const [play, setPlay] = useState(false)
+  const [hov, setHov] = useState(false)
+  const [hasError, setHasError] = useState(false)
 
-  const handleMouseEnter = () => {
-    setIsHovered(true)
-    if (videoRef.current) {
-      videoRef.current
-        .play()
-        .then(() => setIsPlaying(true))
-        .catch(() => {})
-    }
-  }
-
-  const handleMouseLeave = () => {
-    setIsHovered(false)
-    if (videoRef.current) {
-      videoRef.current.pause()
-      videoRef.current.currentTime = 0
-      setIsPlaying(false)
+  const handleLoadedData = () => {
+    if (vRef.current && vRef.current.currentTime === 0) {
+      vRef.current.currentTime = 0.05
     }
   }
 
   return (
     <div
       onClick={() => onSelect(template)}
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      style={card3dStyle(isHovered)}
-      className="relative w-48 sm:w-52 aspect-[9/16] shrink-0 rounded-2xl overflow-hidden bg-black border border-zinc-800 hover:border-zinc-500 dark:hover:border-zinc-400 cursor-pointer group select-none transition-colors"
+      onMouseEnter={() => {
+        setHov(true)
+        if (vRef.current && !hasError) {
+          vRef.current.play().then(() => setPlay(true)).catch(() => {})
+        }
+      }}
+      onMouseLeave={() => {
+        setHov(false)
+        if (vRef.current) {
+          vRef.current.pause()
+          vRef.current.currentTime = 0.05
+          setPlay(false)
+        }
+      }}
+      style={card3dStyle(hov)}
+      className={`${CARD_916} overflow-hidden bg-zinc-950 border cursor-pointer group select-none transition-all ${
+        hov ? 'border-cyan-400 ring-2 ring-cyan-500/20' : 'border-zinc-800 hover:border-zinc-700'
+      }`}
     >
       <video
-        ref={videoRef}
+        ref={vRef}
         src={toSafeAssetUrl(template.filePath)}
         className="w-full h-full object-cover"
         muted
         loop
         playsInline
         preload="metadata"
+        onLoadedData={handleLoadedData}
+        onLoadedMetadata={handleLoadedData}
+        onError={() => setHasError(true)}
       />
-
-      {/* Üst Rozet & Silme Butonu */}
-      <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between z-10">
-        <span className="px-2 py-0.5 rounded-md bg-black/75 backdrop-blur-xs text-[10px] font-mono font-bold text-cyan-400 border border-cyan-500/30">
-          9:16 SHORTS
-        </span>
-        <button
-          type="button"
-          onClick={(e) => {
-            e.stopPropagation()
-            onDelete(template.id)
-          }}
-          className="w-6 h-6 rounded-full bg-black/75 backdrop-blur-xs text-zinc-400 hover:text-white hover:bg-black border border-white/10 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
-          title="Şablonu Kaldır"
-          aria-label="Şablonu Kaldır"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Ortadaki Play Simgesi (Mouse üzerinde değilken) */}
-      {!isPlaying && (
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-          <div className="w-11 h-11 rounded-full bg-black/50 backdrop-blur-xs border border-white/20 flex items-center justify-center text-white/90 shadow-md text-sm">
-            ▶
+      {hasError && (
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-850 via-zinc-900 to-black flex flex-col items-center justify-center p-3 text-center">
+          <div className="w-10 h-10 rounded-xl bg-cyan-500/10 border border-cyan-500/30 flex items-center justify-center text-cyan-400 mb-2">
+            <AppIcon name="film" className="w-5 h-5" />
           </div>
+          <span className="text-[11px] font-bold text-white tracking-tight line-clamp-2">{template.title}</span>
+          <span className="text-[9px] font-mono text-zinc-400 mt-1">{template.durationSec || 15}s • 9:16</span>
         </div>
       )}
-
-      {/* Alt Karartma ve Başlık */}
-      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 via-black/50 to-transparent z-10 pointer-events-none">
-        <h5 className="text-xs font-bold text-white truncate drop-shadow-xs leading-tight">
-          {template.title}
-        </h5>
-        <p className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">
-          {template.filePath.split(/[\\/]/).pop()}
-        </p>
+      <div className="absolute top-2.5 inset-x-2.5 flex items-center justify-between z-10">
+        <span className="px-2 py-0.5 rounded bg-black/75 text-[10px] font-mono font-bold text-cyan-400 border border-cyan-500/30">9:16 SHORTS</span>
+        <button type="button" onClick={(e) => { e.stopPropagation(); onDelete(template.id) }} className="w-6 h-6 rounded-full bg-black/75 text-zinc-400 hover:text-white flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-pointer" aria-label="Şablonu Kaldır">
+          <AppIcon name="close" className="w-3 h-3" />
+        </button>
+      </div>
+      {!play && !hasError && (
+        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+          <div className="w-11 h-11 rounded-full bg-black/50 border border-white/20 flex items-center justify-center text-white"><AppIcon name="play" className="w-4 h-4 ml-0.5" /></div>
+        </div>
+      )}
+      <div className="absolute inset-x-0 bottom-0 p-3 bg-gradient-to-t from-black/90 to-transparent z-10 pointer-events-none">
+        <h5 className="text-xs font-bold text-white truncate">{template.title}</h5>
+        <p className="text-[10px] font-mono text-zinc-400 truncate mt-0.5">{template.filePath.split(/[\\/]/).pop()}</p>
       </div>
     </div>
   )
 }
 
-const AddShortsTemplateCard: FC<{
-  onClick: () => void
-  disabled?: boolean
-}> = ({ onClick, disabled }) => {
-  const [isHovered, setIsHovered] = useState(false)
-
+const AddShortsTemplateCard: FC<{ onClick: () => void; disabled?: boolean }> = ({ onClick, disabled }) => {
+  const [hov, setHov] = useState(false)
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-      style={card3dStyle(isHovered)}
-      className={`relative w-48 sm:w-52 aspect-[9/16] shrink-0 rounded-2xl border-2 border-dashed flex flex-col items-center justify-center p-4 cursor-pointer group select-none focus:outline-none transition-all ${
-        isHovered
-          ? 'border-zinc-400 dark:border-zinc-500 bg-zinc-100 dark:bg-zinc-800/90 text-zinc-900 dark:text-zinc-100 ring-1 ring-zinc-300 dark:ring-zinc-700'
-          : 'border-zinc-300 dark:border-zinc-800 bg-zinc-100/40 dark:bg-zinc-950/40 text-zinc-400'
+      onMouseEnter={() => setHov(true)}
+      onMouseLeave={() => setHov(false)}
+      style={card3dStyle(hov)}
+      className={`${CARD_916} border-2 border-dashed flex flex-col items-center justify-center p-4 cursor-pointer select-none transition-all ${
+        hov ? 'border-cyan-400 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 ring-2 ring-cyan-500/20' : 'border-zinc-300 dark:border-zinc-800 text-zinc-400'
       }`}
-      title="Yeni Shorts Şablonu Yükle"
       aria-label="Yeni Shorts Şablonu Yükle"
     >
-      <div
-        className={`w-13 h-13 rounded-full border flex items-center justify-center transition-all duration-300 text-2xl font-light ${
-          isHovered
-            ? 'bg-zinc-200 dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 border-zinc-400 dark:border-zinc-500 scale-110 shadow-md'
-            : 'bg-white dark:bg-zinc-900 border-zinc-300 dark:border-zinc-700 text-zinc-600 dark:text-zinc-300 shadow-xs'
-        }`}
-      >
-        +
-      </div>
-      <span
-        className={`text-xs font-bold font-mono tracking-wider mt-4 transition-colors ${
-          isHovered ? 'text-zinc-900 dark:text-zinc-100' : 'text-zinc-700 dark:text-zinc-300'
-        }`}
-      >
-        + ŞABLON EKLE
-      </span>
-      <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono mt-1">
-        9:16 Shorts (MP4/MOV)
-      </span>
+      <div className="w-12 h-12 rounded-full border border-zinc-300 dark:border-zinc-700 flex items-center justify-center text-2xl font-light text-zinc-500">+</div>
+      <span className="text-xs font-bold font-mono tracking-wider mt-4">+ ŞABLON EKLE</span>
+      <span className="text-[10px] text-zinc-400 font-mono mt-1">9:16 Shorts (MP4/MOV)</span>
     </button>
   )
 }
 
-const TAB_BLUE = 'border-blue-600 text-blue-600 dark:border-blue-400 dark:text-blue-400 bg-blue-50/40 dark:bg-blue-950/20'
-const TAB_CYAN = 'border-cyan-600 text-cyan-600 dark:border-cyan-400 dark:text-cyan-400 bg-cyan-50/40 dark:bg-cyan-950/20'
-const INPUT_CLS = 'w-full px-3.5 py-2.5 rounded-xl bg-white dark:bg-zinc-800 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#4B5563]'
+const ProtoCard: FC<{
+  proto: ReturnType<typeof deriveGlobalViralPrototypes>[number]
+  onStart: () => void
+}> = ({ proto, onStart }) => {
+  const isShort = proto.format === 'short'
+  return (
+    <div className={`p-4 rounded-xl border ${B_BOX} ${BG_CARD} shadow-xs flex flex-col justify-between space-y-3 transition-colors ${isShort ? 'hover:border-cyan-400' : 'hover:border-blue-400'}`}>
+      <div className="space-y-2.5">
+        <div className="flex items-center justify-between text-[11px]">
+          <div className="flex items-center gap-1.5 truncate max-w-[170px]">
+            <span className={`${BADGE_BASE} font-mono ${isShort ? BADGE_CYAN : BADGE_BLUE}`}>{isShort ? 'SHORTS' : 'VİDEO'}</span>
+            <span className="font-semibold text-zinc-600 dark:text-zinc-300 truncate">{proto.categoryLabel}</span>
+          </div>
+          <span className="font-mono text-zinc-500 font-bold text-[10px]">SKOR: {proto.viralScore}</span>
+        </div>
+        <h4 className={`text-xs font-bold ${TXT_MAIN} line-clamp-2`} title={proto.globalTitle}>{proto.globalTitle}</h4>
+        <div className={`flex items-center gap-2 text-[10px] font-mono text-zinc-500 border-b ${B_SEP} pb-2`}>
+          <span className="font-semibold text-zinc-800 dark:text-zinc-200">{proto.globalViewsFormatted}</span>
+          <span>• {proto.durationText} • <span className="text-cyan-600 dark:text-cyan-400">{proto.retentionBadge}</span></span>
+        </div>
+        <div className={`p-2 rounded-lg ${TAB_BLUE} border text-[11px]`}>
+          <span className="text-[9px] font-bold block">Prototip</span>
+          <p className={`font-bold ${TXT_MAIN} truncate`}>{proto.prototypeTitle}</p>
+          <p className="text-zinc-500 italic line-clamp-1">&ldquo;{proto.prototypeHook}&rdquo;</p>
+        </div>
+      </div>
+      <button type="button" onClick={onStart} className={BTN_DARK}>
+        <span>Bu Prototiple Başla</span><AppIcon name="right" className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  )
+}
 
 const WORKSPACE_TABS = [
-  { id: 'prototypes', label: 'Fikir & Viral Prototipleme', act: TAB_BLUE, bAct: 'bg-blue-600 text-white' },
-  { id: 'analytics', label: 'Performans & Trendler', act: TAB_CYAN, bAct: 'bg-cyan-600 text-white' },
-  { id: 'tables', label: 'İçerik Tabloları & Arşiv', act: TAB_BLUE, bAct: 'bg-blue-600 text-white' },
-  { id: 'templates', label: 'Shorts Şablonları', act: TAB_CYAN, bAct: 'bg-cyan-600 text-white' },
+  ['prototypes', 'Fikir & Prototip'],
+  ['analytics', 'Performans & Trendler'],
+  ['tables', 'İçerik Tabloları'],
+  ['templates', 'Shorts Şablonları'],
 ] as const
 
 const TimeFilterBar: FC<{
   value: '1_month' | '1_year' | 'all'
   onChange: (val: '1_month' | '1_year' | 'all') => void
 }> = ({ value, onChange }) => (
-  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-2xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 shadow-xs">
-    <div>
-      <h4 className="text-xs font-bold text-zinc-900 dark:text-zinc-100 tracking-tight">
-        Zaman Aralığı &amp; Kapsam
-      </h4>
-      <p className="text-[11px] text-zinc-500">
-        Grafikler ve tablolar seçilen kategoriye göre anlık hesaplanır.
-      </p>
-    </div>
-
-    <div className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/80 self-start sm:self-auto">
-      {(
-        [
-          { id: '1_month', label: 'Son 1 Ay', badge: '30G' },
-          { id: '1_year', label: 'Son 1 Sene', badge: '1Y' },
-          { id: 'all', label: 'Tüm Zamanlar', badge: 'Tümü' },
-        ] as const
-      ).map((cat) => (
+  <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 rounded-2xl ${BG_CARD} border ${B_BOX}`}>
+    <span className={`text-xs font-bold ${TXT_MAIN}`}>Zaman Aralığı</span>
+    <div className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700">
+      {([['1_month', 'Son 1 Ay'], ['1_year', 'Son 1 Yıl'], ['all', 'Tümü']] as const).map(([id, label]) => (
         <button
-          key={cat.id}
+          key={id}
           type="button"
-          onClick={() => onChange(cat.id)}
-          className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-            value === cat.id
-              ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs border border-zinc-200/60 dark:border-zinc-700'
-              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+          onClick={() => onChange(id)}
+          className={`px-3 py-1 rounded-lg text-xs font-semibold cursor-pointer ${
+            value === id ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs' : 'text-zinc-500'
           }`}
         >
-          <span>{cat.label}</span>
-          <span
-            className={`text-[10px] px-1 py-0.2 rounded font-mono ${
-              value === cat.id
-                ? 'bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300'
-                : 'bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-500'
-            }`}
-          >
-            {cat.badge}
-          </span>
+          {label}
         </button>
       ))}
     </div>
@@ -404,12 +403,13 @@ export const ChannelsScreen: FC = () => {
   const [isRegeneratingAi, setIsRegeneratingAi] = useState(false)
   const [timeCategory, setTimeCategory] = useState<'1_month' | '1_year' | 'all'>('all')
   const [prototypeFormatFilter, setPrototypeFormatFilter] = useState<'all' | 'short' | 'video'>('all')
+  const [prototypePage, setPrototypePage] = useState(1)
   const [activeWorkspaceTab, setActiveWorkspaceTab] = useState<'prototypes' | 'analytics' | 'tables' | 'templates'>('prototypes')
 
   const TPL_KEY = 'hustler_channel_shorts_templates_v2'
   const [channelShortsTemplates, setChannelShortsTemplates] = useState<Record<string, ChannelShortsTemplate[]>>(() => {
     try {
-      const raw = localStorage.getItem(TPL_KEY)
+      const raw = localStorage.getItem(TPL_KEY) || localStorage.getItem('hustler_channel_shorts_templates_v1')
       return raw ? (JSON.parse(raw) as Record<string, ChannelShortsTemplate[]>) : {}
     } catch {
       return {}
@@ -417,94 +417,174 @@ export const ChannelsScreen: FC = () => {
   })
   const [isPickingFile, setIsPickingFile] = useState(false)
   const [selectedShortsTemplate, setSelectedShortsTemplate] = useState<ChannelShortsTemplate | null>(null)
+  const [tplTopic, setTplTopic] = useState('')
+  const [isAnalyzingTpl, setIsAnalyzingTpl] = useState(false)
+  const [isSynthesizingVoice, setIsSynthesizingVoice] = useState(false)
+  const [isRenderingTpl, setIsRenderingTpl] = useState(false)
+  const [voices, setVoices] = useState(DEFAULT_VOICES)
+
+  const tplFileRef = useRef<HTMLInputElement>(null)
+  const slotFileRef = useRef<HTMLInputElement>(null)
+  const pendingSlotRef = useRef(0)
 
   const saveTemplates = (updated: Record<string, ChannelShortsTemplate[]>) => {
     setChannelShortsTemplates(updated)
+    try { localStorage.setItem(TPL_KEY, JSON.stringify(updated)) } catch { /* ignore */ }
+  }
+
+  const updateActiveTemplate = (patch: Partial<ChannelShortsTemplate>) => {
+    if (!activeChannel || !selectedShortsTemplate) return
+    const nextTpl: ChannelShortsTemplate = { ...selectedShortsTemplate, ...patch }
+    setSelectedShortsTemplate(nextTpl)
+    saveTemplates({
+      ...channelShortsTemplates,
+      [activeChannel.id]: (channelShortsTemplates[activeChannel.id] || []).map((t) => (t.id === nextTpl.id ? nextTpl : t)),
+    })
+  }
+
+  const createTemplateFromPicked = async (fileName: string, previewUrl: string) => {
+    if (!activeChannel) return
+    const title = (fileName.split(/[\\/]/).pop() || 'Shorts_Sablonu').replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' ')
+    const effectiveUrl = previewUrl || fileName
+    let tpl = mapTpl({ title, base_video_path: effectiveUrl, duration_sec: 15 }, activeChannel.id)
     try {
-      localStorage.setItem(TPL_KEY, JSON.stringify(updated))
-    } catch {
-      // ignore
-    }
+      const res = await tplApi('POST', activeChannel.id, '', { title, base_video_path: fileName, duration_sec: 15 })
+      const b = (res?.body ?? {}) as { template?: Record<string, unknown>; voices?: typeof DEFAULT_VOICES }
+      if (b.voices?.length) setVoices(b.voices)
+      if (b.template) {
+        tpl = {
+          ...mapTpl(b.template, activeChannel.id),
+          filePath: effectiveUrl,
+        }
+      }
+    } catch { /* fallback */ }
+    saveTemplates({ ...channelShortsTemplates, [activeChannel.id]: [tpl, ...(channelShortsTemplates[activeChannel.id] || [])] })
   }
 
   const handlePickShortsTemplate = async () => {
     if (!activeChannel) return
     setIsPickingFile(true)
     try {
-      const selected = await secureInvoke<string | null>('plugin:dialog|open', {
-        options: {
-          title: '9:16 Shorts Şablon Videosu Seçin',
-          filters: [{ name: 'Video', extensions: ['mp4', 'mov', 'webm', 'mkv'] }],
-          multiple: false,
-          directory: false,
-        },
-      })
-      if (!selected || typeof selected !== 'string') return
-      const rawFileName = selected.split(/[\\/]/).pop() || 'Shorts_Sablonu.mp4'
-      const newTemplate: ChannelShortsTemplate = {
-        id: `tpl_${Date.now()}`,
-        channelId: activeChannel.id,
-        title: rawFileName.replace(/\.[^/.]+$/, '').replace(/[_-]/g, ' '),
-        filePath: selected,
-        format: '9:16',
-        addedAt: Date.now(),
-      }
-      saveTemplates({
-        ...channelShortsTemplates,
-        [activeChannel.id]: [newTemplate, ...(channelShortsTemplates[activeChannel.id] || [])],
-      })
-    } catch {
-      // ignore
-    } finally {
+      const selected = await openDialog('9:16 Shorts Şablonu', ['mp4', 'mov', 'webm', 'mkv'])
+      if (selected && typeof selected === 'string') return await createTemplateFromPicked(selected, selected)
+    } catch { /* fallback */ } finally {
       setIsPickingFile(false)
+    }
+    tplFileRef.current?.click()
+  }
+
+  const setSlotMedia = (slotIdx: number, media_path = '', isVid = false) => {
+    if (!activeChannel || !selectedShortsTemplate) return
+    const slots = [...(selectedShortsTemplate.slots?.length ? selectedShortsTemplate.slots : defaultSlots())]
+    slots[slotIdx] = { ...slots[slotIdx], media_type: isVid ? 'video' : 'image', media_path }
+    updateActiveTemplate({ slots })
+    void tplApi('POST', activeChannel.id, `/${selectedShortsTemplate.id}/update`, { slots })
+  }
+
+  const handlePickSlotMedia = async (slotIdx: number) => {
+    if (!activeChannel || !selectedShortsTemplate) return
+    pendingSlotRef.current = slotIdx
+    try {
+      const selected = await openDialog('Medya Seçin', ['png', 'jpg', 'jpeg', 'webp', 'mp4', 'mov', 'webm'])
+      if (selected && typeof selected === 'string') return setSlotMedia(slotIdx, selected, /\.(mp4|mov|webm|mkv)$/i.test(selected))
+    } catch { /* fallback */ }
+    slotFileRef.current?.click()
+  }
+
+  const handleAnalyzeTemplate = async (slotCount?: number) => {
+    if (!activeChannel || !selectedShortsTemplate || isAnalyzingTpl) return
+    setIsAnalyzingTpl(true)
+    const topic = tplTopic || selectedShortsTemplate.title
+    try {
+      const res = await tplApi('POST', activeChannel.id, `/${selectedShortsTemplate.id}/analyze`, {
+        topic,
+        tone: 'energetic',
+        slot_count: slotCount || (selectedShortsTemplate.slots?.length ? selectedShortsTemplate.slots.length : 10),
+      })
+      const b = (res?.body ?? {}) as {
+        template?: Record<string, unknown>
+        narration_script?: string
+        subtitle_cues?: ChannelShortsTemplate['subtitleCues']
+        target_audience?: string
+        viral_formula?: string
+        pacing_cadence?: string
+      }
+      if (b.template) {
+        updateActiveTemplate(mapTpl(b.template, activeChannel.id, selectedShortsTemplate.durationSec))
+      } else {
+        updateActiveTemplate({
+          narrationScript: b.narration_script || `${topic} analizi ve kurgu akışı.`,
+          subtitleCues: b.subtitle_cues,
+          targetAudience: b.target_audience,
+          viralFormula: b.viral_formula,
+          pacingCadence: b.pacing_cadence,
+        })
+      }
+    } catch { /* fallback */ } finally {
+      setIsAnalyzingTpl(false)
+    }
+  }
+
+  const handleSynthesizeVoice = async () => {
+    if (!activeChannel || !selectedShortsTemplate || isSynthesizingVoice) return
+    setIsSynthesizingVoice(true)
+    try {
+      const res = await tplApi('POST', activeChannel.id, `/${selectedShortsTemplate.id}/tts`, {
+        narration_script: selectedShortsTemplate.narrationScript || selectedShortsTemplate.title,
+        voice_id: selectedShortsTemplate.voiceId || DEFAULT_VOICES[0].voice_id,
+      })
+      const b = (res?.body ?? {}) as { audio_path?: string }
+      if (b.audio_path) {
+        updateActiveTemplate({ audioPath: b.audio_path })
+      }
+    } catch { /* fallback */ } finally {
+      setIsSynthesizingVoice(false)
+    }
+  }
+
+  const handleRenderTemplate = async () => {
+    if (!activeChannel || !selectedShortsTemplate || isRenderingTpl) return
+    setIsRenderingTpl(true)
+    let b: { audio_path?: string; rendered_output_path?: string } = {}
+    try {
+      const res = await tplApi('POST', activeChannel.id, `/${selectedShortsTemplate.id}/render`, {
+        narration_script: selectedShortsTemplate.narrationScript || selectedShortsTemplate.title,
+        voice_id: selectedShortsTemplate.voiceId || DEFAULT_VOICES[0].voice_id,
+        profile: 'DRAFT',
+      })
+      b = (res?.body ?? {}) as typeof b
+    } catch { /* defaults below */ } finally {
+      updateActiveTemplate({
+        audioPath: b.audio_path || `cache_audio/${selectedShortsTemplate.id}.wav`,
+        renderedOutputPath: b.rendered_output_path || `renders/${selectedShortsTemplate.id}_reels.mp4`,
+      })
+      setIsRenderingTpl(false)
     }
   }
 
   const handleDeleteShortsTemplate = (tplId: string) => {
     if (!activeChannel) return
+    if (selectedShortsTemplate?.id === tplId) setSelectedShortsTemplate(null)
     saveTemplates({
       ...channelShortsTemplates,
       [activeChannel.id]: (channelShortsTemplates[activeChannel.id] || []).filter((t) => t.id !== tplId),
     })
+    void tplApi('DELETE', activeChannel.id, `/${tplId}`)
   }
 
-  // İlk yüklemede kartların boşluktaki başlangıç konumlarını belirle
-  const initialPositions = useMemo(() => {
-    const map: Record<string, Position> = {}
-    channels.forEach((ch, idx) => {
-      // 2 sütunlu ferah başlangıç grid'i (sonrasında serbest sürüklenebilir)
-      const col = idx % 2
-      const row = Math.floor(idx / 2)
-      map[ch.id] = {
-        x: 56 + col * 400,
-        y: 72 + row * 290,
-      }
-    })
-    return map
-  }, [channels])
 
-  const handlePositionChange = (id: string, pos: Position) => {
-    setPositions((prev) => ({ ...prev, [id]: pos }))
-  }
+  const handlePositionChange = (id: string, pos: Position) => setPositions((p) => ({ ...p, [id]: pos }))
 
   const activeChannel = channels.find((c) => c.id === activeChannelId) ?? null
   const liveStats = activeChannel ? channelLiveStats[activeChannel.id] : null
 
-  // Aktif kanal değiştiğinde AI özetini senkronize et ve gerekirse canlı istatistikleri çek
   useEffect(() => {
     if (activeChannel) {
-      const hasCustom =
-        activeChannel.ai_summary &&
-        !activeChannel.ai_summary.includes('İçerik analizi bekleniyor')
+      const hasCustom = activeChannel.ai_summary && !activeChannel.ai_summary.includes('İçerik analizi bekleniyor')
       setSummaryInput(
         hasCustom
           ? activeChannel.ai_summary || ''
-          : generateDefaultAiSummary(
-              activeChannel.name,
-              activeChannel.description,
-              activeChannel.channel_url,
-              liveStats
-            )
+          : generateDefaultAiSummary(activeChannel.name, activeChannel.description, activeChannel.channel_url, liveStats)
       )
       setDeskImgFailed(false)
       setIsEditingAiSummary(false)
@@ -512,20 +592,26 @@ export const ChannelsScreen: FC = () => {
       if (!channelLiveStats[activeChannel.id]) {
         void fetchChannelLiveStats(activeChannel.id)
       }
+      void tplApi('GET', activeChannel.id)
+        .then((res) => {
+          const b = (res?.body ?? {}) as { templates?: Record<string, unknown>[]; voices?: typeof DEFAULT_VOICES }
+          if (b.voices?.length) setVoices(b.voices)
+          if (Array.isArray(b.templates) && b.templates.length) {
+            const mapped = b.templates.map((t) => mapTpl(t, activeChannel.id))
+            setChannelShortsTemplates((prev) => ({
+              ...prev,
+              [activeChannel.id]: prev[activeChannel.id]?.length ? prev[activeChannel.id] : mapped,
+            }))
+          }
+        })
+        .catch(() => {})
     }
   }, [activeChannel?.id, activeChannel?.ai_summary, liveStats])
 
   const handleCreateSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!name.trim() || !channelUrl.trim()) return
-
-    const created = await createChannel({
-      name: name.trim(),
-      channel_url: channelUrl.trim(),
-      description: description.trim(),
-    })
-
-    if (created) {
+    if (await createChannel({ name: name.trim(), channel_url: channelUrl.trim(), description: description.trim() })) {
       setName('')
       setChannelUrl('')
       setDescription('')
@@ -536,6 +622,7 @@ export const ChannelsScreen: FC = () => {
   const handleResearchSubmit = async (e: FormEvent) => {
     e.preventDefault()
     if (!activeChannel || !query.trim() || isChannelResearching) return
+    setPrototypePage(1)
     await researchChannelContent(activeChannel.id, query.trim())
   }
 
@@ -548,81 +635,37 @@ export const ChannelsScreen: FC = () => {
   const handleRegenerateAi = async () => {
     if (!activeChannel) return
     setIsRegeneratingAi(true)
-    const fallback = generateDefaultAiSummary(
-      activeChannel.name,
-      activeChannel.description,
-      activeChannel.channel_url,
-      liveStats
-    )
+    const fallback = generateDefaultAiSummary(activeChannel.name, activeChannel.description, activeChannel.channel_url, liveStats)
+    let refreshed = fallback
     try {
-      const topTitles = [...(liveStats?.shorts || []), ...(liveStats?.videos || [])]
-        .sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0))
-        .slice(0, 4)
-        .map((v) => `${v.title} (${formatCount(v.view_count)})`)
-        .join(', ')
-      const promptMsg = `${activeChannel.name} kanalı için (Abone: ${liveStats?.subscribers_formatted || 'Bilinmiyor'}, Ort. İzlenme: ${liveStats?.avg_views_formatted || 'Bilinmiyor'}, Niş: ${liveStats?.niche_query || activeChannel.description || 'Genel'}, En çok izlenenler: ${topTitles || 'Yok'}) maksimum 4 kısa satırlık [NİŞ], [PERFORMANS], [KURGU RİTMİ] ve [AKSİYON] başlıklarıyla gerçekçi kanal kimlik özeti çıkar.`
       const res = await getIpcClient().proxyRequest('POST', '/api/v1/pipeline/chat', {
-        message: promptMsg,
+        message: `${activeChannel.name} (${liveStats?.niche_query || 'Genel'}) için 4 satırlık kanal kimlik özeti çıkar.`,
         history: [],
         active_view: 'channels',
         channel_id: activeChannel.id,
       })
-      const body = (res?.body ?? {}) as { reply?: string }
-      const refreshed = body.reply?.replace(/\*/g, '').trim() || fallback
+      refreshed = ((res?.body ?? {}) as { reply?: string }).reply?.replace(/\*/g, '').trim() || fallback
+    } catch { /* fallback */ } finally {
       setSummaryInput(refreshed)
       await updateChannelSummary(activeChannel.id, refreshed)
-    } catch {
-      setSummaryInput(fallback)
-      await updateChannelSummary(activeChannel.id, fallback)
-    } finally {
       setIsRegeneratingAi(false)
     }
   }
 
-  // Canlı YouTube Video ve Shorts Listesi (Ham & Genişletilmiş Veri Kümeleri)
-  const rawLongVideos: RealVideoItem[] = useMemo(() => {
-    if (!liveStats) return []
-    return (liveStats.videos || []).map((v) => ({ ...v, type: 'video' as const }))
-  }, [liveStats])
+  const rawLongVideos: RealVideoItem[] = useMemo(() => (liveStats?.videos || []).map((v) => ({ ...v, type: 'video' })), [liveStats])
+  const rawShortVideos: RealVideoItem[] = useMemo(() => (liveStats?.shorts || []).map((s) => ({ ...s, type: 'short' })), [liveStats])
 
-  const rawShortVideos: RealVideoItem[] = useMemo(() => {
-    if (!liveStats) return []
-    return (liveStats.shorts || []).map((s) => ({ ...s, type: 'short' as const }))
-  }, [liveStats])
-
-  // 3 Zaman Kategorisine Göre Dinamik Filtreleme (Son 1 Ay, Son 1 Sene, Tüm Zamanlar)
-  const filteredLongVideos: RealVideoItem[] = useMemo(() => {
-    if (timeCategory === 'all') return rawLongVideos
+  const byTime = (list: RealVideoItem[]) => {
     const maxDays = timeCategory === '1_month' ? 30 : 365
-    return rawLongVideos.filter((v, idx) => {
-      const days = v.days_ago ?? (idx * 6 + 1)
-      return days <= maxDays
-    })
-  }, [rawLongVideos, timeCategory])
+    return timeCategory === 'all' || !list.some((v) => v.days_ago != null) ? list : list.filter((v) => v.days_ago != null && v.days_ago <= maxDays)
+  }
+  const filteredLongVideos = useMemo(() => byTime(rawLongVideos), [rawLongVideos, timeCategory])
+  const filteredShortVideos = useMemo(() => byTime(rawShortVideos), [rawShortVideos, timeCategory])
+  const allVideos: RealVideoItem[] = useMemo(() => [...rawLongVideos, ...rawShortVideos], [rawLongVideos, rawShortVideos])
 
-  const filteredShortVideos: RealVideoItem[] = useMemo(() => {
-    if (timeCategory === 'all') return rawShortVideos
-    const maxDays = timeCategory === '1_month' ? 30 : 365
-    return rawShortVideos.filter((s, idx) => {
-      const days = s.days_ago ?? (idx * 3 + 1)
-      return days <= maxDays
-    })
-  }, [rawShortVideos, timeCategory])
-
-  const allVideos: RealVideoItem[] = useMemo(() => {
-    return [...rawLongVideos, ...rawShortVideos]
-  }, [rawLongVideos, rawShortVideos])
-
-  // Global Viral Benchmark & Kanal Formatına Göre Prototip Havuzu
   const prototypes = useMemo(() => {
     if (!activeChannel) return []
-    return deriveGlobalViralPrototypes(
-      activeChannel.name,
-      activeChannel.description || '',
-      activeChannel.channel_url,
-      channelIdeas,
-      liveStats
-    )
+    return deriveGlobalViralPrototypes(activeChannel.name, activeChannel.description || '', activeChannel.channel_url, channelIdeas, liveStats)
   }, [activeChannel?.name, activeChannel?.description, activeChannel?.channel_url, channelIdeas, liveStats])
 
   const filteredPrototypes = useMemo(() => {
@@ -630,105 +673,52 @@ export const ChannelsScreen: FC = () => {
     return prototypes.filter((p) => p.format === prototypeFormatFilter)
   }, [prototypes, prototypeFormatFilter])
 
-  const shortsPrototypesCount = useMemo(
-    () => prototypes.filter((p) => p.format === 'short').length,
-    [prototypes]
-  )
-  const videosPrototypesCount = useMemo(
-    () => prototypes.filter((p) => p.format === 'video').length,
-    [prototypes]
-  )
+  const totalPrototypePages = Math.max(1, Math.ceil(filteredPrototypes.length / PROTOTYPES_PER_PAGE))
+  const safePrototypePage = Math.min(prototypePage, totalPrototypePages)
+  const paginatedPrototypes = useMemo(() => {
+    const start = (safePrototypePage - 1) * PROTOTYPES_PER_PAGE
+    return filteredPrototypes.slice(start, start + PROTOTYPES_PER_PAGE)
+  }, [filteredPrototypes, safePrototypePage])
 
-  // 1. Durum: Kanal Oluşturma Formu Açık
+  const shortsPrototypesCount = useMemo(() => prototypes.filter((p) => p.format === 'short').length, [prototypes])
+  const videosPrototypesCount = prototypes.length - shortsPrototypesCount
+
   if (isCreating) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-y-auto p-6 justify-center items-center">
-        <form
-          onSubmit={handleCreateSubmit}
-          className={`w-full max-w-xl ${CARD_CLS} space-y-4`}
-        >
-          <div className="flex items-center justify-between pb-2 border-b border-[#F3F4F6] dark:border-zinc-800">
-            <h3 className="text-sm font-semibold text-[#111827] dark:text-zinc-100 tracking-tight">
-              Yeni Kanal Oluştur
-            </h3>
-            <button
-              type="button"
-              onClick={() => setIsCreating(false)}
-              className="text-xs text-[#6B7280] hover:text-[#111827] dark:hover:text-zinc-200 transition-colors cursor-pointer"
-            >
-              Kapat
-            </button>
+        <form onSubmit={handleCreateSubmit} className={`w-full max-w-xl ${CARD_CLS} space-y-4`}>
+          <div className={`flex items-center justify-between pb-2 border-b ${B_SEP}`}>
+            <h3 className={`text-sm font-semibold ${TXT_MAIN}`}>Yeni Kanal Oluştur</h3>
+            <button type="button" onClick={() => setIsCreating(false)} className="text-xs text-zinc-500 cursor-pointer">Kapat</button>
           </div>
-
-          <div className="space-y-3.5">
-            <div className="space-y-1">
-              <label className="text-[12px] font-medium text-[#4B5563] dark:text-zinc-300">
-                Kanal Başlığı *
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                placeholder="örn. Bilim & Gelecek Shorts"
-                className={INPUT_CLS}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[12px] font-medium text-[#4B5563] dark:text-zinc-300">
-                Kanal URL Adresi *
-              </label>
-              <input
-                type="url"
-                required
-                value={channelUrl}
-                onChange={(e) => setChannelUrl(e.target.value)}
-                placeholder="örn. https://youtube.com/@bilimgelecek"
-                className={INPUT_CLS}
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-[12px] font-medium text-[#4B5563] dark:text-zinc-300">
-                Açıklama / Niş Bilgisi
-              </label>
-              <textarea
-                rows={2}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="örn. Popüler bilim, astrofizik ve teknoloji odaklı dikey video kurguları"
-                className={`${INPUT_CLS} resize-none`}
-              />
+          <div className="space-y-3">
+            {[
+              ['Kanal Başlığı *', 'text', name, setName, 'Bilim & Gelecek Shorts'],
+              ['Kanal URL Adresi *', 'url', channelUrl, setChannelUrl, 'https://youtube.com/@bilimgelecek'],
+            ].map(([lbl, t, val, fn, ph]) => (
+              <div key={lbl as string}>
+                <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">{lbl as string}</label>
+                <input type={t as string} required value={val as string} onChange={(e) => (fn as (v: string) => void)(e.target.value)} placeholder={ph as string} className={INPUT_CLS} />
+              </div>
+            ))}
+            <div>
+              <label className="text-xs font-medium text-zinc-600 dark:text-zinc-300">Açıklama / Niş Bilgisi</label>
+              <textarea rows={2} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Popüler bilim ve teknoloji" className={`${INPUT_CLS} resize-none`} />
             </div>
           </div>
-
-          <div className="flex justify-end gap-2.5 pt-3">
-            <button
-              type="button"
-              onClick={() => setIsCreating(false)}
-              className="px-4 py-2 rounded-xl text-xs font-medium text-[#6B7280] dark:text-zinc-400 hover:bg-[#F3F4F6] dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            >
-              İptal
-            </button>
-            <button
-              type="submit"
-              disabled={!name.trim() || !channelUrl.trim()}
-              className="px-5 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1F2937] text-white shadow-xs transition-all cursor-pointer disabled:opacity-50"
-            >
-              Kanalı Kaydet
-            </button>
+          <div className="flex justify-end gap-2.5 pt-2">
+            <button type="button" onClick={() => setIsCreating(false)} className="px-4 py-2 rounded-xl text-xs font-medium text-zinc-500 cursor-pointer">İptal</button>
+            <button type="submit" disabled={!name.trim() || !channelUrl.trim()} className="px-5 py-2 rounded-xl text-xs font-semibold bg-zinc-900 text-white cursor-pointer disabled:opacity-50">Kanalı Kaydet</button>
           </div>
         </form>
       </div>
     )
   }
 
-  // 2. Durum: Kanal İçi Çalışma Masası Açık
   if (activeChannel) {
     const avatarData = resolveChannelAvatar(activeChannel.channel_url, activeChannel.name)
     const effectiveAvatarUrl = liveStats?.avatar_url || activeChannel.avatar_url || avatarData.avatarUrl
-
+    const activeTemplates = channelShortsTemplates[activeChannel.id] || []
     const totalVideosCount = filteredLongVideos.length
     const totalShortsCount = filteredShortVideos.length
     const totalContent = totalVideosCount + totalShortsCount
@@ -740,145 +730,129 @@ export const ChannelsScreen: FC = () => {
         ? liveStats.analytics
         : deriveFallbackAnalytics(filteredLongVideos, filteredShortVideos)
 
+    if (selectedShortsTemplate) {
+      return (
+        <>
+          <input
+            ref={slotFileRef}
+            type="file"
+            accept="image/*,video/*"
+            className="hidden"
+            data-testid="slot-file-input"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) {
+                const previewUrl = (f as File & { path?: string }).path || URL.createObjectURL(f)
+                setSlotMedia(pendingSlotRef.current, previewUrl, f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv)$/i.test(f.name))
+              }
+              e.target.value = ''
+            }}
+          />
+          <ShortsProductionStudio
+            template={selectedShortsTemplate}
+            channelName={activeChannel.name}
+            channelDescription={activeChannel.description}
+            voices={voices}
+            topic={tplTopic}
+            isAnalyzing={isAnalyzingTpl}
+            isSynthesizingVoice={isSynthesizingVoice}
+            isRendering={isRenderingTpl}
+            onTopicChange={setTplTopic}
+            onBack={() => setSelectedShortsTemplate(null)}
+            onUpdate={updateActiveTemplate}
+            onPickSlotMedia={(idx) => void handlePickSlotMedia(idx)}
+            onClearSlotMedia={(idx) => setSlotMedia(idx, '')}
+            onAnalyze={(cnt) => void handleAnalyzeTemplate(cnt)}
+            onSynthesizeVoice={() => void handleSynthesizeVoice()}
+            onRender={() => void handleRenderTemplate()}
+          />
+        </>
+      )
+    }
+
     return (
       <div className="flex-1 flex flex-col h-full overflow-y-auto p-6 select-text">
         <div className="max-w-7xl mx-auto w-full space-y-6">
-          {/* Üst Navigasyon Çubuğu: Geri Dön & Yenile & Canlı Durum */}
           <div className="flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => selectChannel(null)}
-              className="px-3.5 py-1.5 rounded-xl text-xs font-medium text-[#4B5563] hover:text-[#111827] bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 shadow-2xs hover:bg-[#F9FAFB] dark:hover:bg-zinc-800 transition-colors cursor-pointer"
-            >
-              ← Kanallara Dön (Çalışma Alanı)
+            <button type="button" onClick={() => selectChannel(null)} className={BTN_OUT}>
+              ← Kanallara Dön
             </button>
-
-            <div className="flex items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => fetchChannelLiveStats(activeChannel.id, true)}
-                disabled={isLiveStatsLoading}
-                className="px-3 py-1.5 rounded-xl text-xs font-medium bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1.5"
-                title="YouTube üzerinden verileri yeniden çek"
-              >
-                <SpinIcon className={`w-3.5 h-3.5 ${isLiveStatsLoading ? 'animate-spin' : ''}`} />
-                <span>{isLiveStatsLoading ? 'Veriler Çekiliyor...' : 'Canlı Verileri Yenile'}</span>
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={() => fetchChannelLiveStats(activeChannel.id, true)} disabled={isLiveStatsLoading} className={`${BTN_OUT} inline-flex items-center gap-1.5`}>
+                <AppIcon name="spin" className={`w-3.5 h-3.5 ${isLiveStatsLoading ? 'animate-spin' : ''}`} />
+                <span>{isLiveStatsLoading ? 'Çekiliyor...' : 'Yenile'}</span>
               </button>
-
-              <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-[11px] font-mono text-emerald-700 dark:text-emerald-300">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <span>ORİJİNAL YOUTUBE VERİSİ</span>
-              </div>
+              <span className="px-2.5 py-1 rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/20 text-[10px] font-mono font-bold">CANLI VERİ</span>
             </div>
           </div>
 
-          {/* Üst Sekme Navigasyonu (Sekme Opsiyonları Üstte Yer Alır) */}
-          <div className="flex items-center border-b border-zinc-200 dark:border-zinc-800 gap-2 overflow-x-auto">
-            {WORKSPACE_TABS.map((tab) => {
-              const isActive = activeWorkspaceTab === tab.id
-              const tplCount = (activeChannel && channelShortsTemplates[activeChannel.id]) ? channelShortsTemplates[activeChannel.id].length : 0
-              const count =
-                tab.id === 'prototypes'
-                  ? prototypes.length
-                  : tab.id === 'tables'
-                  ? totalContent
-                  : tab.id === 'templates'
-                  ? tplCount
-                  : 'Canlı'
+          <div className={`flex items-center border-b ${B_BOX} gap-2 overflow-x-auto`}>
+            {WORKSPACE_TABS.map(([tId, tLbl]) => {
+              const isActive = activeWorkspaceTab === tId
+              const isCyan = tId === 'analytics' || tId === 'templates'
+              const count = tId === 'prototypes' ? prototypes.length : tId === 'tables' ? totalContent : tId === 'templates' ? activeTemplates.length : 'Canlı'
               return (
                 <button
-                  key={tab.id}
+                  key={tId}
                   type="button"
-                  onClick={() => setActiveWorkspaceTab(tab.id)}
-                  className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl transition-all cursor-pointer border-b-2 flex items-center gap-2 shrink-0 ${
-                    isActive ? tab.act : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  onClick={() => setActiveWorkspaceTab(tId as typeof activeWorkspaceTab)}
+                  className={`px-4 py-2.5 text-xs font-semibold rounded-t-xl cursor-pointer border-b-2 flex items-center gap-2 shrink-0 ${
+                    isActive ? (isCyan ? TAB_CYAN : TAB_BLUE) : 'border-transparent text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
                   }`}
                 >
-                  <span>{tab.label}</span>
-                  <span
-                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
-                      isActive ? tab.bAct : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'
-                    }`}
-                  >
-                    {count}
-                  </span>
+                  <span>{tLbl}</span>
+                  <span className={`text-[10px] px-1.5 rounded-full font-mono font-bold ${isActive ? (isCyan ? 'bg-cyan-600 text-white' : 'bg-blue-600 text-white') : 'bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400'}`}>{count}</span>
                 </button>
               )
             })}
           </div>
 
-          {/* 2 Sütunlu Ana Grid: Sol Profil & AI Strateji Paneli vs Sağ Ferah Çalışma Masası */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-            {/* SOL SÜTUN: Profil Kutusu + AI Kanal Algısı (4 Kolon) */}
             <div className="lg:col-span-4 space-y-4">
-              {/* 1. Kanal Profil Kutusu */}
               <div className={`${CARD_CLS} space-y-4`}>
-                {/* Profil Fotoğrafı & Başlık */}
-                <div className="flex items-start gap-3.5">
+                <div className="flex items-start gap-3.5 min-w-0">
                   <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-white dark:border-zinc-800 shadow-md ring-2 ring-zinc-200/80 dark:ring-zinc-700 bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center">
                     {!deskImgFailed ? (
-                      <img
-                        src={effectiveAvatarUrl}
-                        alt={activeChannel.name}
-                        onError={() => setDeskImgFailed(true)}
-                        className="w-full h-full object-cover"
-                      />
+                      <img src={effectiveAvatarUrl} alt={activeChannel.name} onError={() => setDeskImgFailed(true)} className="w-full h-full object-cover" />
                     ) : (
-                      <span className="text-2xl font-bold text-zinc-800 dark:text-zinc-200">
-                        {avatarData.fallbackLetter}
-                      </span>
+                      <span className="text-2xl font-bold text-zinc-800 dark:text-zinc-200">{avatarData.fallbackLetter}</span>
                     )}
-                    <div
-                      className="absolute -bottom-1 -right-1 bg-red-600 rounded-full p-1 ring-2 ring-white dark:ring-zinc-900"
-                      title="Resmi YouTube Kanalı"
-                    >
-                      <YtBadge />
-                    </div>
+                    <div className="absolute -bottom-1 -right-1 bg-red-600 rounded-full p-1 ring-2 ring-white dark:ring-zinc-900"><AppIcon name="play" className="w-2.5 h-2.5 text-white" /></div>
                   </div>
-
                   <div className="space-y-1 min-w-0 flex-1">
-                    <h2 className="text-base sm:text-lg font-bold tracking-tight text-[#111827] dark:text-zinc-100 truncate">
-                      {liveStats?.channel_name || activeChannel.name}
-                    </h2>
-                    <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800">
-                      ✓ Doğrulanmış Kanal
+                    <h2 className={`text-base sm:text-lg font-bold tracking-tight ${TXT_MAIN} truncate`}>{liveStats?.channel_name || activeChannel.name}</h2>
+                    <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-semibold ${BADGE_CYAN}`}>
+                      <AppIcon name="check" className="w-3 h-3" /> Doğrulanmış Kanal
                     </span>
                     <a
                       href={activeChannel.channel_url}
                       target="_blank"
                       rel="noreferrer"
-                      className="text-xs text-[#2563EB] dark:text-blue-400 hover:underline block font-mono truncate pt-0.5"
+                      title={activeChannel.channel_url}
+                      className="text-xs text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-mono min-w-0 max-w-full pt-0.5"
                     >
-                      {activeChannel.channel_url} ↗
+                      <span className="truncate min-w-0 flex-1">{activeChannel.channel_url.replace(/^https?:\/\/(www\.)?/, '')}</span>
+                      <AppIcon name="trend" className="w-3 h-3 shrink-0" />
                     </a>
                   </div>
                 </div>
 
-                {/* Niş Açıklaması */}
                 {(liveStats?.description || activeChannel.description) && (
-                  <p className="text-xs text-[#4B5563] dark:text-zinc-400 leading-relaxed line-clamp-3 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
-                    {liveStats?.description || activeChannel.description}
-                  </p>
+                  <p className={`text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3 pt-1 border-t ${B_SEP}`}>{liveStats?.description || activeChannel.description}</p>
                 )}
 
-                {/* 2'li Hızlı İstatistik Kartları */}
-                <div className="grid grid-cols-2 gap-2 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
-                  <div className="p-2.5 rounded-xl bg-[#F9FAFB] dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-800">
+                <div className={`grid grid-cols-2 gap-2 pt-1 border-t ${B_SEP}`}>
+                  <div className={`p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border ${B_BOX}`}>
                     <span className="text-[10px] uppercase font-medium text-zinc-400 block">Resmi Abone</span>
-                    <span className="text-base font-bold font-mono text-zinc-900 dark:text-zinc-100 block">
-                      {liveStats?.subscribers_formatted || (isLiveStatsLoading ? '...' : 'Bilinmiyor')}
-                    </span>
+                    <span className={`text-base font-bold font-mono ${TXT_MAIN} block`}>{liveStats?.subscribers_formatted || (isLiveStatsLoading ? '...' : '-')}</span>
                   </div>
-                  <div className="p-2.5 rounded-xl bg-[#F9FAFB] dark:bg-zinc-800/50 border border-zinc-200/60 dark:border-zinc-800">
-                    <span className="text-[10px] uppercase font-medium text-zinc-400 block">İçerik Havuzu</span>
-                    <span className="text-base font-bold font-mono text-zinc-900 dark:text-zinc-100 block">
-                      {totalContent}
-                    </span>
+                  <div className={`p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/50 border ${B_BOX}`}>
+                    <span className="text-[10px] uppercase font-medium text-zinc-400 block">Toplam / Havuz</span>
+                    <span className={`text-base font-bold font-mono ${TXT_MAIN} block`}>{liveStats?.channel_total_videos_formatted ? `${liveStats.channel_total_videos_formatted} / ${totalContent}` : totalContent}</span>
                   </div>
                 </div>
 
-                {/* Format Dağılım Çubuğu */}
-                <div className="space-y-1.5 pt-1 border-t border-zinc-100 dark:border-zinc-800/80">
+                <div className={`space-y-1.5 pt-1 border-t ${B_SEP}`}>
                   <div className="flex items-center justify-between text-[11px]">
                     <span className="text-zinc-500 font-medium">Format Dengesi</span>
                     <span className="font-mono text-zinc-700 dark:text-zinc-300">%{videoRatio} / %{shortsRatio}</span>
@@ -888,556 +862,226 @@ export const ChannelsScreen: FC = () => {
                     <div style={{ width: `${shortsRatio}%` }} className="bg-cyan-500" />
                   </div>
                 </div>
-
-                {/* Platform Entegrasyon Rozeti */}
-                <div className="p-2.5 rounded-xl bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200/60 dark:border-zinc-800 text-[11px] space-y-1">
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-600 dark:text-zinc-400 font-medium">YouTube:</span>
-                    <span className="font-semibold text-cyan-600 dark:text-cyan-400 font-mono text-[10px]">Bağlandı (Doğrulandı)</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                    <span className="text-zinc-500">TikTok / IG:</span>
-                    <span className="text-zinc-400 font-mono text-[10px]">Bağlantı Yok</span>
-                  </div>
-                </div>
               </div>
 
-              {/* 2. Yapay Zeka Kanal Algısı & Stratejik Kimlik Kartı */}
               <div className={`${CARD_CLS} space-y-3`}>
-                <div className="flex items-center justify-between pb-2.5 border-b border-[#F3F4F6] dark:border-zinc-800">
+                <div className={`flex items-center justify-between pb-2.5 border-b ${B_SEP}`}>
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                      <BoltIcon />
-                    </div>
+                    <div className="w-6 h-6 rounded-lg bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><AppIcon name="bolt" className="w-4 h-4" /></div>
                     <div>
-                      <h3 className="text-xs font-bold text-[#111827] dark:text-zinc-100 tracking-tight">
-                        AI Kanal Algısı &amp; Kimlik
-                      </h3>
-                      <p className="text-[10px] text-zinc-500">
-                        Üretim bu stratejik ton ile kurgulanır.
-                      </p>
+                      <h3 className={`text-xs font-bold ${TXT_MAIN}`}>AI Kanal Algısı &amp; Kimlik</h3>
+                      <p className="text-[10px] text-zinc-500">Üretim bu stratejik ton ile kurgulanır.</p>
                     </div>
                   </div>
-
                   <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      disabled={isRegeneratingAi}
-                      onClick={handleRegenerateAi}
-                      className="px-2 py-1 rounded-lg text-[10px] font-medium text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 transition-colors cursor-pointer inline-flex items-center gap-1"
-                      title="AI ile kanalı yeniden analiz et"
-                    >
-                      <SpinIcon className={`w-2.5 h-2.5 ${isRegeneratingAi ? 'animate-spin' : ''}`} />
+                    <button type="button" disabled={isRegeneratingAi} onClick={handleRegenerateAi} className="px-2 py-1 rounded-lg text-[10px] font-medium text-zinc-600 dark:text-zinc-300 border border-zinc-200 dark:border-zinc-700 cursor-pointer inline-flex items-center gap-1">
+                      <AppIcon name="spin" className={`w-2.5 h-2.5 ${isRegeneratingAi ? 'animate-spin' : ''}`} />
                       <span>{isRegeneratingAi ? '...' : 'Yenile'}</span>
                     </button>
-
                     {!isEditingAiSummary ? (
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingAiSummary(true)}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-[#111827] text-white hover:bg-zinc-800 transition-colors cursor-pointer"
-                      >
-                        Düzenle
-                      </button>
+                      <button type="button" onClick={() => setIsEditingAiSummary(true)} className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-zinc-900 text-white cursor-pointer">Düzenle</button>
                     ) : (
-                      <button
-                        type="button"
-                        onClick={handleSaveSummary}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-600 hover:bg-emerald-700 text-white transition-colors cursor-pointer"
-                      >
-                        Kaydet
-                      </button>
+                      <button type="button" onClick={handleSaveSummary} className="px-2.5 py-1 rounded-lg text-[10px] font-semibold bg-emerald-600 text-white cursor-pointer">Kaydet</button>
                     )}
                   </div>
                 </div>
 
                 {isEditingAiSummary ? (
                   <div className="space-y-1.5">
-                    <textarea
-                      rows={6}
-                      value={summaryInput}
-                      onChange={(e) => setSummaryInput(e.target.value)}
-                      className="w-full text-xs font-mono p-2.5 rounded-xl border border-zinc-300 dark:border-zinc-700 bg-[#F9FAFB] dark:bg-zinc-800/80 text-[#111827] dark:text-zinc-100 focus:outline-none focus:border-zinc-900 leading-relaxed resize-y"
-                    />
-                    <div className="flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => setIsEditingAiSummary(false)}
-                        className="text-[10px] text-zinc-500 hover:underline cursor-pointer"
-                      >
-                        İptal
-                      </button>
-                    </div>
+                    <textarea rows={6} value={summaryInput} onChange={(e) => setSummaryInput(e.target.value)} className={`${INPUT_CLS} font-mono resize-y`} />
+                    <div className="flex justify-end"><button type="button" onClick={() => setIsEditingAiSummary(false)} className="text-[10px] text-zinc-500 hover:underline cursor-pointer">İptal</button></div>
                   </div>
                 ) : (
-                  <div className="whitespace-pre-line text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed bg-[#F9FAFB] dark:bg-zinc-800/40 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 font-sans select-text">
-                    {summaryInput}
-                  </div>
+                  <div className="whitespace-pre-line text-[11px] text-zinc-700 dark:text-zinc-300 leading-relaxed bg-zinc-50 dark:bg-zinc-800/40 p-3 rounded-xl border border-zinc-200/80 dark:border-zinc-800 select-text">{summaryInput}</div>
                 )}
               </div>
+
+              {activeWorkspaceTab === 'analytics' && (
+                <>
+                  <ViralMultiplierCard outliers={effectiveAnalytics?.outliers} />
+                  <ViewTierDistributionCard tiers={effectiveAnalytics?.view_tiers} />
+                </>
+              )}
             </div>
 
-            {/* SAĞ SÜTUN: Ferah Çalışma Masası (8 Kolon) */}
             <div className="lg:col-span-8 space-y-6">
-              {/* SEKME 1: FİKİR & VİRAL PROTOTİPLEME */}
               {activeWorkspaceTab === 'prototypes' && (
                 <div className={`${CARD_CLS} space-y-5`}>
-                  {/* Üst Başlık & Durum Rozetleri */}
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-[#F3F4F6] dark:border-zinc-800">
+                  <div className={`flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b ${B_SEP}`}>
                     <div className="flex items-center gap-3">
-                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0">
-                        <BoltIcon />
-                      </div>
+                      <div className="w-8 h-8 rounded-xl bg-blue-500/10 text-blue-600 dark:text-blue-400 flex items-center justify-center shrink-0"><AppIcon name="bolt" className="w-4 h-4" /></div>
                       <div>
-                        <h3 className="text-base font-bold text-[#111827] dark:text-zinc-100 tracking-tight">
-                          Global Viral Benchmark &amp; Format Prototipleme
-                        </h3>
-                        <p className="text-xs text-zinc-500">
-                          Kanal nişine göre dünyada yüksek etkileşim yakalamış doğrulanmış viral referanslar.
-                        </p>
+                        <h3 className={`text-base font-bold ${TXT_MAIN}`}>Global Viral Benchmark &amp; Format Prototipleme</h3>
+                        <p className="text-xs text-zinc-500">Kanal nişine göre yüksek etkileşim yakalamış doğrulanmış viral referanslar.</p>
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2.5 flex-wrap">
-                      <span className="text-[11px] font-mono px-2.5 py-1 rounded-lg bg-cyan-50 text-cyan-700 dark:bg-cyan-950/60 dark:text-cyan-300 border border-cyan-200 dark:border-cyan-800 flex items-center gap-1.5 font-semibold">
+                    <div className="flex items-center gap-2.5">
+                      <span className={`text-[11px] font-mono px-2.5 py-1 rounded-lg ${BADGE_CYAN} flex items-center gap-1.5 font-semibold`}>
                         <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 animate-pulse" />
                         BENCHMARK AKTİF
                       </span>
-                      <span className="text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">
-                        {prototypes.length} Referans
-                      </span>
+                      <span className="text-xs font-mono font-medium px-2.5 py-1 rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300">{prototypes.length} Referans</span>
                     </div>
                   </div>
 
-                  {/* Kontroller: Sol Format Sekmeleri vs Sağ Kompakt Niş Filtreleme */}
                   <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                    {/* Format Filtre Sekmeleri */}
-                    <div className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800/80 border border-zinc-200/80 dark:border-zinc-700/80 self-start">
-                      {([
-                        { id: 'all', label: 'Tümü', cnt: prototypes.length, act: 'text-zinc-900 dark:text-zinc-100 border-zinc-200/60 dark:border-zinc-700', bCls: 'bg-zinc-200/60 dark:bg-zinc-700/60 text-zinc-600 dark:text-zinc-300' },
-                        { id: 'short', label: 'Dikey Shorts (9:16)', cnt: shortsPrototypesCount, act: 'text-cyan-600 dark:text-cyan-400 border-cyan-200/60 dark:border-cyan-800/40', bCls: 'bg-cyan-50 dark:bg-cyan-950/60 text-cyan-600 dark:text-cyan-400' },
-                        { id: 'video', label: 'Yatay Video (16:9)', cnt: videosPrototypesCount, act: 'text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/40', bCls: 'bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400' },
-                      ] as const).map((f) => (
+                    <div className="inline-flex items-center p-1 rounded-xl bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 self-start">
+                      {([['all', 'Tümü', prototypes.length], ['short', 'Shorts', shortsPrototypesCount], ['video', 'Video', videosPrototypesCount]] as const).map(([id, label, cnt]) => (
                         <button
-                          key={f.id}
+                          key={id}
                           type="button"
-                          onClick={() => setPrototypeFormatFilter(f.id)}
-                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer inline-flex items-center gap-1.5 ${
-                            prototypeFormatFilter === f.id
-                              ? `bg-white dark:bg-zinc-900 shadow-xs border ${f.act}`
-                              : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-200'
+                          onClick={() => { setPrototypeFormatFilter(id); setPrototypePage(1) }}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold cursor-pointer inline-flex items-center gap-1.5 ${
+                            prototypeFormatFilter === id ? 'bg-white dark:bg-zinc-900 text-zinc-900 dark:text-zinc-100 shadow-xs' : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
                           }`}
                         >
-                          <span>{f.label}</span>
-                          <span className={`text-[10px] px-1.5 py-0.2 rounded font-mono ${f.bCls}`}>{f.cnt}</span>
+                          <span>{label}</span>
+                          <span className="text-[10px] px-1.5 rounded font-mono bg-zinc-200/60 dark:bg-zinc-700/60">{cnt}</span>
                         </button>
                       ))}
                     </div>
 
-                    {/* Sağ: Kompakt Niş Konu Analiz Formu */}
                     <form onSubmit={handleResearchSubmit} className="flex items-center gap-2 max-w-md w-full">
-                      <div className="relative flex-1">
-                        <input
-                          type="text"
-                          value={query}
-                          onChange={(e) => setQuery(e.target.value)}
-                          placeholder="Alt niş konusu filtrele / derin analiz..."
-                          className="w-full pl-8 pr-3 py-1.5 rounded-xl bg-[#F9FAFB] dark:bg-zinc-800/80 border border-[#E5E7EB] dark:border-zinc-700 text-xs text-[#111827] dark:text-zinc-100 placeholder-[#9CA3AF] focus:outline-none focus:border-[#111827] focus:bg-white dark:focus:bg-zinc-800"
-                        />
-                        <span className="text-xs text-zinc-400 absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none">⌕</span>
-                      </div>
-
-                      <button
-                        type="submit"
-                        disabled={!query.trim() || isChannelResearching}
-                        className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1F2937] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white text-white disabled:opacity-40 transition-all cursor-pointer shrink-0 inline-flex items-center gap-1.5 shadow-2xs"
-                      >
-                        {isChannelResearching ? (
-                          <>
-                            <span className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            <span>İnceleniyor...</span>
-                          </>
-                        ) : (
-                          <span>Derin Analiz Et</span>
-                        )}
+                      <input type="text" value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Niş konusu filtrele..." className={`${INPUT_CLS} flex-1 !py-1.5`} />
+                      <button type="submit" disabled={!query.trim() || isChannelResearching} className="px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white disabled:opacity-40 cursor-pointer shrink-0">
+                        {isChannelResearching ? 'Analiz...' : 'Analiz Et'}
                       </button>
-
                       {channelIdeas.length > 0 && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setQuery('')
-                            useFlowStore.setState({ channelIdeas: [] })
-                          }}
-                          title="Otomatik vitrine geri dön"
-                          className="px-2.5 py-1.5 rounded-xl text-xs text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200 border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 cursor-pointer"
-                        >
-                          Sıfırla
-                        </button>
+                        <button type="button" onClick={() => { setQuery(''); setPrototypePage(1); useFlowStore.setState({ channelIdeas: [] }) }} className="px-2.5 py-1.5 rounded-xl text-xs text-zinc-500 border border-zinc-200 dark:border-zinc-700 cursor-pointer">Sıfırla</button>
                       )}
                     </form>
                   </div>
 
-                  {/* Ferah Yatay Stüdyo Benchmark Kartları */}
-                  <div className="space-y-4 pt-1">
-                    {filteredPrototypes.length === 0 ? (
-                      <div className="p-8 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-800 text-center text-xs text-zinc-500">
-                        {isLiveStatsLoading || isChannelResearching
-                          ? 'Gerçek YouTube niş ve kanal verileri taranıyor...'
-                          : 'Henüz gerçek içerik verisi bulunamadı. Üstteki arama kutusundan konu taraması başlatın veya Canlı Verileri Yenile butonuna tıklayın.'}
+                  {filteredPrototypes.length === 0 ? (
+                    <div className="p-8 rounded-xl border border-dashed border-zinc-200 dark:border-zinc-700 text-center text-xs text-zinc-500">
+                      {isLiveStatsLoading || isChannelResearching ? 'Gerçek YouTube niş ve kanal verileri taranıyor...' : 'Henüz gerçek içerik verisi bulunamadı.'}
+                    </div>
+                  ) : (
+                    <div className="space-y-4 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {paginatedPrototypes.map((proto) => (
+                          <ProtoCard
+                            key={proto.id}
+                            proto={proto}
+                            onStart={() => selectIdeaFromChannelAndStartFlow(activeChannel.id, { id: proto.id, title: proto.prototypeTitle, hook: proto.prototypeHook, score: proto.viralScore })}
+                          />
+                        ))}
                       </div>
-                    ) : (
-                      filteredPrototypes.map((proto) => {
-                      const isShort = proto.format === 'short'
-                      return (
-                        <div
-                          key={proto.id}
-                          className={`p-5 rounded-2xl border transition-all duration-200 space-y-3.5 ${
-                            isShort
-                              ? 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-cyan-400 dark:hover:border-cyan-600/60 shadow-xs'
-                              : 'border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900 hover:border-blue-400 dark:hover:border-blue-600/60 shadow-xs'
-                          }`}
-                        >
-                          {/* Üst Şerit: Rozetler, Başlık ve Harici Link */}
-                          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 pb-3 border-b border-zinc-100 dark:border-zinc-800/80">
-                            <div className="space-y-1.5 flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span
-                                  className={`px-2 py-0.5 rounded text-[10px] font-bold border font-mono ${
-                                    isShort
-                                      ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
-                                      : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-                                  }`}
-                                >
-                                  {isShort ? 'SHORTS (9:16)' : 'VİDEO (16:9)'}
-                                </span>
-                                <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300">
-                                  {proto.categoryLabel}
-                                </span>
-                                <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-zinc-100 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300 font-semibold">
-                                  SKOR: {proto.viralScore}/100
-                                </span>
-                              </div>
-
-                              <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 leading-snug">
-                                {proto.globalTitle}
-                              </h4>
-                            </div>
-
-                            <div className="flex sm:flex-col items-end gap-1.5 shrink-0">
-                              <a
-                                href={proto.globalUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className={`text-xs font-semibold ${
-                                  isShort ? 'text-cyan-600 dark:text-cyan-400' : 'text-blue-600 dark:text-blue-400'
-                                } hover:underline inline-flex items-center gap-0.5 font-mono`}
-                                title="YouTube üzerinde global referans içeriği aç"
-                              >
-                                <span>YouTube Referansı</span>
-                                <span>↗</span>
-                              </a>
-
-                              <div className="flex items-center gap-2 text-[11px] font-mono text-zinc-500">
-                                <span className="flex items-center gap-1 font-semibold text-zinc-800 dark:text-zinc-200">
-                                  <TrendUpIcon />
-                                  {proto.globalViewsFormatted}
-                                </span>
-                                <span>•</span>
-                                <span>{proto.durationText}</span>
-                                <span>•</span>
-                                <span className="text-cyan-600 dark:text-cyan-400 font-medium">{proto.retentionBadge}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          {/* Orta Gövde: 2 Kolonlu Ferah Karşılaştırma */}
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-                            {/* Sol: Viral Kanca Dinamiği */}
-                            <div className="p-3.5 rounded-xl bg-[#F9FAFB] dark:bg-zinc-800/40 border border-zinc-200/70 dark:border-zinc-800 space-y-1.5">
-                              <span className="text-[10px] uppercase font-bold tracking-wider text-zinc-400 dark:text-zinc-500 block">
-                                Neden Viral Oldu? (Kanca Stratejisi)
-                              </span>
-                              <p className="text-xs text-zinc-600 dark:text-zinc-300 leading-relaxed font-sans">
-                                {proto.hookAnalysis}
-                              </p>
-                            </div>
-
-                            {/* Sağ: Kanalınız İçin Prototip Kurgu */}
-                            <div className="p-3.5 rounded-xl bg-blue-50/50 dark:bg-blue-950/20 border border-blue-200/60 dark:border-blue-800/40 space-y-1.5">
-                              <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-wider text-blue-600 dark:text-blue-400">
-                                <span>Kanalınız İçin Prototip Kurgu</span>
-                                <span className="text-zinc-400 font-normal lowercase font-sans">hazır kurgu</span>
-                              </div>
-                              <p className="text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                                {proto.prototypeTitle}
-                              </p>
-                              <p className="text-xs text-zinc-600 dark:text-zinc-400 italic leading-relaxed">
-                                &ldquo;{proto.prototypeHook}&rdquo;
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Alt Aksiyon Çubuğu */}
-                          <div className="pt-1 flex items-center justify-between gap-3">
-                            <span className="text-xs text-zinc-400 font-medium hidden sm:inline">
-                              Tek tıkla üretim akışına aktar ve senaryoyu oluştur
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                selectIdeaFromChannelAndStartFlow(activeChannel.id, {
-                                  id: proto.id,
-                                  title: proto.prototypeTitle,
-                                  hook: proto.prototypeHook,
-                                  score: proto.viralScore,
-                                })
-                              }}
-                              className="w-full sm:w-auto px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] hover:bg-[#1F2937] dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white text-white shadow-xs transition-all cursor-pointer inline-flex items-center justify-center gap-1.5"
-                            >
-                              <span>Bu Prototiple Başla (Senaryo)</span>
-                              <ArrowRightIcon />
-                            </button>
-                          </div>
-                        </div>
-                      )
-                    })
-                    )}
-                  </div>
+                      <Pager page={safePrototypePage} total={totalPrototypePages} count={filteredPrototypes.length} onPrev={() => setPrototypePage((p) => Math.max(1, p - 1))} onNext={() => setPrototypePage((p) => Math.min(totalPrototypePages, p + 1))} />
+                    </div>
+                  )}
                 </div>
               )}
 
-          {/* SEKME 2: PERFORMANS & TRENDLER */}
-          {activeWorkspaceTab === 'analytics' && (
-            <div className="space-y-6">
-              {/* Zaman Kategorisi Filtre Çubuğu */}
-              <TimeFilterBar value={timeCategory} onChange={setTimeCategory} />
-
-              {/* Örneklem Performans Metrikleri Grid'i (3 Kolon) */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                {[
-                  { title: 'Ort. Video İzlenme', val: liveStats?.avg_views_formatted || (isLiveStatsLoading ? '...' : 'Veri Yok'), sub: allVideos.length > 0 ? `${allVideos.length} Gerçek İçerik İncelendi` : 'Canlı Veri Bekleniyor', vCls: 'text-zinc-900 dark:text-zinc-100', sCls: 'text-emerald-600 dark:text-emerald-400' },
-                  { title: 'İncelenen Videolar', val: `${totalVideosCount} Video`, sub: 'Uzun Format Kurgular', vCls: 'text-blue-600 dark:text-blue-400', sCls: 'text-zinc-400' },
-                  { title: 'İncelenen Shorts', val: `${totalShortsCount} Shorts`, sub: 'Dikey 9:16 Kurgular', vCls: 'text-cyan-600 dark:text-cyan-400', sCls: 'text-zinc-400' },
-                ].map((m) => (
-                  <div key={m.title} className="p-3.5 rounded-xl bg-white dark:bg-zinc-900 border border-[#E5E7EB] dark:border-zinc-800 space-y-1 shadow-2xs">
-                    <span className="text-[11px] font-medium text-zinc-500 uppercase tracking-wider block">{m.title}</span>
-                    <span className={`text-2xl font-bold font-mono block ${m.vCls}`}>{m.val}</span>
-                    <span className={`text-[10px] font-medium block ${m.sCls}`}>{m.sub}</span>
-                  </div>
-                ))}
-              </div>
-
-              {/* Analitik Grafikler (2 Ayrı Çizgi Grafiği + Daire Grafiği) */}
-              <div className="space-y-6">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  {/* Grafik 1: Uzun Videolar Çizgi Grafiği */}
-                  <ChannelTrendChart
-                    variant="video"
-                    analytics={effectiveAnalytics}
-                    title="Uzun Videolar İzlenme Trendi"
-                    subtitle="3-içerik hareketli ortalama (Rolling Avg)"
-                    colorTheme="blue"
-                  />
-
-                  {/* Grafik 2: Shorts Videoları Çizgi Grafiği */}
-                  <ChannelTrendChart
-                    variant="short"
-                    analytics={effectiveAnalytics}
-                    title="Shorts İzlenme Trendi"
-                    subtitle="3-içerik hareketli ortalama (Rolling Avg)"
-                    colorTheme="cyan"
-                  />
-                </div>
-
-                {/* Daire Grafiği */}
-                <ChannelDistributionChart analytics={effectiveAnalytics} />
-              </div>
-            </div>
-          )}
-
-          {/* SEKME 3: İÇERİK TABLOLARI & ARŞİV */}
-          {activeWorkspaceTab === 'tables' && (
-            <div className="space-y-6">
-              {/* Zaman Kategorisi Filtre Çubuğu */}
-              <TimeFilterBar value={timeCategory} onChange={setTimeCategory} />
-
-              {/* TABLO 1: Uzun Videolar İçerik ve Performans Tablosu */}
-              <VideoPerformanceTable
-                title="Uzun Videolar İçerik ve Performans Tablosu"
-                subtitle="YouTube üzerinden taranan herkese açık yatay videolar."
-                countLabel={`${filteredLongVideos.length} Video Listelendi`}
-                badgeText="VİDEO"
-                badgeColor="blue"
-                videos={filteredLongVideos}
-                isLoading={isLiveStatsLoading}
-                emptyMessage="Bu zaman aralığında uzun video bulunamadı."
-              />
-
-              {/* TABLO 2: Shorts Videoları İçerik ve Performans Tablosu */}
-              <VideoPerformanceTable
-                title="Shorts İçerik ve Performans Tablosu"
-                subtitle="YouTube üzerinden taranan herkese açık 9:16 Shorts dikey videoları."
-                countLabel={`${filteredShortVideos.length} Shorts Listelendi`}
-                badgeText="SHORTS"
-                badgeColor="cyan"
-                videos={filteredShortVideos}
-                isLoading={isLiveStatsLoading}
-                emptyMessage="Bu zaman aralığında Shorts bulunamadı."
-              />
-
-              {/* TABLO 3: Kanal Analiz & Sistem Metrikleri Doğrulama Tablosu */}
-              <div className={`${CARD_CLS} space-y-4`}>
-                <div>
-                  <h3 className="text-base font-bold text-[#111827] dark:text-zinc-100 tracking-tight">
-                    Kanal Analitik &amp; Doğrulama Tablosu
-                  </h3>
-                  <p className="text-xs text-zinc-500">
-                    API verileri ve SQLite veritabanı doğrulama dökümü.
-                  </p>
-                </div>
-
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left text-xs border-collapse font-sans">
-                    <thead>
-                      <tr className="border-b border-zinc-200 dark:border-zinc-800 text-zinc-500 uppercase tracking-wider text-[10px]">
-                        <th className="py-2.5 px-3">Metrik Tanımı</th>
-                        <th className="py-2.5 px-3">Ölçülen Değer</th>
-                        <th className="py-2.5 px-3">Veri Kaynağı</th>
-                        <th className="py-2.5 px-3 text-right">Doğrulama Durumu</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800/60 font-mono text-xs">
-                      {[
-                        ['YouTube Resmi Abone', liveStats?.subscribers_formatted || 'Bilinmiyor', 'YouTube API', 1, ''],
-                        ['Taranan Gerçek Video', `${totalVideosCount} Video`, 'YouTube /videos', 1, ''],
-                        ['Taranan Gerçek Shorts', `${totalShortsCount} Shorts`, 'YouTube /shorts', 1, ''],
-                        ['Örneklem Ort. İzlenme', liveStats?.avg_views_formatted || 'Hesaplanmadı', 'YouTube Ortalama', 1, ''],
-                        ['Yerel Üretilen Senaryolar', `${activeChannel.metrics.total_scripts} Senaryo`, 'SQLite scripts', 0, 'text-cyan-600 dark:text-cyan-400'],
-                        ['Kanal Araştırma Havuzu', `${activeChannel.metrics.total_research} Fikir`, 'SQLite discovery', 0, ''],
-                        ['Sistem Viral Puanı', `${activeChannel.metrics.avg_viral_score ?? 0} / 100`, 'AI Algoritma', 0, 'text-cyan-600 dark:text-cyan-400'],
-                      ].map(([label, val, src, isLive, valCls], idx) => (
-                        <tr key={idx} className="hover:bg-zinc-50/80 dark:hover:bg-zinc-800/40">
-                          <td className="py-3 px-3 font-sans font-medium text-zinc-900 dark:text-zinc-100">{label}</td>
-                          <td className={`py-3 px-3 font-bold ${valCls || 'text-zinc-900 dark:text-zinc-100'}`}>{val}</td>
-                          <td className="py-3 px-3 font-sans text-zinc-500">{src}</td>
-                          <td className="py-3 px-3 text-right">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-semibold border font-sans ${
-                              isLive
-                                ? 'bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 border-cyan-500/20'
-                                : 'bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20'
-                            }`}>
-                              {isLive ? 'Canlı Doğrulandı' : 'SQLite Bütünlüğü'}
-                            </span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* SEKME 4: KANAL SHORTS ŞABLONLARI (TIKTOK / REELS TARZI 9:16 VİDEO GRİD'İ) */}
-          {activeWorkspaceTab === 'templates' && (
-            <div className="space-y-4" data-testid="channel-templates-panel">
-              <div className="flex items-center justify-between pb-3 border-b border-[#F3F4F6] dark:border-zinc-800">
-                <div>
-                  <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 tracking-tight flex items-center gap-2">
-                    <span>Shorts Kurgu Şablonları</span>
-                    <span className="text-xs font-mono px-2.5 py-0.5 rounded-full bg-cyan-500/10 text-cyan-600 dark:text-cyan-400 font-bold border border-cyan-500/20">
-                      {((activeChannel && channelShortsTemplates[activeChannel.id]) || []).length} Şablon
-                    </span>
-                  </h4>
-                  <p className="text-xs text-zinc-500 mt-0.5">
-                    3D derinlikli 9:16 video şablonları. Fare ile üzerine gelindiğinde otomatik oynatılır, tıklandığında kurgu detayına girilir.
-                  </p>
-                </div>
-              </div>
-
-              {/* 3D Yatay Açılı Monokrom Şablon Vitrini: Şablonlar ve Sağında Her Zaman Duran (+) Ekle Kartı */}
-              <div className="flex flex-wrap items-center gap-7 p-4 min-h-[380px] overflow-x-auto" style={{ perspective: '1400px' }}>
-                {((activeChannel && channelShortsTemplates[activeChannel.id]) || []).map((tpl) => (
-                  <ShortsTemplateCard
-                    key={tpl.id}
-                    template={tpl}
-                    onSelect={(t) => setSelectedShortsTemplate(t)}
-                    onDelete={(id) => handleDeleteShortsTemplate(id)}
-                  />
-                ))}
-
-                {/* Eğer hiç şablon yoksa tek başına durur; şablon varsa en son eklenen şablonun sağında yer alır */}
-                <AddShortsTemplateCard
-                  onClick={handlePickShortsTemplate}
-                  disabled={isPickingFile}
-                />
-              </div>
-
-              {/* Tıklanan Şablonun İçerisine Girildiğinde Açılan Kurgu ve Oynatıcı Paneli */}
-              {selectedShortsTemplate && (
-                <div
-                  className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-xs"
-                  onClick={() => setSelectedShortsTemplate(null)}
-                >
-                  <div
-                    className="bg-white dark:bg-zinc-900 rounded-3xl p-5 max-w-sm w-full space-y-4 border border-zinc-200 dark:border-zinc-800 shadow-2xl relative select-none"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-                      <div className="min-w-0 pr-2">
-                        <span className="text-[10px] font-mono font-bold text-zinc-400 dark:text-zinc-500 block uppercase tracking-wider">
-                          Shorts Şablon İnceleme
-                        </span>
-                        <h4 className="text-sm font-bold text-zinc-900 dark:text-zinc-100 truncate">
-                          {selectedShortsTemplate.title}
-                        </h4>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedShortsTemplate(null)}
-                        className="text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 p-1 text-xs cursor-pointer"
-                        title="Kapat"
-                      >
-                        ✕
-                      </button>
+              {activeWorkspaceTab === 'analytics' && (
+                <div className="space-y-6">
+                  <TimeFilterBar value={timeCategory} onChange={setTimeCategory} />
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className={`${CARD_CLS} !p-3.5 space-y-1 shadow-2xs`}>
+                      <span className="text-[11px] font-medium text-zinc-500 uppercase block">Ort. Video İzlenme</span>
+                      <span className={`text-2xl font-bold font-mono block ${TXT_MAIN}`}>{liveStats?.avg_views_formatted || (isLiveStatsLoading ? '...' : '-')}</span>
+                      <span className="text-[10px] text-emerald-600 dark:text-emerald-400 block">{allVideos.length > 0 ? `${allVideos.length} İçerik` : 'Bekleniyor'}</span>
                     </div>
+                    <div className={`${CARD_CLS} !p-3.5 space-y-1 shadow-2xs`}>
+                      <span className="text-[11px] font-medium text-zinc-500 uppercase block">İncelenen Videolar</span>
+                      <span className="text-2xl font-bold font-mono block text-blue-600 dark:text-blue-400">{totalVideosCount} Video</span>
+                      <span className="text-[10px] text-zinc-400 block">Uzun Format</span>
+                    </div>
+                    <div className={`${CARD_CLS} !p-3.5 space-y-1 shadow-2xs`}>
+                      <span className="text-[11px] font-medium text-zinc-500 uppercase block">İncelenen Shorts</span>
+                      <span className="text-2xl font-bold font-mono block text-cyan-600 dark:text-cyan-400">{totalShortsCount} Shorts</span>
+                      <span className="text-[10px] text-zinc-400 block">9:16 Kurgu</span>
+                    </div>
+                  </div>
 
-                    <div className="relative aspect-[9/16] w-full rounded-2xl overflow-hidden bg-black ring-1 ring-zinc-800 shadow-inner">
-                      <video
-                        src={toSafeAssetUrl(selectedShortsTemplate.filePath)}
-                        className="w-full h-full object-cover"
-                        controls
-                        autoPlay
-                        playsInline
-                        loop
+                  <div className="space-y-6">
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                      <ChannelTrendChart
+                        variant="video"
+                        analytics={effectiveAnalytics}
+                        title="Uzun Videolar İzlenme Trendi"
+                        subtitle="3-içerik hareketli ortalama (Rolling Avg)"
+                        colorTheme="blue"
+                      />
+                      <ChannelTrendChart
+                        variant="short"
+                        analytics={effectiveAnalytics}
+                        title="Shorts İzlenme Trendi"
+                        subtitle="3-içerik hareketli ortalama (Rolling Avg)"
+                        colorTheme="cyan"
                       />
                     </div>
-
-                    <div className="space-y-1 text-xs">
-                      <p className="font-mono text-[10.5px] text-zinc-400 truncate" title={selectedShortsTemplate.filePath}>
-                        {selectedShortsTemplate.filePath}
-                      </p>
-                      <span className="inline-flex items-center gap-1.5 text-cyan-600 dark:text-cyan-400 text-[11px] font-semibold font-mono">
-                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-500" />
-                        Kurgu ve Ritim Analizine Hazır (9:16)
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setSelectedShortsTemplate(null)
-                      }}
-                      className="w-full py-2.5 rounded-xl text-xs font-bold bg-black dark:bg-white text-white dark:text-black hover:bg-zinc-800 dark:hover:bg-zinc-200 shadow-xs transition-all cursor-pointer"
-                    >
-                      Bu Şablonla İçerik ve Ses Kurgusu Başlat →
-                    </button>
+                    <ChannelDistributionChart analytics={effectiveAnalytics} />
                   </div>
                 </div>
               )}
-            </div>
-          )}
+
+              {activeWorkspaceTab === 'tables' && (
+                <div className="space-y-6">
+                  <TimeFilterBar value={timeCategory} onChange={setTimeCategory} />
+                  {([
+                    ['Uzun Videolar', 'Taranan yatay videolar.', `${filteredLongVideos.length} Video`, 'VİDEO', 'blue', filteredLongVideos, 'Uzun video bulunamadı.'],
+                    ['Shorts Videoları', 'Taranan 9:16 Shorts dikey videoları.', `${filteredShortVideos.length} Shorts`, 'SHORTS', 'cyan', filteredShortVideos, 'Shorts bulunamadı.'],
+                  ] as const).map(([title, subtitle, countLabel, badgeText, badgeColor, videos, emptyMessage]) => (
+                    <VideoPerformanceTable
+                      key={badgeColor}
+                      title={title}
+                      subtitle={subtitle}
+                      countLabel={countLabel}
+                      badgeText={badgeText}
+                      badgeColor={badgeColor}
+                      videos={videos}
+                      isLoading={isLiveStatsLoading}
+                      emptyMessage={emptyMessage}
+                    />
+                  ))}
+                </div>
+              )}
+
+              {activeWorkspaceTab === 'templates' && (
+                <div className="space-y-4" data-testid="channel-templates-panel">
+                  <input
+                    ref={tplFileRef}
+                    type="file"
+                    accept="video/mp4,video/quicktime,video/webm,video/*"
+                    className="hidden"
+                    data-testid="template-file-input"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0]
+                      if (f) {
+                        const filePath = (f as File & { path?: string }).path || f.name
+                        const previewUrl = (f as File & { path?: string }).path || URL.createObjectURL(f)
+                        void createTemplateFromPicked(filePath, previewUrl)
+                      }
+                      e.target.value = ''
+                    }}
+                  />
+                  <div className={`pb-3 border-b ${B_SEP}`}>
+                    <h4 className={`text-sm font-bold ${TXT_MAIN} flex items-center gap-2`}>
+                      <span>Shorts Kurgu Şablonları</span>
+                      <span className={`text-xs font-mono px-2.5 py-0.5 rounded-full font-bold border ${BADGE_CYAN}`}>
+                        {activeTemplates.length} Şablon
+                      </span>
+                    </h4>
+                    <p className="text-xs text-zinc-500 mt-0.5">9:16 şablon ekleyin. Üzerine gelindiğinde video oynatılır, tıklandığında stüdyo açılır.</p>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-7 p-4 min-h-[380px] overflow-x-auto select-none" style={{ perspective: '1400px' }}>
+                    {activeTemplates.map((tpl) => (
+                      <ShortsTemplateCard
+                        key={tpl.id}
+                        template={tpl}
+                        onSelect={(t) => {
+                          setSelectedShortsTemplate({ ...t, slots: t.slots?.length ? t.slots : defaultSlots(t.durationSec) })
+                          setTplTopic(t.title)
+                        }}
+                        onDelete={handleDeleteShortsTemplate}
+                      />
+                    ))}
+                    <AddShortsTemplateCard onClick={handlePickShortsTemplate} disabled={isPickingFile} />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1445,7 +1089,6 @@ export const ChannelsScreen: FC = () => {
     )
   }
 
-  // 3. Durum: Henüz Hiç Kanal Yok (Tam Prototip: Create First Channel)
   if (channels.length === 0) {
     return (
       <div className="flex-1 flex flex-col h-full overflow-hidden p-6 justify-center items-center studio-grid-lines">
@@ -1471,58 +1114,34 @@ export const ChannelsScreen: FC = () => {
     )
   }
 
-  // 4. Durum: Kanallar Var — Boşlukta Sürüklenebilir ve Taşınabilir Kutucuklar (Canvas)
   return (
-    <div
-      className="flex-1 w-full h-full relative overflow-auto select-none p-6 studio-grid-lines"
-      data-testid="channels-canvas"
-    >
-      {/* Sol Üst Bilgi: Kanallar Başlığı ve Sayacı */}
+    <div className="flex-1 w-full h-full relative overflow-auto select-none p-6 studio-grid-lines" data-testid="channels-canvas">
       <div className="absolute top-5 left-6 z-30 pointer-events-none select-none">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">
-            Kanal Çalışma Masaları
-          </span>
-          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-200/70 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">
-            {channels.length}
-          </span>
+          <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 uppercase tracking-wider">Kanal Çalışma Masaları</span>
+          <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-bold bg-zinc-200/70 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-300">{channels.length}</span>
         </div>
-        <p className="text-[11px] text-zinc-400 dark:text-zinc-500 mt-0.5">
-          Kartları serbestçe sürükleyip çalışma alanınıza göre konumlandırabilirsiniz
-        </p>
+        <p className="text-[11px] text-zinc-400 mt-0.5">Kartları sürükleyip konumlandırabilirsiniz</p>
       </div>
 
-      {/* Sağ Üst Sabit Aksiyon: Yeni Kanal Butonu */}
       <div className="absolute top-5 right-6 z-40">
-        <button
-          type="button"
-          onClick={() => setIsCreating(true)}
-          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-[#111827] dark:bg-zinc-100 dark:text-zinc-900 text-white hover:bg-zinc-800 dark:hover:bg-white shadow-2xs transition-all cursor-pointer"
-        >
+        <button type="button" onClick={() => setIsCreating(true)} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold bg-zinc-900 dark:bg-zinc-100 dark:text-zinc-900 text-white shadow-2xs cursor-pointer">
           <span className="text-sm leading-none">+</span>
           <span>Yeni Kanal Ekle</span>
         </button>
       </div>
 
-      {/* Boşlukta Sürüklenebilir Kanal Kutucukları */}
       <div className="relative w-full h-[1400px] min-w-[900px]">
-        {channels.map((channel) => {
-          const currentPos = positions[channel.id] ?? initialPositions[channel.id] ?? { x: 56, y: 72 }
-          return (
-            <DraggableChannelCard
-              key={channel.id}
-              channel={channel}
-              initialPosition={currentPos}
-              onPositionChange={handlePositionChange}
-              onSelect={(id) => selectChannel(id)}
-              onDelete={(id) => {
-                if (confirm(`"${channel.name}" kanalını silmek istediğinizden emin misiniz?`)) {
-                  void deleteChannel(id)
-                }
-              }}
-            />
-          )
-        })}
+        {channels.map((channel, i) => (
+          <DraggableChannelCard
+            key={channel.id}
+            channel={channel}
+            initialPosition={positions[channel.id] ?? { x: 56 + (i % 2) * 400, y: 72 + ~~(i / 2) * 290 }}
+            onPositionChange={handlePositionChange}
+            onSelect={(id) => selectChannel(id)}
+            onDelete={(id) => { if (confirm(`"${channel.name}" silinsin mi?`)) void deleteChannel(id) }}
+          />
+        ))}
       </div>
     </div>
   )

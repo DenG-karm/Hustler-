@@ -31,40 +31,29 @@ export interface RenderSlice {
   pollJobStatus: () => Promise<void>
 }
 
-export const createRenderSlice: StateCreator<
-  FlowState,
-  [],
-  [],
-  RenderSlice
-> = (set, get) => ({
+const handleSliceError = (set: Parameters<StateCreator<FlowState, [], [], RenderSlice>>[0], source: unknown) => {
+  const err = parseProblemDetails(source)
+  if (err.mode === 'modal') set({ activeModalError: err, isLoading: false, errorMessage: err.message })
+  else set((s) => ({ toasts: [...s.toasts, err], isLoading: false, errorMessage: err.message }))
+}
+
+export const createRenderSlice: StateCreator<FlowState, [], [], RenderSlice> = (set, get) => ({
   assets: createInitialAssetsData(),
   preview: createInitialPreviewData(),
   render: createInitialRenderData(),
 
   assignAssetSlot: (slotId: string, path: string) => {
     set((state) => {
-      const updatedSlots = state.assets.slots.map((s) =>
-        s.slotId === slotId ? { ...s, assignedPath: path } : s
-      )
-      const allRequiredFilled = updatedSlots
-        .filter((s) => s.required)
-        .every((s) => s.assignedPath !== null)
-
+      const updatedSlots = state.assets.slots.map((s) => (s.slotId === slotId ? { ...s, assignedPath: path } : s))
       return {
-        assets: {
-          slots: updatedSlots,
-          allSlotsFilled: allRequiredFilled,
-        },
+        assets: { slots: updatedSlots, allSlotsFilled: updatedSlots.filter((s) => s.required).every((s) => s.assignedPath !== null) },
         errorMessage: null,
       }
     })
   },
 
   setPreviewVerified: (verified: boolean) => {
-    set((state) => ({
-      preview: { ...state.preview, isVerified: verified },
-      errorMessage: null,
-    }))
+    set((state) => ({ preview: { ...state.preview, isVerified: verified }, errorMessage: null }))
   },
 
   setRenderProgress: (progress: number, status?: RenderData['status'], outputPath?: string, error?: string) => {
@@ -82,55 +71,27 @@ export const createRenderSlice: StateCreator<
   cancelRenderJob: async () => {
     const { render } = get()
     if (!render.jobId) return
-
     set({ isLoading: true })
     try {
-      const client = getIpcClient()
-      const resp = await client.cancelJob(render.jobId)
-      if (resp.status >= 400) {
-        const uiError = parseProblemDetails(resp)
-        if (uiError.mode === 'modal') {
-          set({ activeModalError: uiError, isLoading: false })
-        } else {
-          set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false }))
-        }
-      } else {
-        set((state) => ({
-          render: {
-            ...state.render,
-            status: 'CANCELLED',
-          },
-          isLoading: false,
-        }))
-      }
+      const resp = await getIpcClient().cancelJob(render.jobId)
+      if (resp.status >= 400) handleSliceError(set, resp)
+      else set((state) => ({ render: { ...state.render, status: 'CANCELLED' }, isLoading: false }))
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false }))
-      }
+      handleSliceError(set, err)
     }
   },
 
   loadAssetsForScript: async () => {
     const { script } = get()
     if (!script) return
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const client = getIpcClient()
-      const resp = await client.prepareAssets(script.id)
+      const resp = await getIpcClient().prepareAssets(script.id)
       if (resp.status >= 400) {
-        const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        handleSliceError(set, resp)
         return
       }
-
-      const data = resp.body
-      const rawSlots = (data.slots ?? createInitialAssetsData().slots) as Array<{
+      const rawSlots = (resp.body.slots ?? createInitialAssetsData().slots) as Array<{
         slot_id?: string
         slotId?: string
         name?: string
@@ -139,7 +100,6 @@ export const createRenderSlice: StateCreator<
         assigned_path?: string | null
         assignedPath?: string | null
       }>
-
       const slots: AssetSlot[] = rawSlots.map((s) => ({
         slotId: s.slot_id ?? s.slotId ?? '',
         name: s.name ?? '',
@@ -147,39 +107,22 @@ export const createRenderSlice: StateCreator<
         required: typeof s.required === 'boolean' ? s.required : true,
         assignedPath: s.assigned_path ?? s.assignedPath ?? null,
       }))
-
-      const allFilled = slots.filter((s) => s.required).every((s) => s.assignedPath !== null)
-
-      set({
-        assets: { slots, allSlotsFilled: allFilled },
-        isLoading: false,
-      })
+      set({ assets: { slots, allSlotsFilled: slots.filter((s) => s.required).every((s) => s.assignedPath !== null) }, isLoading: false })
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      handleSliceError(set, err)
     }
   },
 
   buildPreviewForScript: async () => {
     const { script } = get()
     if (!script) return
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const client = getIpcClient()
-      const resp = await client.generatePreview(script.id)
+      const resp = await getIpcClient().generatePreview(script.id)
       if (resp.status >= 400) {
-        const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        handleSliceError(set, resp)
         return
       }
-
       const data = resp.body
       set({
         preview: {
@@ -191,31 +134,20 @@ export const createRenderSlice: StateCreator<
         isLoading: false,
       })
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      handleSliceError(set, err)
     }
   },
 
   dispatchRenderJob: async (profile: 'DRAFT' | 'FINAL' = 'DRAFT') => {
     const { script } = get()
     if (!script) return
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const client = getIpcClient()
-      const resp = await client.triggerRender(profile, script.id)
+      const resp = await getIpcClient().triggerRender(profile, script.id)
       if (resp.status >= 400) {
-        const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        handleSliceError(set, resp)
         return
       }
-
       const data = resp.body
       set({
         render: {
@@ -229,25 +161,16 @@ export const createRenderSlice: StateCreator<
         isLoading: false,
       })
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      handleSliceError(set, err)
     }
   },
 
   pollJobStatus: async () => {
-    // K-703: SSE Event Stream önceliklidir; bu metot manuel sorgu/fallback içindir.
     const { render } = get()
     if (!render.jobId) return
-
     try {
-      const client = getIpcClient()
-      const resp = await client.getJobStatus(render.jobId)
+      const resp = await getIpcClient().getJobStatus(render.jobId)
       const data = resp.body
-
       set((state) => ({
         render: {
           ...state.render,
@@ -258,8 +181,7 @@ export const createRenderSlice: StateCreator<
         },
       }))
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      set({ errorMessage: uiError.message })
+      set({ errorMessage: parseProblemDetails(err).message })
     }
   },
 })

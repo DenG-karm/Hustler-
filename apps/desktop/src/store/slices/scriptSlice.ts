@@ -27,12 +27,13 @@ export interface ScriptSlice {
   generateAudioForScript: (voiceId?: string) => Promise<void>
 }
 
-export const createScriptSlice: StateCreator<
-  FlowState,
-  [],
-  [],
-  ScriptSlice
-> = (set, get) => ({
+const handleScriptError = (set: Parameters<StateCreator<FlowState, [], [], ScriptSlice>>[0], source: unknown) => {
+  const err = parseProblemDetails(source)
+  if (err.mode === 'modal') set({ activeModalError: err, isLoading: false, errorMessage: err.message })
+  else set((s) => ({ toasts: [...s.toasts, err], isLoading: false, errorMessage: err.message }))
+}
+
+export const createScriptSlice: StateCreator<FlowState, [], [], ScriptSlice> = (set, get) => ({
   script: null,
   audio: null,
 
@@ -52,15 +53,14 @@ export const createScriptSlice: StateCreator<
           errorMessage: null,
         }
       }
-      const textOrTitleChanged =
+      const changed =
         (scriptUpdate.title !== undefined && scriptUpdate.title !== state.script.title) ||
         (scriptUpdate.fullText !== undefined && scriptUpdate.fullText !== state.script.fullText)
-
       return {
         script: {
           ...state.script,
           ...scriptUpdate,
-          isApproved: textOrTitleChanged ? false : (scriptUpdate.isApproved ?? state.script.isApproved),
+          isApproved: changed ? false : (scriptUpdate.isApproved ?? state.script.isApproved),
         },
         errorMessage: null,
       }
@@ -70,14 +70,11 @@ export const createScriptSlice: StateCreator<
   toggleClaim: (claimId: string) => {
     set((state) => {
       if (!state.script) return state
-      const updatedClaims = (state.script.claims || []).map((c) =>
-        c.id === claimId ? { ...c, verified: !c.verified } : c
-      )
       return {
         script: {
           ...state.script,
-          claims: updatedClaims,
-          isApproved: false, // İddia durumu değiştiğinde yeniden onay gerekir
+          claims: (state.script.claims || []).map((c) => (c.id === claimId ? { ...c, verified: !c.verified } : c)),
+          isApproved: false,
         },
         errorMessage: null,
       }
@@ -87,13 +84,10 @@ export const createScriptSlice: StateCreator<
   setClaimVerified: (claimId: string, verified: boolean) => {
     set((state) => {
       if (!state.script) return state
-      const updatedClaims = (state.script.claims || []).map((c) =>
-        c.id === claimId ? { ...c, verified } : c
-      )
       return {
         script: {
           ...state.script,
-          claims: updatedClaims,
+          claims: (state.script.claims || []).map((c) => (c.id === claimId ? { ...c, verified } : c)),
           isApproved: false,
         },
         errorMessage: null,
@@ -104,41 +98,24 @@ export const createScriptSlice: StateCreator<
   saveScriptContent: async (titleOverride?: string, fullTextOverride?: string) => {
     const { script } = get()
     if (!script) return null
-
-    const title = titleOverride ?? script.title
-    const fullText = fullTextOverride ?? script.fullText
-
-    set((s) => ({
-      script: s.script ? { ...s.script, isSaving: true, saveStatus: 'SAVING' } : null,
-    }))
-
+    set((s) => ({ script: s.script ? { ...s.script, isSaving: true, saveStatus: 'SAVING' } : null }))
     try {
-      const client = getIpcClient()
-      const resp = await client.saveScript(
+      const resp = await getIpcClient().saveScript(
         script.id,
-        title,
-        fullText,
+        titleOverride ?? script.title,
+        fullTextOverride ?? script.fullText,
         script.scenes,
         script.claims,
         script.isApproved
       )
-
-      const status = resp.body?.status === 'UNCHANGED' ? 'UNCHANGED' : 'SAVED'
       set((s) => ({
         script: s.script
-          ? {
-              ...s.script,
-              isSaving: false,
-              saveStatus: status,
-              lastSavedAt: Date.now(),
-            }
+          ? { ...s.script, isSaving: false, saveStatus: resp.body?.status === 'UNCHANGED' ? 'UNCHANGED' : 'SAVED', lastSavedAt: Date.now() }
           : null,
       }))
       return resp
     } catch (err: unknown) {
-      set((s) => ({
-        script: s.script ? { ...s.script, isSaving: false, saveStatus: 'ERROR' } : null,
-      }))
+      set((s) => ({ script: s.script ? { ...s.script, isSaving: false, saveStatus: 'ERROR' } : null }))
       throw err
     }
   },
@@ -152,19 +129,11 @@ export const createScriptSlice: StateCreator<
     }
     const unverified = (state.script.claims || []).filter((c) => !c.verified)
     if (unverified.length > 0) {
-      const err = new InvalidStateTransitionError(
-        'SCRIPT',
-        'AUDIO',
-        `Tüm iddialar (claims) kullanıcı tarafından onaylanmadan senaryo onaylanamaz. Onay bekleyen iddia sayısı: ${unverified.length}`
-      )
+      const err = new InvalidStateTransitionError('SCRIPT', 'AUDIO', `Onay bekleyen iddia sayısı: ${unverified.length}`)
       set({ errorMessage: err.message })
       throw err
     }
-
-    set((s) => ({
-      script: s.script ? { ...s.script, isApproved: true } : null,
-      errorMessage: null,
-    }))
+    set((s) => ({ script: s.script ? { ...s.script, isApproved: true } : null, errorMessage: null }))
   },
 
   setAudio: (audioUpdate: Partial<AudioData>) => {
@@ -180,22 +149,13 @@ export const createScriptSlice: StateCreator<
       set({ errorMessage: 'Önce bir fikir seçmelisiniz.' })
       return
     }
-
-    const currentIdea = selectedIdea
-    const channelId = flowChannelId ?? activeChannelId
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const client = getIpcClient()
-      const resp = await client.generateScript(currentIdea.id, topic, currentIdea.title, channelId)
+      const resp = await getIpcClient().generateScript(selectedIdea.id, topic, selectedIdea.title, flowChannelId ?? activeChannelId)
       if (resp.status >= 400) {
-        const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        handleScriptError(set, resp)
         return
       }
-
       const data = resp.body
       const rawClaims = Array.isArray(data.claims) ? data.claims : []
       const claims: ScriptClaim[] =
@@ -206,31 +166,25 @@ export const createScriptSlice: StateCreator<
               verified: typeof c === 'object' && c && 'verified' in c ? Boolean(c.verified) : false,
             }))
           : [
-              { id: 'claim_1', text: `${topic} konusundaki veriler resmi kaynaklarla doğrulanmıştır.`, verified: false },
-              { id: 'claim_2', text: 'Sunulan rakamlar ve test sonuçları güncel araştırmalara dayanmaktadır.', verified: false },
-              { id: 'claim_3', text: 'Metin yanıltıcı veya asılsız sağlık/finansal vaatler içermemektedir.', verified: false },
+              { id: 'claim_1', text: `${topic} verileri doğrulanmıştır.`, verified: false },
+              { id: 'claim_2', text: 'Rakamlar güncel araştırmalara dayanmaktadır.', verified: false },
+              { id: 'claim_3', text: 'Metin yanıltıcı vaatler içermemektedir.', verified: false },
             ]
 
-      const script: ScriptData = {
-        id: data.script_id ?? `scr_${Date.now()}`,
-        title: data.title ?? currentIdea.title,
-        hook: data.hook ?? currentIdea.hook,
-        fullText: data.full_text ?? `${currentIdea.title}. ${currentIdea.hook}`,
-        scenes: data.scenes ?? [
-          { order: 1, narration: currentIdea.hook, visualPrompt: 'Cinematic visual' },
-        ],
-        claims,
-        isApproved: false,
-      }
-
-      set({ script, isLoading: false })
+      set({
+        script: {
+          id: data.script_id ?? `scr_${Date.now()}`,
+          title: data.title ?? selectedIdea.title,
+          hook: data.hook ?? selectedIdea.hook,
+          fullText: data.full_text ?? `${selectedIdea.title}. ${selectedIdea.hook}`,
+          scenes: data.scenes ?? [{ order: 1, narration: selectedIdea.hook, visualPrompt: 'Cinematic visual' }],
+          claims,
+          isApproved: false,
+        },
+        isLoading: false,
+      })
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      handleScriptError(set, err)
     }
   },
 
@@ -240,36 +194,26 @@ export const createScriptSlice: StateCreator<
       set({ errorMessage: 'Ses üretmek için onaylanmış bir senaryo gereklidir.' })
       return
     }
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const client = getIpcClient()
-      const resp = await client.generateAudio(script.id, voiceId, script.fullText)
+      const resp = await getIpcClient().generateAudio(script.id, voiceId, script.fullText)
       if (resp.status >= 400) {
-        const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        handleScriptError(set, resp)
         return
       }
-
       const data = resp.body
-      const audio: AudioData = {
-        scriptId: script.id,
-        voiceId,
-        audioPath: data.audio_path ?? `assets/audio/${script.id}.mp3`,
-        durationSeconds: data.duration_seconds ?? 30,
-        isGenerated: true,
-      }
-
-      set({ audio, isLoading: false })
+      set({
+        audio: {
+          scriptId: script.id,
+          voiceId,
+          audioPath: data.audio_path ?? `assets/audio/${script.id}.mp3`,
+          durationSeconds: data.duration_seconds ?? 30,
+          isGenerated: true,
+        },
+        isLoading: false,
+      })
     } catch (err: unknown) {
-      const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      handleScriptError(set, err)
     }
   },
 })

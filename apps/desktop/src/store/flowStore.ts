@@ -198,25 +198,15 @@ export const useFlowStore = create<FlowState>()((set, get, api) => ({
             set((s) => ({ render: { ...s.render, status: 'CANCELLED' } }))
           }
         } else if (event.type === 'job_failed') {
-          const evt = event as JobFailedEvent
-          const uiError = parseProblemDetails(evt.error)
-          if (uiError.mode === 'modal') {
-            set((s) => ({ activeModalError: uiError, render: { ...s.render, status: 'FAILED', error: uiError.message }, errorMessage: uiError.message }))
-          } else {
-            set((s) => ({ toasts: [...s.toasts, uiError], render: { ...s.render, status: 'FAILED', error: uiError.message }, errorMessage: uiError.message }))
-          }
+          const uiError = parseProblemDetails((event as JobFailedEvent).error)
+          set((s) => ({
+            ...(uiError.mode === 'modal' ? { activeModalError: uiError } : { toasts: [...s.toasts, uiError] }),
+            render: { ...s.render, status: 'FAILED', error: uiError.message },
+            errorMessage: uiError.message,
+          }))
         } else if (event.type === 'llm_loop_warning') {
           const evt = event as LlmLoopWarningEvent
-          const warningToast: UIError = {
-            id: `warn_${Date.now()}`,
-            mode: 'toast',
-            title: 'LLM Döngü Uyarısı',
-            message: evt.message || 'LLM döngü limiti uyarısı alındı.',
-            code: 'LLM_LOOP_WARNING',
-            status: 200,
-            timestamp: Date.now(),
-          }
-          set((s) => ({ toasts: [...s.toasts, warningToast] }))
+          get().addToast({ title: 'LLM Döngü Uyarısı', message: evt.message || 'LLM döngü limiti uyarısı alındı.', code: 'LLM_LOOP_WARNING' })
         }
       }),
       bridge.onConnectionState((statePayload: ConnectionStatePayload) => {

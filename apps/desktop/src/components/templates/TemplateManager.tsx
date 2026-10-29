@@ -49,97 +49,54 @@ export const TemplateManager: React.FC = () => {
     return template.category === selectedCategory
   })
 
-  // İçe Aktarma Tetikleyicisi (Tauri Native Dialog & Fs)
+  const toast = (title: string, message: string, code: string, status: number) => addToast({ title, message, code, status })
+  const fail = (err: unknown, fallback: string, title: string, code: string, status: number) => {
+    const msg = err instanceof Error ? err.message : String(err || fallback)
+    setErrorMessage(msg)
+    toast(title, msg, code, status)
+  }
+
+  // Tauri Native Dialog & Fs
   const handleImport = async () => {
     setIsLoading(true)
     setErrorMessage(null)
     try {
       const imported = await importTemplateFromFile()
       addTemplate(imported)
-      addToast({
-        title: 'Şablon İçe Aktarıldı',
-        message: `"${imported.name}" şablonu şema doğrulamasından başarıyla geçti ve eklendi.`,
-        code: 'TEMPLATE_IMPORTED',
-        status: 200,
-      })
+      toast('Şablon İçe Aktarıldı', `"${imported.name}" şablonu şema doğrulamasından başarıyla geçti ve eklendi.`, 'TEMPLATE_IMPORTED', 200)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err || 'İçe aktarma hatası')
-      // Kullanıcı iptali sessizce geçilebilir, diğer hatalar Toast ve arayüzde gösterilir
-      if (!msg.includes('iptal edildi')) {
-        setErrorMessage(msg)
-        addToast({
-          title: 'Şablon Doğrulama Hatası',
-          message: msg,
-          code: 'TEMPLATE_VALIDATION_ERROR',
-          status: 400,
-        })
-      }
+      // Kullanıcı iptali sessizce geçilir
+      if (!(err instanceof Error && err.message.includes('iptal edildi'))) fail(err, 'İçe aktarma hatası', 'Şablon Doğrulama Hatası', 'TEMPLATE_VALIDATION_ERROR', 400)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Dışa Aktarma Tetikleyicisi (Tauri Native Dialog & Fs)
   const handleExport = async (template: Template) => {
     setIsLoading(true)
     setErrorMessage(null)
     try {
       const result = await exportTemplateToFile(template)
-      if (result.success && result.filePath) {
-        addToast({
-          title: 'Şablon Dışa Aktarıldı',
-          message: `"${template.name}" dosyası kaydedildi: ${result.filePath}`,
-          code: 'TEMPLATE_EXPORTED',
-          status: 200,
-        })
-      }
+      if (result.success && result.filePath) toast('Şablon Dışa Aktarıldı', `"${template.name}" dosyası kaydedildi: ${result.filePath}`, 'TEMPLATE_EXPORTED', 200)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err || 'Dışa aktarma hatası')
-      setErrorMessage(msg)
-      addToast({
-        title: 'Dışa Aktarma Hatası',
-        message: msg,
-        code: 'TEMPLATE_EXPORT_ERROR',
-        status: 500,
-      })
+      fail(err, 'Dışa aktarma hatası', 'Dışa Aktarma Hatası', 'TEMPLATE_EXPORT_ERROR', 500)
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Klonlama Tetikleyicisi (Idempotent Deep Copy & UUID)
   const handleClone = (id: string) => {
     try {
       const cloned = cloneTemplateItem(id)
-      if (cloned) {
-        addToast({
-          title: 'Şablon Klonlandı',
-          message: `"${cloned.name}" başarıyla oluşturuldu (Yeni ID: ${cloned.id.substring(0, 8)}...).`,
-          code: 'TEMPLATE_CLONED',
-          status: 200,
-        })
-      }
+      if (cloned) toast('Şablon Klonlandı', `"${cloned.name}" başarıyla oluşturuldu (Yeni ID: ${cloned.id.substring(0, 8)}...).`, 'TEMPLATE_CLONED', 200)
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err || 'Klonlama hatası')
-      setErrorMessage(msg)
-      addToast({
-        title: 'Klonlama Hatası',
-        message: msg,
-        code: 'TEMPLATE_CLONE_ERROR',
-        status: 500,
-      })
+      fail(err, 'Klonlama hatası', 'Klonlama Hatası', 'TEMPLATE_CLONE_ERROR', 500)
     }
   }
 
-  // Silme Tetikleyicisi
   const handleDelete = (template: Template) => {
     removeTemplate(template.id)
-    addToast({
-      title: 'Şablon Silindi',
-      message: `"${template.name}" listeden kaldırıldı.`,
-      code: 'TEMPLATE_DELETED',
-      status: 200,
-    })
+    toast('Şablon Silindi', `"${template.name}" listeden kaldırıldı.`, 'TEMPLATE_DELETED', 200)
   }
 
   return (
@@ -189,7 +146,7 @@ export const TemplateManager: React.FC = () => {
             className="text-xs text-destructive hover:underline px-2 py-1 outline-none ring-0 focus:outline-none focus:ring-0"
             aria-label="Hatayı Gizle"
           >
-            ✕ Kapat
+            Kapat
           </button>
         </div>
       )}

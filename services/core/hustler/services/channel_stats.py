@@ -98,12 +98,74 @@ def _parse_time_text_to_days(text: str | None) -> int:
     return 1
 
 
-def _get_channel_tab_time_map(tab_url: str) -> dict[str, str]:
+def _parse_int_from_text(text: str | None) -> int | None:
+    """Metin içerisindeki toplam video veya görüntülenme sayısını ayrıştırır (ör: '1,234 video', '2.4B video', '45.2M görüntüleme')."""
+    if not text:
+        return None
+    t = text.strip().lower()
+    m_unit = re.search(r"([\d.,]+)\s*(mr|milyar|b|mn|milyon|m|b|bin|k)\b", t)
+    if m_unit:
+        raw_num = m_unit.group(1).replace(",", ".")
+        unit = m_unit.group(2)
+        try:
+            val = float(raw_num)
+            if unit in ("mr", "milyar", "b") and "bin" not in t:
+                return int(val * 1_000_000_000)
+            if unit in ("mn", "milyon", "m"):
+                return int(val * 1_000_000)
+            return int(val * 1_000)
+        except ValueError:
+            pass
+    digits = re.sub(r"[^\d]", "", t)
+    return int(digits) if digits else None
+
+
+def _extract_totals_from_obj(obj: dict[str, object], totals: dict[str, int | None]) -> None:
+    for k, v in obj.items():
+        if k in ("videoCountText", "videosCountText") and isinstance(v, (str, dict)):
+            txt = v if isinstance(v, str) else str(v.get("simpleText") or "")
+            parsed = _parse_int_from_text(txt)
+            if parsed is not None:
+                totals["total_videos"] = parsed
+        elif k == "viewCountText" and isinstance(v, (str, dict)) and "videoId" not in obj:
+            txt = v if isinstance(v, str) else str(v.get("simpleText") or "")
+            parsed = _parse_int_from_text(txt)
+            if parsed is not None and parsed > (totals["total_views"] or 0):
+                totals["total_views"] = parsed
+        elif k == "content" and isinstance(v, str) and len(v) < 40 and any(c.isdigit() for c in v):
+            low = v.lower()
+            if "video" in low and totals["total_videos"] is None:
+                totals["total_videos"] = _parse_int_from_text(v)
+            elif "görüntüleme" in low or "views" in low:
+                parsed = _parse_int_from_text(v)
+                if parsed is not None and parsed > (totals["total_views"] or 0):
+                    totals["total_views"] = parsed
+
+
+def _extract_channel_totals_from_initial_data(data: object) -> dict[str, int | None]:
+    """ytInitialData ağacından kanalın gerçek toplam video sayısını ve tüm zamanlar izlenmesini çıkarır."""
+    totals: dict[str, int | None] = {"total_videos": None, "total_views": None}
+
+    def walk(obj: object) -> None:
+        if isinstance(obj, dict):
+            _extract_totals_from_obj(obj, totals)
+            for v in obj.values():
+                walk(v)
+        elif isinstance(obj, list):
+            for item in obj:
+                walk(item)
+
+    walk(data)
+    return totals
+
+
+def _get_channel_tab_time_map_and_totals(tab_url: str) -> tuple[dict[str, str], dict[str, int | None]]:
     """
-    YouTube web sekmesinden (ör: /videos veya /shorts) HTML parse ederek
-    video ID -> yayınlanma zaman metni (ör: '3 gün önce') haritası çıkarır.
+    YouTube web sekmesinden HTML parse ederek hem video ID -> yayınlanma zamanı haritasını
+    hem de kanalın gerçek tüm zamanlar toplam video/izlenme sayılarını çıkarır.
     """
     time_map: dict[str, str] = {}
+    totals: dict[str, int | None] = {"total_videos": None, "total_views": None}
     try:
         req = urllib.request.Request(
             tab_url,
@@ -115,16 +177,21 @@ def _get_channel_tab_time_map(tab_url: str) -> dict[str, str]:
         with urllib.request.urlopen(req, timeout=5) as resp:
             html = resp.read().decode("utf-8", errors="ignore")
 
-        # ytInitialData JSON bloğunu ara
         m = re.search(r"var ytInitialData\s*=\s*({.+?});</script>", html)
         if not m:
             m = re.search(r"ytInitialData\s*=\s*({.+?});", html)
         if m:
             data = json.loads(m.group(1))
             _collect_video_times(data, time_map)
+            totals = _extract_channel_totals_from_initial_data(data)
     except Exception as err:
         logger.debug("channel_tab_html_scrape_skipped", url=tab_url, error=str(err))
 
+    return time_map, totals
+
+
+def _get_channel_tab_time_map(tab_url: str) -> dict[str, str]:
+    time_map, _ = _get_channel_tab_time_map_and_totals(tab_url)
     return time_map
 
 
@@ -153,7 +220,9 @@ def _collect_video_times(data: object, time_map: dict[str, str]) -> dict[str, st
     return time_map
 
 
-def _format_days_ago_text(days_ago: int) -> tuple[str, str]:
+def _format_days_ago_text(days_ago: int | None) -> tuple[str | None, str]:
+    if days_ago is None:
+        return None, "all_time"
     if days_ago <= 30:
         return f"{days_ago} gün önce", "month"
     if days_ago <= 365:
@@ -165,7 +234,6 @@ def _extract_tab_entries(
     tab_url: str,
     item_type: str,
     time_map: dict[str, str],
-    step_days: int,
 ) -> list[dict[str, object]]:
     items: list[dict[str, object]] = []
     opts = {
@@ -179,12 +247,12 @@ def _extract_tab_entries(
     try:
         with yt_dlp.YoutubeDL(opts) as ydl:
             info = ydl.extract_info(tab_url, download=False) or {}
-            for idx, entry in enumerate(info.get("entries", [])):
+            for entry in info.get("entries", []):
                 if not (entry and entry.get("title")):
                     continue
                 v_id = entry.get("id")
                 t_text = time_map.get(str(v_id)) if v_id else None
-                days_ago = _parse_time_text_to_days(t_text) if t_text else (idx * step_days + 1)
+                days_ago = _parse_time_text_to_days(t_text) if t_text else None
                 default_text, time_period = _format_days_ago_text(days_ago)
                 url_prefix = "shorts/" if item_type == "short" else "watch?v="
                 items.append({
@@ -239,9 +307,10 @@ def _extract_channel_sync(channel_url: str) -> dict[str, object]:
     except Exception as err:
         logger.warning("yt_dlp_main_channel_extract_failed", url=channel_url, error=str(err))
 
-    video_time_map = _get_channel_tab_time_map(f"{base_url}/videos")
-    videos = _extract_tab_entries(f"{base_url}/videos", "video", video_time_map, 6)
-    shorts = _extract_tab_entries(f"{base_url}/shorts", "short", {}, 3)
+    video_time_map, totals = _get_channel_tab_time_map_and_totals(f"{base_url}/videos")
+    shorts_time_map = _get_channel_tab_time_map(f"{base_url}/shorts")
+    videos = _extract_tab_entries(f"{base_url}/videos", "video", video_time_map)
+    shorts = _extract_tab_entries(f"{base_url}/shorts", "short", shorts_time_map)
 
     all_views = [
         int(vc)
@@ -249,10 +318,14 @@ def _extract_channel_sync(channel_url: str) -> dict[str, object]:
         for vc in [v.get("view_count")]
         if isinstance(vc, (int, float))
     ]
-    avg_views = round(sum(all_views) / len(all_views)) if all_views else None
+    sample_total_views = sum(all_views) if all_views else 0
+    avg_views = round(sample_total_views / len(all_views)) if all_views else None
     analytics = compute_channel_analytics(videos, shorts)
     niche_query = infer_channel_niche_query(channel_name, description, videos, shorts)
     niche_benchmarks = _search_youtube_ytdlp_sync(niche_query, max_results=6) if niche_query else []
+
+    real_total_videos = totals.get("total_videos") or (len(videos) + len(shorts))
+    real_total_views = totals.get("total_views") or sample_total_views
 
     return {
         "channel_name": channel_name,
@@ -262,6 +335,10 @@ def _extract_channel_sync(channel_url: str) -> dict[str, object]:
         "description": description,
         "subscribers": subscribers,
         "subscribers_formatted": format_count(subscribers) if subscribers is not None else None,
+        "channel_total_videos": real_total_videos,
+        "channel_total_videos_formatted": format_count(real_total_videos),
+        "channel_total_views": real_total_views,
+        "channel_total_views_formatted": format_count(real_total_views) if real_total_views else None,
         "videos": videos,
         "shorts": shorts,
         "niche_query": niche_query,

@@ -83,6 +83,51 @@ def _compute_line_chart_for_items(items: list[dict[str, object]], item_type: str
     }
 
 
+def _compute_outliers_and_tiers(
+    all_items: list[dict[str, object]], avg_views: float
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    """
+    1) Viral Çarpan (Outliers): Kanal ortalamasına göre en yüksek çarpanlı (Nx) ilk 6 içeriği çıkarır.
+    2) İzlenme Kademesi (View Tiers): İçeriklerin izlenme aralıklarına göre dağılımını hesaplar.
+    """
+    base_avg = max(1.0, avg_views)
+    sorted_items = sorted(all_items, key=lambda x: float(str(x.get("view_count") or 0)), reverse=True)
+    outliers: list[dict[str, object]] = []
+    for item in sorted_items[:6]:
+        vc = int(float(str(item.get("view_count") or 0)))
+        mult = round(vc / base_avg, 2)
+        outliers.append({
+            "id": item.get("id"),
+            "title": str(item.get("title") or "İçerik"),
+            "type": str(item.get("type") or "video"),
+            "view_count": vc,
+            "view_count_formatted": _format_count(vc),
+            "multiplier": mult,
+            "multiplier_formatted": f"{mult:.1f}x",
+        })
+
+    total_cnt = max(1, len(all_items))
+    tier_defs = [
+        ("0 - 10K", 0, 10_000),
+        ("10K - 50K", 10_000, 50_000),
+        ("50K - 250K", 50_000, 250_000),
+        ("250K+", 250_000, 10**15),
+    ]
+    tiers: list[dict[str, object]] = []
+    for label, low, high in tier_defs:
+        cnt = sum(
+            1
+            for it in all_items
+            if low <= int(float(str(it.get("view_count") or 0))) < high
+        )
+        tiers.append({
+            "label": label,
+            "count": cnt,
+            "percentage": round((cnt / total_cnt) * 100, 1),
+        })
+    return outliers, tiers
+
+
 def compute_channel_analytics(
     videos: list[dict[str, object]], shorts: list[dict[str, object]]
 ) -> dict[str, object]:
@@ -123,6 +168,8 @@ def compute_channel_analytics(
             "videos_line_chart": empty_line,
             "shorts_line_chart": empty_line,
             "pie_chart": {"slices": [], "total_views": 0, "total_views_formatted": "0"},
+            "outliers": [],
+            "view_tiers": [],
             "summary": {"median_views": 0, "max_views": 0, "min_views": 0, "total_views": 0},
             "videos_summary": {"median_views": 0, "max_views": 0, "min_views": 0, "total_views": 0, "sample_count": 0},
             "shorts_summary": {"median_views": 0, "max_views": 0, "min_views": 0, "total_views": 0, "sample_count": 0},
@@ -196,6 +243,7 @@ def compute_channel_analytics(
         })
 
     slices.sort(key=lambda s: float(str(s["percentage"])), reverse=True)
+    outliers, view_tiers = _compute_outliers_and_tiers(all_items, avg_views)
 
     return {
         "has_data": True,
@@ -214,6 +262,8 @@ def compute_channel_analytics(
             "total_views": int(total_views),
             "total_views_formatted": _format_count(total_views),
         },
+        "outliers": outliers,
+        "view_tiers": view_tiers,
         "summary": {
             "median_views": int(median_views),
             "median_views_formatted": _format_count(median_views),

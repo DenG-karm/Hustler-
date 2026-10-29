@@ -1,4 +1,4 @@
-import type { ChannelLiveStats, DiscoveryItem, RealVideoItem, VideoIdea } from '../../store/flowTypes'
+import type { ChannelLiveStats, VideoIdea } from '../../store/flowTypes'
 import { formatCount } from './channelMetadata'
 
 export interface GlobalViralPrototype {
@@ -22,89 +22,37 @@ const fmtDuration = (sec: number | null | undefined, isShort: boolean): string =
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
 }
 
-const calcScore = (views: number): number => {
-  if (views <= 0) return 60
-  return Math.min(99, Math.max(55, Math.round(50 + Math.log10(views) * 7.2)))
-}
+const calcScore = (views: number): number => (views <= 0 ? 60 : Math.min(99, Math.max(55, Math.round(50 + Math.log10(views) * 7.2))))
 
-function fromIdea(idea: VideoIdea, channelName: string): GlobalViralPrototype {
-  const isShort = idea.format ? idea.format === 'short' : (idea.duration ?? 45) <= 65
-  const views = idea.viewCount ?? 0
-  const srcChannel = idea.channelName || 'YouTube'
-  const url =
-    idea.url ||
-    (idea.id && !idea.id.startsWith('fallback_') && !idea.id.startsWith('idea_')
-      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${idea.id}`
-      : `https://www.youtube.com/results?search_query=${encodeURIComponent(idea.title)}`)
+const ytUrl = (id: string, title: string, isShort: boolean, rawUrl?: string | null): string =>
+  rawUrl || (id && !id.startsWith('fallback_') && !id.startsWith('idea_') ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${id}` : `https://www.youtube.com/results?search_query=${encodeURIComponent(title)}`)
 
-  return {
-    id: idea.id,
-    format: isShort ? 'short' : 'video',
-    globalTitle: idea.title,
-    globalUrl: url,
-    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Yeni / Veri Yok',
-    retentionBadge: srcChannel,
-    durationText: idea.durationText || fmtDuration(idea.duration, isShort),
-    hookAnalysis: `Gerçek YouTube Verisi (${srcChannel}): ${formatCount(views)} izlenme alan doğrulanmış içerik.`,
-    prototypeTitle: `${channelName}: ${idea.title}`,
-    prototypeHook: idea.hook || idea.title,
-    viralScore: Math.round(idea.score || calcScore(views)),
-    categoryLabel: 'Canlı Niş Taraması',
-  }
-}
-
-function fromChannelVideo(vid: RealVideoItem, channelName: string): GlobalViralPrototype {
-  const isShort = vid.type === 'short'
-  const views = vid.view_count ?? 0
-  const score = calcScore(views)
-  const url =
-    vid.url ||
-    (vid.id
-      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${vid.id}`
-      : `https://www.youtube.com/results?search_query=${encodeURIComponent(vid.title)}`)
-
-  return {
-    id: vid.id || `ch_${vid.title.slice(0, 12)}`,
-    format: isShort ? 'short' : 'video',
-    globalTitle: vid.title,
-    globalUrl: url,
-    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Bilinmiyor',
-    retentionBadge: vid.published_text || 'Kanal İçeriği',
-    durationText: fmtDuration(vid.duration, isShort),
-    hookAnalysis: `${channelName} kanalının kendi gerçek içeriği (${formatCount(views)} izlenme).`,
-    prototypeTitle: vid.title,
-    prototypeHook: `${vid.title} — Kanalın en yüksek etkileşimli kurgu yapısını devam ettir.`,
-    viralScore: score,
-    categoryLabel: 'Kanalın Gerçek İçeriği',
-  }
-}
-
-function fromBenchmarkItem(item: DiscoveryItem, channelName: string): GlobalViralPrototype {
-  const vid = item.video_id || item.id || ''
-  const isShort = item.format ? item.format === 'short' : (item.duration ?? 45) <= 65
-  const views = item.view_count ?? 0
-  const srcChannel = item.channel_name || 'YouTube Niş'
-  const url =
-    item.url ||
-    (vid
-      ? `https://www.youtube.com/${isShort ? 'shorts/' : 'watch?v='}${vid}`
-      : `https://www.youtube.com/results?search_query=${encodeURIComponent(item.title)}`)
-
-  return {
-    id: vid || `bm_${item.title.slice(0, 12)}`,
-    format: isShort ? 'short' : 'video',
-    globalTitle: item.title,
-    globalUrl: url,
-    globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : 'Bilinmiyor',
-    retentionBadge: srcChannel,
-    durationText: item.duration_text || fmtDuration(item.duration, isShort),
-    hookAnalysis: `Niş Rakip Analizi (${srcChannel}): Bu başlık ve süre (${item.duration_text || fmtDuration(item.duration, isShort)}) nişte ${formatCount(views)} izlenmeye ulaştı.`,
-    prototypeTitle: `${channelName}: ${item.title}`,
-    prototypeHook: item.hook || item.title,
-    viralScore: Math.round(item.score || calcScore(views)),
-    categoryLabel: 'Otomatik Niş Taraması',
-  }
-}
+const makeItem = (
+  id: string,
+  title: string,
+  isShort: boolean,
+  views: number,
+  src: string,
+  dur: string,
+  pTitle: string,
+  pHook: string,
+  score: number,
+  cat: string,
+  rawUrl?: string | null
+): GlobalViralPrototype => ({
+  id,
+  format: isShort ? 'short' : 'video',
+  globalTitle: title,
+  globalUrl: ytUrl(id, title, isShort, rawUrl),
+  globalViewsFormatted: views > 0 ? `${formatCount(views)} İzlenme` : '-',
+  retentionBadge: src,
+  durationText: dur,
+  hookAnalysis: `${src}: ${formatCount(views)}`,
+  prototypeTitle: pTitle,
+  prototypeHook: pHook,
+  viralScore: Math.round(score),
+  categoryLabel: cat,
+})
 
 export function deriveGlobalViralPrototypes(
   channelName: string,
@@ -113,34 +61,68 @@ export function deriveGlobalViralPrototypes(
   customIdeas?: VideoIdea[],
   liveStats?: ChannelLiveStats | null
 ): GlobalViralPrototype[] {
-  if (customIdeas && customIdeas.length > 0) {
-    return customIdeas.map((idea) => fromIdea(idea, channelName))
+  if (customIdeas?.length) {
+    return customIdeas.map((i) => {
+      const isShort = i.format ? i.format === 'short' : (i.duration ?? 45) <= 65
+      const v = i.viewCount ?? 0
+      const src = i.channelName || 'YouTube'
+      return makeItem(
+        i.id,
+        i.title,
+        isShort,
+        v,
+        src,
+        i.durationText || fmtDuration(i.duration, isShort),
+        `${channelName}: ${i.title}`,
+        i.hook || i.title,
+        i.score || calcScore(v),
+        'Canlı Niş',
+        i.url
+      )
+    })
   }
-
   if (!liveStats) return []
-
   const results: GlobalViralPrototype[] = []
-  const seenIds = new Set<string>()
+  const seen = new Set<string>()
 
-  const benchmarks = liveStats.niche_benchmarks || []
-  for (const bm of benchmarks) {
-    const proto = fromBenchmarkItem(bm, channelName)
-    if (!seenIds.has(proto.id)) {
-      seenIds.add(proto.id)
-      results.push(proto)
-    }
+  const pool: [string, string, boolean, number, string, string, string, string, string, string | null | undefined][] = []
+  for (const bm of liveStats.niche_benchmarks || []) {
+    const isShort = bm.format ? bm.format === 'short' : (bm.duration ?? 45) <= 65
+    pool.push([
+      bm.video_id || bm.id || `bm_${bm.title.slice(0, 12)}`,
+      bm.title,
+      isShort,
+      bm.view_count ?? 0,
+      bm.channel_name || 'YouTube Niş',
+      bm.duration_text || fmtDuration(bm.duration, isShort),
+      `${channelName}: ${bm.title}`,
+      bm.hook || bm.title,
+      'Otomatik Niş',
+      bm.url,
+    ])
+  }
+  const own = [...(liveStats.shorts || []), ...(liveStats.videos || [])].sort((a, b) => (b.view_count ?? 0) - (a.view_count ?? 0))
+  for (const v of own.slice(0, 8)) {
+    const isShort = v.type === 'short'
+    const cnt = v.view_count ?? 0
+    pool.push([
+      v.id || `ch_${v.title.slice(0, 12)}`,
+      v.title,
+      isShort,
+      cnt,
+      v.published_text || 'Kanal',
+      fmtDuration(v.duration, isShort),
+      v.title,
+      v.title,
+      'Kanal İçeriği',
+      v.url,
+    ])
   }
 
-  const ownVideos = [...(liveStats.shorts || []), ...(liveStats.videos || [])].sort(
-    (a, b) => (b.view_count ?? 0) - (a.view_count ?? 0)
-  )
-  for (const v of ownVideos.slice(0, 8)) {
-    const proto = fromChannelVideo(v, channelName)
-    if (!seenIds.has(proto.id)) {
-      seenIds.add(proto.id)
-      results.push(proto)
-    }
+  for (const [id, title, isShort, cnt, src, dur, pTitle, pHook, cat, rawUrl] of pool) {
+    if (seen.has(id)) continue
+    seen.add(id)
+    results.push(makeItem(id, title, isShort, cnt, src, dur, pTitle, pHook, calcScore(cnt), cat, rawUrl))
   }
-
   return results
 }

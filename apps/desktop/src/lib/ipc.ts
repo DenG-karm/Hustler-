@@ -157,142 +157,62 @@ export interface ChannelIpcClient {
  * Sıfır Mock Kuralı: Tarayıcı mock işleyicileri kaldırılmış olup tüm çağrılar Tauri invoke köprüsünden geçer.
  */
 export const tauriIpcClient: FlowIpcClient & ChannelIpcClient = {
-  async runDiscovery(topic: string, channelId?: string | null): Promise<ProxyResponse<DiscoveryResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/discovery/run', {
+  runDiscovery(topic, channelId) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/discovery/run', {
       topic,
       max_results: 20,
       score_threshold: 30.0,
       ...(channelId ? { channel_id: channelId } : {}),
-    })) as ProxyResponse<DiscoveryResponseData>
+    }) as Promise<ProxyResponse<DiscoveryResponseData>>
   },
-
-  async generateScript(
-    ideaId: string,
-    topic: string,
-    title: string,
-    channelId?: string | null
-  ): Promise<ProxyResponse<ScriptGenerateResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/script', {
-      idea_id: ideaId,
-      topic,
-      title,
-      ...(channelId ? { channel_id: channelId } : {}),
-    })) as ProxyResponse<ScriptGenerateResponseData>
+  generateScript(idea_id, topic, title, channelId) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/script', { idea_id, topic, title, ...(channelId ? { channel_id: channelId } : {}) }) as Promise<ProxyResponse<ScriptGenerateResponseData>>
   },
-
-  async saveScript(
-    scriptId: string,
-    title: string,
-    fullText: string,
-    scenes: ScriptScene[] = [],
-    claims: ScriptClaim[] = [],
-    isApproved = false
-  ): Promise<ProxyResponse<ScriptSaveResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/script/save', {
-      script_id: scriptId,
-      title,
-      full_text: fullText,
-      scenes,
-      claims,
-      is_approved: isApproved,
-    })) as ProxyResponse<ScriptSaveResponseData>
+  saveScript(script_id, title, full_text, scenes = [], claims = [], is_approved = false) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/script/save', { script_id, title, full_text, scenes, claims, is_approved }) as Promise<ProxyResponse<ScriptSaveResponseData>>
   },
-
-  async generateAudio(scriptId: string, voiceId: string, text: string): Promise<ProxyResponse<AudioGenerateResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/audio', {
-      script_id: scriptId,
-      voice_id: voiceId,
-      text,
-    })) as ProxyResponse<AudioGenerateResponseData>
+  generateAudio(script_id, voice_id, text) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/audio', { script_id, voice_id, text }) as Promise<ProxyResponse<AudioGenerateResponseData>>
   },
-
-  async prepareAssets(scriptId: string, slots: AssetSlot[] = []): Promise<ProxyResponse<AssetsPrepareResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/assets', {
-      script_id: scriptId,
-      slots,
-    })) as ProxyResponse<AssetsPrepareResponseData>
+  prepareAssets(script_id, slots = []) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/assets', { script_id, slots }) as Promise<ProxyResponse<AssetsPrepareResponseData>>
   },
-
-  async generatePreview(scriptId: string): Promise<ProxyResponse<PreviewGenerateResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/preview', {
-      script_id: scriptId,
-    })) as ProxyResponse<PreviewGenerateResponseData>
+  generatePreview(script_id) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/preview', { script_id }) as Promise<ProxyResponse<PreviewGenerateResponseData>>
   },
-
-  async triggerRender(profile: 'DRAFT' | 'FINAL', scriptId: string): Promise<ProxyResponse<RenderTriggerResponseData>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/render', {
-      profile,
-      script_id: scriptId,
-    })) as ProxyResponse<RenderTriggerResponseData>
+  triggerRender(profile, script_id) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/render', { profile, script_id }) as Promise<ProxyResponse<RenderTriggerResponseData>>
   },
-
-  async getJobStatus(jobId: string): Promise<ProxyResponse<JobStatusResponseData>> {
-    return (await tauriIpcClient.proxyRequest(
-      'GET',
-      `/api/v1/jobs/${encodeURIComponent(jobId)}`
-    )) as ProxyResponse<JobStatusResponseData>
+  getJobStatus(jobId) {
+    return tauriIpcClient.proxyRequest('GET', `/api/v1/jobs/${encodeURIComponent(jobId)}`) as Promise<ProxyResponse<JobStatusResponseData>>
   },
-
-  async cancelJob(jobId: string): Promise<ProxyResponse<JobStatusResponseData>> {
-    return (await tauriIpcClient.proxyRequest(
-      'POST',
-      `/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`
-    )) as ProxyResponse<JobStatusResponseData>
+  cancelJob(jobId) {
+    return tauriIpcClient.proxyRequest('POST', `/api/v1/jobs/${encodeURIComponent(jobId)}/cancel`) as Promise<ProxyResponse<JobStatusResponseData>>
   },
-
-  async getActiveSession(): Promise<ProxyResponse<SessionResponseData>> {
-    return (await tauriIpcClient.proxyRequest(
-      'GET',
-      '/api/v1/pipeline/session/active'
-    )) as ProxyResponse<SessionResponseData>
+  getActiveSession() {
+    return tauriIpcClient.proxyRequest('GET', '/api/v1/pipeline/session/active') as Promise<ProxyResponse<SessionResponseData>>
   },
-
-  async saveActiveSession(payload: ActiveSessionPayload): Promise<ProxyResponse<SessionResponseData>> {
-    return (await tauriIpcClient.proxyRequest(
-      'POST',
-      '/api/v1/pipeline/session/save',
-      payload
-    )) as ProxyResponse<SessionResponseData>
+  saveActiveSession(payload) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/pipeline/session/save', payload) as Promise<ProxyResponse<SessionResponseData>>
   },
-
-  async exportDiagnostics(format: 'zip' | 'json' = 'json'): Promise<ProxyResponse<DiagnosticsResponseData>> {
-    return (await tauriIpcClient.proxyRequest(
-      'POST',
-      `/api/v1/diagnostics/export?format=${encodeURIComponent(format)}`
-    )) as ProxyResponse<DiagnosticsResponseData>
+  exportDiagnostics(format = 'json') {
+    return tauriIpcClient.proxyRequest('POST', `/api/v1/diagnostics/export?format=${encodeURIComponent(format)}`) as Promise<ProxyResponse<DiagnosticsResponseData>>
   },
-
-  async listChannels(): Promise<ProxyResponse<ChannelItem[]>> {
-    return (await tauriIpcClient.proxyRequest('GET', '/api/v1/channels')) as ProxyResponse<ChannelItem[]>
+  listChannels() {
+    return tauriIpcClient.proxyRequest('GET', '/api/v1/channels') as Promise<ProxyResponse<ChannelItem[]>>
   },
-
-  async createChannel(payload: ChannelCreatePayload): Promise<ProxyResponse<ChannelItem>> {
-    return (await tauriIpcClient.proxyRequest('POST', '/api/v1/channels', payload)) as ProxyResponse<ChannelItem>
+  createChannel(payload) {
+    return tauriIpcClient.proxyRequest('POST', '/api/v1/channels', payload) as Promise<ProxyResponse<ChannelItem>>
   },
-
-  async getChannelDetail(channelId: string): Promise<ProxyResponse<ChannelItem>> {
-    return (await tauriIpcClient.proxyRequest(
-      'GET',
-      `/api/v1/channels/${encodeURIComponent(channelId)}`
-    )) as ProxyResponse<ChannelItem>
+  getChannelDetail(channelId) {
+    return tauriIpcClient.proxyRequest('GET', `/api/v1/channels/${encodeURIComponent(channelId)}`) as Promise<ProxyResponse<ChannelItem>>
   },
-
-  async deleteChannel(channelId: string): Promise<ProxyResponse<ChannelDeleteResponse>> {
-    return (await tauriIpcClient.proxyRequest(
-      'DELETE',
-      `/api/v1/channels/${encodeURIComponent(channelId)}`
-    )) as ProxyResponse<ChannelDeleteResponse>
+  deleteChannel(channelId) {
+    return tauriIpcClient.proxyRequest('DELETE', `/api/v1/channels/${encodeURIComponent(channelId)}`) as Promise<ProxyResponse<ChannelDeleteResponse>>
   },
-
-  async proxyRequest(method: string, route: string, body?: unknown): Promise<ProxyResponse<unknown>> {
-    const validatedRoute = validateProxyRoute(route)
-
+  proxyRequest(method, route, body) {
     return secureInvoke<ProxyResponse<unknown>>('proxy_request', {
-      req: {
-        method,
-        route: validatedRoute,
-        body: body ?? null,
-      },
+      req: { method, route: validateProxyRoute(route), body: body ?? null },
     })
   },
 }

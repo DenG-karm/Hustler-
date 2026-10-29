@@ -18,70 +18,41 @@ export interface DiscoverySlice {
   fetchIdeasForTopic: () => Promise<void>
 }
 
-export const createDiscoverySlice: StateCreator<
-  FlowState,
-  [],
-  [],
-  DiscoverySlice
-> = (set, get) => ({
+export const createDiscoverySlice: StateCreator<FlowState, [], [], DiscoverySlice> = (set, get) => ({
   topic: '',
   ideas: [],
   selectedIdea: null,
 
-  setTopic: (topic: string) => {
-    set({ topic, errorMessage: null })
-  },
-
-  selectIdea: (idea: VideoIdea) => {
-    set({ selectedIdea: idea, errorMessage: null })
-  },
-
+  setTopic: (topic: string) => set({ topic, errorMessage: null }),
+  selectIdea: (idea: VideoIdea) => set({ selectedIdea: idea, errorMessage: null }),
   runDiscovery: async (topicOverride?: string) => {
-    if (topicOverride) {
-      set({ topic: topicOverride })
-    }
+    if (topicOverride) set({ topic: topicOverride })
     return get().fetchIdeasForTopic()
   },
 
   fetchIdeasForTopic: async () => {
-    const { topic } = get()
+    const { topic, activeChannelId, flowChannelId } = get()
     if (!topic || topic.trim().length < 3) {
       set({ errorMessage: 'Geçersiz konu başlığı.' })
       return
     }
-
     set({ isLoading: true, errorMessage: null })
     try {
-      const { topic, activeChannelId, flowChannelId } = get()
-      const channelId = flowChannelId ?? activeChannelId
-      const client = getIpcClient()
-      const resp = await client.runDiscovery(topic, channelId)
+      const resp = await getIpcClient().runDiscovery(topic, flowChannelId ?? activeChannelId)
       if (resp.status >= 400) {
         const err = parseProblemDetails(resp)
-        if (err.mode === 'modal') set({ activeModalError: err })
-        else set((s) => ({ toasts: [...s.toasts, err] }))
-        set({ errorMessage: err.message, isLoading: false })
+        if (err.mode === 'modal') set({ activeModalError: err, errorMessage: err.message, isLoading: false })
+        else set((s) => ({ toasts: [...s.toasts, err], errorMessage: err.message, isLoading: false }))
         return
       }
-
-      // K-806: yt-dlp bozulduğunda degraded uyarısı ver ama akışı kesme
       if (resp.body?.degraded || resp.body?.warning) {
-        const warningMsg =
-          typeof resp.body?.warning === 'string'
-            ? resp.body.warning
-            : 'yt-dlp çıkarıcısı yanıt vermiyor; yerel kurtarma modu aktif.'
         get().addToast({
           title: 'Çıkarıcı Uyarısı (Degraded Mod)',
-          message: warningMsg,
+          message: typeof resp.body?.warning === 'string' ? resp.body.warning : 'Yerel kurtarma modu aktif.',
           code: 'DISCOVERY_DEGRADED',
-          mode: 'toast',
         })
       }
-
-      const rawItems: DiscoveryItem[] = Array.isArray(resp.body?.results)
-        ? resp.body.results
-        : (Array.isArray(resp.body) ? resp.body : [])
-
+      const rawItems: DiscoveryItem[] = Array.isArray(resp.body?.results) ? resp.body.results : (Array.isArray(resp.body) ? resp.body : [])
       const ideas: VideoIdea[] = rawItems.map((item: DiscoveryItem, idx: number) => ({
         id: item.video_id ?? item.id ?? `idea_${idx + 1}`,
         title: item.title ?? `Fikir #${idx + 1}: ${topic}`,
@@ -89,26 +60,20 @@ export const createDiscoverySlice: StateCreator<
         score: typeof item.score === 'number' ? item.score : 85 - idx * 2,
         viewCount: item.view_count ?? 150000,
       }))
-
-      const fallbackIdeas: VideoIdea[] =
-        ideas.length > 0
-          ? ideas
-          : Array.from({ length: 5 }, (_, i) => ({
-              id: `idea_det_${i + 1}`,
-              title: `${topic} Hakkında ${i + 1}. Viral Gerçek`,
-              hook: `Bunu biliyor muydunuz? ${topic} ile ilgili kimsenin söylemediği sır!`,
-              score: 95 - i * 5,
-              viewCount: 250000 - i * 30000,
-            }))
-
-      set({ ideas: fallbackIdeas, isLoading: false })
+      set({
+        ideas: ideas.length ? ideas : Array.from({ length: 5 }, (_, i) => ({
+          id: `idea_det_${i + 1}`,
+          title: `${topic} Hakkında ${i + 1}. Viral Gerçek`,
+          hook: `Bunu biliyor muydunuz? ${topic} ile ilgili sır!`,
+          score: 95 - i * 5,
+          viewCount: 250000 - i * 30000,
+        })),
+        isLoading: false,
+      })
     } catch (err: unknown) {
       const uiError = parseProblemDetails(err)
-      if (uiError.mode === 'modal') {
-        set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
-      } else {
-        set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
-      }
+      if (uiError.mode === 'modal') set({ activeModalError: uiError, isLoading: false, errorMessage: uiError.message })
+      else set((s) => ({ toasts: [...s.toasts, uiError], isLoading: false, errorMessage: uiError.message }))
     }
   },
 })

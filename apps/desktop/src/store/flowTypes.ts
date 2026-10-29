@@ -244,12 +244,12 @@ export interface FlowState {
 
 export function createInitialAssetsData(): AssetsData {
   return {
-    slots: [
-      { slotId: 'slot_intro_video', name: 'Giriş Kancası (Video)', type: 'video', required: true, assignedPath: null },
-      { slotId: 'slot_body_img1', name: 'Gövde Sahne 1 (Görsel)', type: 'image', required: true, assignedPath: null },
-      { slotId: 'slot_body_img2', name: 'Gövde Sahne 2 (Görsel)', type: 'image', required: true, assignedPath: null },
-      { slotId: 'slot_bg_audio', name: 'Arka Plan Müziği', type: 'audio', required: false, assignedPath: null },
-    ],
+    slots: ([
+      ['slot_intro_video', 'Giriş Kancası (Video)', 'video', true],
+      ['slot_body_img1', 'Gövde Sahne 1 (Görsel)', 'image', true],
+      ['slot_body_img2', 'Gövde Sahne 2 (Görsel)', 'image', true],
+      ['slot_bg_audio', 'Arka Plan Müziği', 'audio', false],
+    ] as const).map(([slotId, name, type, required]) => ({ slotId, name, type, required, assignedPath: null })),
     allSlotsFilled: false,
   }
 }
@@ -399,6 +399,22 @@ export interface LineChartData {
   trend_direction: 'up' | 'down' | 'stable'
 }
 
+export interface OutlierItem {
+  id: string | null
+  title: string
+  type: string
+  view_count: number
+  view_count_formatted: string
+  multiplier: number
+  multiplier_formatted: string
+}
+
+export interface ViewTierItem {
+  label: string
+  count: number
+  percentage: number
+}
+
 export interface ChannelAnalytics {
   has_data: boolean
   line_chart: LineChartData
@@ -409,6 +425,8 @@ export interface ChannelAnalytics {
     total_views: number
     total_views_formatted: string
   }
+  outliers?: OutlierItem[]
+  view_tiers?: ViewTierItem[]
   summary: {
     median_views: number
     median_views_formatted: string
@@ -429,6 +447,10 @@ export interface ChannelLiveStats {
   description: string
   subscribers: number | null
   subscribers_formatted: string | null
+  channel_total_videos?: number | null
+  channel_total_videos_formatted?: string | null
+  channel_total_views?: number | null
+  channel_total_views_formatted?: string | null
   videos: RealVideoItem[]
   shorts: RealVideoItem[]
   niche_query?: string

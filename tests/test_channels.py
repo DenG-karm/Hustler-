@@ -362,6 +362,47 @@ def test_channel_analytics_pandas_numpy() -> None:
     assert short_line["min_val"] == 25000
     assert short_line["trend_direction"] in ("up", "down", "stable")
 
+    # 5. Viral Çarpan (Outliers) ve İzlenme Kademesi (View Tiers) Kontrolleri
+    outliers = analytics["outliers"]
+    assert isinstance(outliers, list)
+    assert len(outliers) == 5
+    assert outliers[0]["title"] == "Kuantum Fiziği 101"
+    assert float(str(outliers[0]["multiplier"])) > 1.5
+
+    tiers = analytics["view_tiers"]
+    assert isinstance(tiers, list)
+    assert len(tiers) == 4
+    assert sum(int(str(t["count"])) for t in tiers if isinstance(t, dict)) == 5
+
+
+def test_parse_channel_totals_and_real_dates() -> None:
+    from services.core.hustler.services.channel_stats import (
+        _extract_channel_totals_from_initial_data,
+        _format_days_ago_text,
+    )
+
+    sample_initial_data = {
+        "header": {
+            "pageHeaderRenderer": {
+                "metadata": {
+                    "items": [
+                        {"content": "1.250 video"},
+                        {"content": "45,2 Mn görüntüleme"},
+                    ]
+                }
+            }
+        }
+    }
+    totals = _extract_channel_totals_from_initial_data(sample_initial_data)
+    assert totals["total_videos"] == 1250
+    assert totals["total_views"] == 45_200_000
+
+    # Tarih bilgisi olmadığında sahte gün üretilmemeli (None dönmeli)
+    txt, period = _format_days_ago_text(None)
+    assert txt is None
+    assert period == "all_time"
+
+
 
 def test_infer_channel_niche_query_from_real_videos() -> None:
     from services.core.hustler.services.channel_stats import infer_channel_niche_query
@@ -376,6 +417,122 @@ def test_infer_channel_niche_query_from_real_videos() -> None:
     q = infer_channel_niche_query("Bilim Kanalı", "Kuantum ve yapay zeka", videos, shorts)
     assert "kuantum" in q
     assert "yapay" in q or "zeka" in q
+
+
+@pytest.mark.asyncio
+async def test_channel_templates_crud_analyze_and_render(
+    temp_db: Database, channel_repo: ChannelRepository
+) -> None:
+    app = FastAPI()
+    app.state.session_token = TOKEN
+    app.state.db = temp_db
+    app.state.channel_repo = channel_repo
+    app.include_router(channels_router, prefix="/api/v1")
+    app.include_router(pipeline_router, prefix="/api/v1")
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+
+    chan = await channel_repo.create("Kurgu Stüdyosu", "https://youtube.com/@kurgu", "Bilim ve Teknoloji")
+
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app), base_url="http://test"
+    ) as client:
+        # 1. Şablon oluşturma
+        res = await client.post(
+            f"/api/v1/channels/{chan.id}/templates",
+            json={
+                "title": "Hızlı Kanca Şablonu",
+                "base_video_path": "assets/video/hook.mp4",
+                "duration_sec": 18.0,
+            },
+            headers=headers,
+        )
+        assert res.status_code == 201
+        created = res.json()["template"]
+        tpl_id = created["id"]
+        assert created["title"] == "Hızlı Kanca Şablonu"
+        assert len(created["slots"]) == 3
+
+        # 2. Şablon üzerine fotoğraf / video slotu ekleme (update)
+        res = await client.post(
+            f"/api/v1/channels/{chan.id}/templates/{tpl_id}/update",
+            json={
+                "slots": [
+                    {
+                        "slot_id": "slot_1",
+                        "label": "Kanca Görseli",
+                        "media_type": "image",
+                        "media_path": "assets/img/scene1.png",
+                        "start_sec": 0.0,
+                        "end_sec": 4.0,
+                        "layout": "overlay_center",
+                    },
+                    {
+                        "slot_id": "slot_2",
+                        "label": "B-Roll Video",
+                        "media_type": "video",
+                        "media_path": "assets/video/hook.mp4",
+                        "start_sec": 4.0,
+                        "end_sec": 18.0,
+                        "layout": "fullscreen",
+                    },
+                ],
+            },
+            headers=headers,
+        )
+        assert res.status_code == 200
+        assert len(res.json()["template"]["slots"]) == 2
+
+        # 3. Şablona özgü matematiksel storyboard analizi (10 slot, görsel prompt ve direktifler)
+        res = await client.post(
+            f"/api/v1/channels/{chan.id}/templates/{tpl_id}/analyze",
+            json={"topic": "Yapay Zeka Çipleri", "tone": "energetic", "slot_count": 10},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        analyzed = res.json()
+        assert len(analyzed["narration_script"]) > 15
+        assert len(analyzed["subtitle_cues"]) == 10
+        assert len(analyzed["template"]["slots"]) == 10
+        first_slot = analyzed["template"]["slots"][0]
+        assert "prompt" in first_slot and len(str(first_slot["prompt"])) > 20
+        assert "directive" in first_slot and len(str(first_slot["directive"])) > 10
+        assert "target_audience" in analyzed
+        assert "viral_formula" in analyzed
+
+        # 4. Yalnızca ElevenLabs TTS seslendirme endpoint'i testi (/tts)
+        res = await client.post(
+            f"/api/v1/channels/{chan.id}/templates/{tpl_id}/tts",
+            json={"voice_id": "21m00Tcm4TlvDq8ikWAM"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        tts_res = res.json()
+        assert tts_res["audio_path"].endswith((".wav", ".mp3"))
+        assert tts_res["duration_seconds"] > 0
+
+        # 5. ElevenLabs / TTS seslendirme + .ass altyazı + hızlı Reels MP4 derleme
+        res = await client.post(
+            f"/api/v1/channels/{chan.id}/templates/{tpl_id}/render",
+            json={"voice_id": "21m00Tcm4TlvDq8ikWAM", "profile": "DRAFT"},
+            headers=headers,
+        )
+        assert res.status_code == 200
+        rendered = res.json()
+        assert rendered["audio_path"].endswith((".wav", ".mp3"))
+        assert rendered["ass_path"].endswith(".ass")
+        assert rendered["rendered_output_path"].endswith("_reels.mp4")
+        assert rendered["ffmpeg_args_count"] > 5
+
+        # 6. Listeleme ve silme
+        res = await client.get(f"/api/v1/channels/{chan.id}/templates", headers=headers)
+        assert res.status_code == 200
+        assert len(res.json()["templates"]) == 1
+
+        res = await client.delete(f"/api/v1/channels/{chan.id}/templates/{tpl_id}", headers=headers)
+        assert res.status_code == 200
+        res = await client.get(f"/api/v1/channels/{chan.id}/templates", headers=headers)
+        assert len(res.json()["templates"]) == 0
+
 
 
 
